@@ -6,11 +6,17 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_community.document_loaders.text import TextLoader
 from langchain_experimental.text_splitter import SemanticChunker
+from langchain_core.documents.base import Document
+from langsmith import Client
+from typing_extensions import List, TypedDict
 
 
 load_dotenv()
 config = dotenv_values()
 FIREWORKS_API_KEY = config.get("FIREWORKS_API_KEY")
+LANGSMITH_API_KEY = config.get("LANGSMITH_API_KEY")
+client = Client(api_key=LANGSMITH_API_KEY)
+prompt = client.pull_prompt("rlm/rag-prompt", include_model=True)
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
 vector_store = Chroma(
     collection_name="example_collection",
@@ -24,9 +30,31 @@ current_dir = os.getcwd()
 history = gr.State([])
 sem_chunker = SemanticChunker(embeddings, breakpoint_threshold_type="percentile")
 
-def load_text(text_path:str="./elicitation.txt"):
-    text = TextLoader(text_path, encoding="utf-8").load()
-    return text[0].page_content
+
+class State(TypedDict):
+    question: str
+    context: List[Document]
+    answer: str
+
+
+# Define application steps
+def retrieve(state: State):
+    retrieved_docs = vector_store.similarity_search(state["question"])
+    return {"context": retrieved_docs}
+
+
+def generate(state: State):
+    docs_content = "\n\n".join(doc.page_content for doc in state["context"])
+    messages = prompt.invoke({"question": state["question"], "context": docs_content})
+    response = llm.invoke(messages)
+    return {"answer": response.content}
+
+
+def load_chunk_text(text_path:str="./elicitation.txt") -> List[Document]:
+    with open(text_path, "r") as f:
+        text = f.read()
+    docs = sem_chunker.create_documents(texts=[text])
+    return docs
 
 
 def echo(message, history):
