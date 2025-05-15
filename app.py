@@ -7,7 +7,9 @@ from langchain_chroma import Chroma
 from langchain_community.document_loaders.text import TextLoader
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_core.documents.base import Document
+from langchain_core.documents.transformers import BaseDocumentTransformer
 from langsmith import Client
+from langgraph.graph import StateGraph, START
 from typing_extensions import List, TypedDict
 
 
@@ -50,10 +52,10 @@ def generate(state: State):
     return {"answer": response.content}
 
 
-def load_chunk_text(text_path:str="./elicitation.txt") -> List[Document]:
+def load_chunk_text(text_path:str="./elicitation.txt", chunker:SemanticChunker=sem_chunker) -> List[Document]:
     with open(text_path, "r") as f:
         text = f.read()
-    docs = sem_chunker.create_documents(texts=[text])
+    docs = chunker.create_documents(texts=[text])
     return docs
 
 
@@ -83,3 +85,6 @@ with gr.Blocks(css="css/custom.css") as demo:
 # Launch the app
 if __name__ == "__main__":
     demo.launch()
+    graph_builder = StateGraph(State).add_sequence([retrieve, generate])
+    graph_builder.add_edge(START, "retrieve")
+    graph = graph_builder.compile()
