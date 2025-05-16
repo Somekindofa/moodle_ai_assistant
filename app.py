@@ -224,6 +224,7 @@ def generate(state: State):
 
 
 def load_chunk_text(
+    #TOFIX
     text_path: str = "./elicitation.txt", chunker: SemanticChunker = sem_chunker
 ) -> List[Document]:
     with open(text_path, "r") as f:
@@ -242,6 +243,7 @@ with gr.Blocks(css="css/custom.css") as demo:
     with gr.Row():
         with gr.Column(scale=1):
             gr.Markdown("### Files")
+            #TOFIX
             file_explorer = gr.FileExplorer(current_dir)
 
         with gr.Column(scale=5):
@@ -257,6 +259,7 @@ with gr.Blocks(css="css/custom.css") as demo:
 
 # demo.launch()
 all_splits = load_chunk_text()
+#TOFIX
 _ = vector_store.add_documents(documents=all_splits)
 graph_builder = StateGraph(State).add_sequence([retrieve, generate])
 graph_builder.add_edge(START, "retrieve")
