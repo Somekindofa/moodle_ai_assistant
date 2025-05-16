@@ -7,6 +7,7 @@ from langchain_chroma import Chroma
 from langchain_community.document_loaders.text import TextLoader
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_core.documents.base import Document
+from langchain_core.messages import BaseMessage
 from langchain_core.documents.transformers import BaseDocumentTransformer
 from langsmith import Client
 from langgraph.graph import StateGraph, START
@@ -104,6 +105,6 @@ async def run():
         {"question": "How can one better transmit glassblowing knowledge to novices?"},
         stream_mode="messages",
     ):
-        print(message.content)
+        print(message.content) # type: ignore
 
 asyncio.run(run())
