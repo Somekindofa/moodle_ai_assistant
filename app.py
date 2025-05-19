@@ -5,6 +5,7 @@ import asyncio
 import logging
 
 from dotenv import dotenv_values, load_dotenv
+from langchain import hub
 from langchain.chat_models import init_chat_model
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
@@ -125,7 +126,7 @@ class LangInit:
             return None
 
         try:
-            self.prompt_template = self.client.pull_prompt(
+            self.prompt_template = hub.pull(
                 prompt_url, include_model=include_model
             )
             return self.prompt_template
@@ -243,6 +244,7 @@ llm = lang.chat_model_init().model
 def echo(message, history):
     return message
 
+
 with gr.Blocks(css="css/custom.css") as demo:
     gr.Markdown("# Moodle AI Assistant")
 
@@ -263,17 +265,27 @@ with gr.Blocks(css="css/custom.css") as demo:
             )
 
 if __name__ == "__main__":
-    all_splits = rag.load_chunk_text(chunker=PyPDFLoader)
-    # TOFIX
-    _ = vector_store.add_documents(documents=all_splits)
-    graph_builder = StateGraph(State).add_sequence([retrieve, generate])
+    all_splits = []
+    documents_dir = "./documents"
+    for file in os.listdir(path=documents_dir):
+        file_path = os.path.join(documents_dir, file)
+        print(f"Loading file {file_path}...")
+        loader = PyPDFLoader(file_path=file_path)
+        splits = loader.load()
+        all_splits.extend(splits)
+    _ = rag.add_documents(documents=all_splits)
+    graph_builder = StateGraph(rag.State).add_sequence([rag.retrieve, rag.generate])
     graph_builder.add_edge(START, "retrieve")
     graph = graph_builder.compile()
+
     async def run():
         async for message, metadata in graph.astream(
-            {"question": "How can one better transmit glassblowing knowledge to novices?"},
+            {
+                "question": "How can one better transmit glassblowing knowledge to novices?"
+            },
             stream_mode="messages",
         ):
             print(message.content)  # type: ignore
+
     asyncio.run(run())
-    demo.launch()
+    # demo.launch()
