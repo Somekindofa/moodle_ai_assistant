@@ -1,11 +1,14 @@
-import gradio as gr
 import os
-
+import warnings
 import asyncio
 import logging
-
+import gradio as gr
 from dotenv import dotenv_values, load_dotenv
+from functools import partial
+
 from langchain import hub
+from langchain.schema.runnable import RunnablePassthrough
+from langchain_core.runnables import RunnableLambda
 from langchain.chat_models import init_chat_model
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
@@ -19,7 +22,8 @@ from langchain_core.documents.transformers import BaseDocumentTransformer
 from langsmith import Client
 from langgraph.graph import StateGraph, START
 from typing_extensions import List, Literal, TypedDict, Dict, Union, Type
-import warnings
+import tkinter as tk
+from tkinter import filedialog
 
 logger_ = logging.getLogger(__name__)
 
@@ -126,9 +130,7 @@ class LangInit:
             return None
 
         try:
-            self.prompt_template = hub.pull(
-                prompt_url, include_model=include_model
-            )
+            self.prompt_template = hub.pull(prompt_url, include_model=include_model)
             return self.prompt_template
         except Exception as e:
             logger_.error(f"Failed to pull prompt from {prompt_url}: {str(e)}")
@@ -147,28 +149,30 @@ class LangInit:
             logger_.error(f"Failed to initialize chat model: {str(e)}")
             return self
 
-    def load_splitter(self, text_splitter, **kwargs):
+    def load_splitter(self, text_splitter_cls):
         """Load text splitter with specified configuration."""
         try:
-            self.splitter = text_splitter(**kwargs)
+            self.splitter = text_splitter_cls
             return self
         except Exception as e:
             logger_.error(f"Failed to load text splitter: {str(e)}")
             return self
 
 
+class State(TypedDict):
+    question: str  # User query
+    context: List[Document]
+    answer: str
+
+
 class RAG:
     """Setup for Retrieval Augmented Generation."""
-
-    class State(TypedDict):
-        question: str  # User query
-        context: List[Document]
-        answer: str
 
     def __init__(
         self,
         collection_name="example_collection",
         persist_directory="./chroma_langchain_db",
+        llm=None,
     ):
         """Initialize RAG setup with default configuration."""
         try:
@@ -181,6 +185,7 @@ class RAG:
                 persist_directory=persist_directory,
             )
             self.history = []
+            self.llm = llm
             logger_.info(f"Initialized RAG setup with collection '{collection_name}'")
         except Exception as e:
             logger_.error(f"Failed to initialize RAG setup: {str(e)}")
@@ -211,11 +216,18 @@ class RAG:
             logger_.error(f"Error during similarity search: {str(e)}")
             return []
 
-    def retrieve(self, state: State):
+    def retrieve(self, state):
+        print(f"\nState in RETRIEVE is: {state}\n")
         retrieved_docs = self.vector_store.similarity_search(state["question"])
         return {"context": retrieved_docs}
 
-    def generate(self, state: State, *, prompt=None):
+    def set_llm(self, llm):
+        """Set or update the language model."""
+        self.llm = llm
+        logger_.info("LLM updated successfully")
+
+    def generate(self, state, *, prompt=None):
+        print(f"\nState in GENERATE is: {state}\n")
         docs_content = "\n\n".join(doc.page_content for doc in state["context"])
 
         if prompt:
@@ -226,63 +238,145 @@ class RAG:
             # Fallback if no prompt is available
             message = f"Question: {state['question']}\n\nContext: {docs_content}"
 
-        if llm:
-            response = llm.invoke(message)
+        if self.llm:
+            response = self.llm.invoke(message)
             return {"answer": response.content}
         else:
             return {"answer": "LLM not initialized properly."}
-
-
-# Initialize LangInit and get prompt
-env = EnvLoader()
-lang = LangInit()
-rag = RAG()
-prompt = lang.pull_prompt()
-llm = lang.chat_model_init().model
 
 
 def echo(message, history):
     return message
 
 
-with gr.Blocks(css="css/custom.css") as demo:
-    gr.Markdown("# Moodle AI Assistant")
+# with gr.Blocks(css="css/custom.css") as demo:
+#     gr.Markdown("# Moodle AI Assistant")
 
-    with gr.Row():
-        with gr.Column(scale=1):
-            gr.Markdown("### Files")
-            file_explorer = gr.FileExplorer(rag.get_cwd())
+#     def load_files_to_knowledge(selected_files):
+#         """Process selected files and add them to the RAG knowledge base."""
+#         if not selected_files:
+#             return "No files selected. Please select files to load."
 
-        with gr.Column(scale=5):
-            chat_interface = gr.ChatInterface(
-                fn=echo,
-                type="messages",
-                chatbot=gr.Chatbot(type="messages"),
-                textbox=gr.Textbox(placeholder="Ask something...", container=True),
-                submit_btn="Submit",
-                stop_btn="Stop",
-                show_progress="hidden",
-            )
+#         all_splits = []
+#         for file_path in selected_files:
+#             try:
+#                 if file_path.lower().endswith(".pdf"):
+#                     loader = PyPDFLoader(file_path=file_path)
+#                 elif file_path.lower().endswith((".txt", ".md")):
+#                     loader = TextLoader(file_path=file_path)
+#                 else:
+#                     continue  # Skip unsupported file types
+
+#                 splits = loader.load()
+#                 all_splits.extend(splits)
+#             except Exception as e:
+#                 logger_.error(f"Error processing file {file_path}: {str(e)}")
+
+#         if all_splits:
+#             rag.add_documents(documents=all_splits)
+#             logger_.info(
+#                 "Successfully loaded {len(all_splits)} document chunks into knowledge base."
+#             )
+#         else:
+#             return "No valid documents were processed. Please check file types and try again."
+
+#     with gr.Row():
+#         with gr.Column(scale=1):
+#             gr.Markdown("### Files")
+#             file_explorer = gr.FileExplorer(rag.get_cwd())
+#             load_knowledge = gr.Button("Load to knowledge")
+#             knowledge_status = gr.Textbox(label="Status", interactive=False)
+#             load_knowledge.click(
+#                 fn=load_files_to_knowledge,
+#                 inputs=file_explorer,
+#                 outputs=knowledge_status,
+#             )
+
+#         with gr.Column(scale=5):
+#             chat_interface = gr.ChatInterface(
+#                 fn=echo,
+#                 type="messages",
+#                 chatbot=gr.Chatbot(type="messages"),
+#                 textbox=gr.Textbox(placeholder="Ask something...", container=True),
+#                 submit_btn="Submit",
+#                 stop_btn="Stop",
+#                 show_progress="hidden",
+#             )
+
+
+class GraphBuilder:
+    def __init__(self, state):
+        self.state_graph = StateGraph(state)
+    
+    def to_runnable(self, func, name:str=""):
+        if name=="":
+            name = func.__name__ + "_runnable"
+        return RunnableLambda(lambda state_: func(state_), name=name)
+
+    def add_sequence(self, sequence:List):
+        self.state_graph.add_sequence(sequence)
+
+    def add_edge(self, edge_name):
+        self.state_graph.add_edge(START, edge_name)
+    
+    def compile(self):
+        return self.state_graph.compile()
+
 
 if __name__ == "__main__":
+    # Initialize LangInit and get prompt
+    env = EnvLoader()
+    lang = LangInit()
+    rag = RAG()
+
+    lang.load_splitter(PyPDFLoader)
+    prompt = lang.pull_prompt()
+    rag.set_llm(lang.chat_model_init().model)
+
+    state = State
     all_splits = []
-    documents_dir = "./documents"
-    for file in os.listdir(path=documents_dir):
-        file_path = os.path.join(documents_dir, file)
-        print(f"Loading file {file_path}...")
-        loader = PyPDFLoader(file_path=file_path)
-        splits = loader.load()
-        all_splits.extend(splits)
-    _ = rag.add_documents(documents=all_splits)
-    graph_builder = StateGraph(rag.State).add_sequence([rag.retrieve, rag.generate])
-    graph_builder.add_edge(START, "retrieve")
-    graph = graph_builder.compile()
+    documents = []
+    # Set up Tkinter dialog to select files
+    root = tk.Tk()
+    root.withdraw()  # Hide the main window
+    documents = list(
+        filedialog.askopenfilenames(
+            title="Select files to add to knowledge base",
+            filetypes=[
+                ("Document files", "*.pdf;*.txt;*.md"),
+                ("PDF files", "*.pdf"),
+                ("Text files", "*.txt"),
+                ("Markdown files", "*.md"),
+                ("All files", "*.*"),
+            ],
+        )
+    )
+    root.destroy()
+
+    if not documents:
+        print("No files selected. Please run the program again to select files.")
+    else:
+        print(f"Selected {len(documents)} files to process.")
+        for file in documents:
+            file_path = file
+            if lang.splitter:
+                if file_path:
+                    loader = lang.splitter(file_path=file_path)
+                    splits = loader.load()
+                    all_splits.extend(splits)
+
+    rag.add_documents(documents=all_splits)
+
+    state_graph = GraphBuilder(state)
+    retrieve_runnable = state_graph.to_runnable(func=rag.retrieve)
+    generate_runnable = state_graph.to_runnable(func=rag.generate)
+    state_graph.add_sequence([retrieve_runnable, generate_runnable])
+    state_graph.add_edge(edge_name="retrieve_runnable") # this adds an edge called "retrieve" to START (pls generalize the function 'add_edge')
+    graph = state_graph.compile()
 
     async def run():
         async for message, metadata in graph.astream(
-            {
-                "question": "How can one better transmit glassblowing knowledge to novices?"
-            },
+            {"question": "What are the main steps to build a RAG?"},
             stream_mode="messages",
         ):
             print(message.content)  # type: ignore
