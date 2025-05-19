@@ -23,42 +23,43 @@ import warnings
 logger_ = logging.getLogger(__name__)
 
 MODEL_PROVIDERS = Literal[
-        'openai',
-        'anthropic',
-        'azure_openai',
-        'azure_ai',
-        'google_vertexai',
-        'google_genai',
-        'bedrock',
-        'bedrock_converse',
-        'cohere',
-        'fireworks',
-        'together',
-        'mistralai',
-        'huggingface',
-        'groq',
-        'ollama',
-        'google_anthropic_vertex',
-        'deepseek',
-        'ibm',
-        'nvidia',
-        'xai',
-        'perplexity'
-    ]
+    "openai",
+    "anthropic",
+    "azure_openai",
+    "azure_ai",
+    "google_vertexai",
+    "google_genai",
+    "bedrock",
+    "bedrock_converse",
+    "cohere",
+    "fireworks",
+    "together",
+    "mistralai",
+    "huggingface",
+    "groq",
+    "ollama",
+    "google_anthropic_vertex",
+    "deepseek",
+    "ibm",
+    "nvidia",
+    "xai",
+    "perplexity",
+]
+
 
 class EnvLoader:
     """Helper class to load and validate API keys from .env file."""
-    
+
     def __init__(self, required_keys=None):
         self.config = {}
         self.required_keys = required_keys or ["FIREWORKS_API_KEY", "LANGCHAIN_API_KEY"]
-        
+
     def load(self):
         """Load environment variables from .env file."""
         load_dotenv()
         self.config = dotenv_values()
         return self
-        
+
     def validate(self):
         """Validate that all required API keys are present."""
         missing_keys = []
@@ -69,19 +70,22 @@ class EnvLoader:
             else:
                 print(f"{key} not found in environment variables")
                 missing_keys.append(key)
-        
+
         if missing_keys:
-            warnings.warn(f"Missing required environment variables: {', '.join(missing_keys)}")
-            
+            warnings.warn(
+                f"Missing required environment variables: {', '.join(missing_keys)}"
+            )
+
         return self
-    
+
     def get(self, key, default=None):
         """Get a specific config value."""
         return self.config.get(key, default)
 
+
 class LangInit:
     """Helper class to instantiate a Langchain Routine"""
-    
+
     def __init__(self):
         self.client = None
         self.prompt_template = None
@@ -90,15 +94,17 @@ class LangInit:
         self.model = None
         self.splitter = None
         self.logger = logging.getLogger(__name__)
-    
+
     def lc_client_init(self, env_config):
         """Initialize langchain client with provided environment configuration."""
         try:
             _LANGCHAIN_API_KEY = env_config.get("LANGCHAIN_API_KEY")
             if not _LANGCHAIN_API_KEY:
-                self.logger.warning("No Langchain API key found. Please check your environment variables.")
+                self.logger.warning(
+                    "No Langchain API key found. Please check your environment variables."
+                )
                 return self
-                
+
             self.logger.info("Loaded Langchain API key.")
             self.client = Client(api_key=_LANGCHAIN_API_KEY)
             self.logger.info("Instantiated Langchain Client with API key")
@@ -106,24 +112,26 @@ class LangInit:
         except Exception as e:
             self.logger.error(f"Failed to initialize LangChain client: {str(e)}")
             return self
-    
+
     def pull_prompt(self, prompt_url="rlm/rag-prompt", include_model=True):
         """Pull prompt from LangChain Hub."""
         if not self.client:
-            self.logger.warning("No LangChain client available. Initialize client first.")
+            self.logger.warning(
+                "No LangChain client available. Initialize client first."
+            )
             return None
-            
+
         try:
             prompt = self.client.pull_prompt(prompt_url, include_model=include_model)
             return prompt
         except Exception as e:
             self.logger.error(f"Failed to pull prompt from {prompt_url}: {str(e)}")
             return None
-        
+
     def chat_model_init(
         self,
         model_url="accounts/fireworks/models/llama-v3p1-70b-instruct",
-        model_provider="fireworks"
+        model_provider="fireworks",
     ):
         """Initialize chat model from specified provider."""
         try:
@@ -132,7 +140,7 @@ class LangInit:
         except Exception as e:
             self.logger.error(f"Failed to initialize chat model: {str(e)}")
             return self
-    
+
     def load_splitter(self, text_splitter, **kwargs):
         """Load text splitter with specified configuration."""
         try:
@@ -141,14 +149,21 @@ class LangInit:
         except Exception as e:
             self.logger.error(f"Failed to load text splitter: {str(e)}")
             return self
-        
+
+
 class RAGSetup:
     """Setup for Retrieval Augmented Generation."""
-    
-    def __init__(self, collection_name="example_collection", persist_directory="./chroma_langchain_db"):
+
+    def __init__(
+        self,
+        collection_name="example_collection",
+        persist_directory="./chroma_langchain_db",
+    ):
         """Initialize RAG setup with default configuration."""
         try:
-            self.embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
+            self.embeddings = HuggingFaceEmbeddings(
+                model_name="sentence-transformers/all-mpnet-base-v2"
+            )
             self.vector_store = Chroma(
                 collection_name=collection_name,
                 embedding_function=self.embeddings,
@@ -156,19 +171,21 @@ class RAGSetup:
             )
             self.history = []
             self.logger = logging.getLogger(__name__)
-            self.logger.info(f"Initialized RAG setup with collection '{collection_name}'")
+            self.logger.info(
+                f"Initialized RAG setup with collection '{collection_name}'"
+            )
         except Exception as e:
             self.logger.error(f"Failed to initialize RAG setup: {str(e)}")
             raise
-    
+
     def get_cwd(self):
         """Get current working directory."""
         return os.getcwd()
-    
+
     def get_history(self):
         """Get conversation history."""
         return self.history
-    
+
     def add_documents(self, documents):
         """Add documents to the vector store."""
         try:
@@ -176,7 +193,7 @@ class RAGSetup:
             self.logger.info(f"Added {len(documents)} documents to vector store")
         except Exception as e:
             self.logger.error(f"Failed to add documents: {str(e)}")
-            
+
     def similarity_search(self, query, k=4):
         """Perform similarity search with the given query."""
         try:
@@ -188,9 +205,11 @@ class RAGSetup:
 
 
 class State(TypedDict):
-    question: str
-    context: List[Document]
-    answer: str
+    question: str  # User query
+    context: List[
+        Document
+    ]  # List of Documents loaded in the vector store (Chroma here)
+    answer: str  #
 
 
 # Initialize LangInit and get prompt
@@ -199,6 +218,7 @@ env_loader = EnvLoader().load().validate()
 lang_init.lc_client_init(env_loader.config)
 prompt = lang_init.pull_prompt()
 llm = lang_init.chat_model_init().model
+
 
 # Define application steps
 def retrieve(state: State):
@@ -209,13 +229,15 @@ def retrieve(state: State):
 
 def generate(state: State):
     docs_content = "\n\n".join(doc.page_content for doc in state["context"])
-    
+
     if prompt:
-        message = prompt.invoke({"question": state["question"], "context": docs_content})
+        message = prompt.invoke(
+            {"question": state["question"], "context": docs_content}
+        )
     else:
         # Fallback if no prompt is available
         message = f"Question: {state['question']}\n\nContext: {docs_content}"
-        
+
     if llm:
         response = llm.invoke(message)
         return {"answer": response.content}
@@ -224,8 +246,9 @@ def generate(state: State):
 
 
 def load_chunk_text(
-    #TOFIX
-    text_path: str = "./elicitation.txt", chunker: SemanticChunker = sem_chunker
+    # TOFIX
+    text_path: str = "./elicitation.txt",
+    chunker: SemanticChunker = sem_chunker,
 ) -> List[Document]:
     with open(text_path, "r") as f:
         text = f.read()
@@ -243,7 +266,7 @@ with gr.Blocks(css="css/custom.css") as demo:
     with gr.Row():
         with gr.Column(scale=1):
             gr.Markdown("### Files")
-            #TOFIX
+            # TOFIX
             file_explorer = gr.FileExplorer(current_dir)
 
         with gr.Column(scale=5):
@@ -259,17 +282,19 @@ with gr.Blocks(css="css/custom.css") as demo:
 
 # demo.launch()
 all_splits = load_chunk_text()
-#TOFIX
+# TOFIX
 _ = vector_store.add_documents(documents=all_splits)
 graph_builder = StateGraph(State).add_sequence([retrieve, generate])
 graph_builder.add_edge(START, "retrieve")
 graph = graph_builder.compile()
+
 
 async def run():
     async for message, metadata in graph.astream(
         {"question": "How can one better transmit glassblowing knowledge to novices?"},
         stream_mode="messages",
     ):
-        print(message.content) # type: ignore
+        print(message.content)  # type: ignore
+
 
 asyncio.run(run())
