@@ -3,12 +3,17 @@ import warnings
 import asyncio
 import logging
 import gradio as gr
+import tkinter as tk
 from dotenv import dotenv_values, load_dotenv
 from functools import partial
+from tkinter import filedialog
+from typing_extensions import List, Literal, TypedDict, Dict, Union, Type, Generator
 
 from langchain import hub
+from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+from langchain.schema import HumanMessage, AIMessage
 from langchain.schema.runnable import RunnablePassthrough
-from langchain_core.runnables import RunnableLambda
+from langchain_core.runnables import RunnableLambda, Runnable
 from langchain.chat_models import init_chat_model
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
@@ -21,9 +26,8 @@ from langchain_core.messages import BaseMessage
 from langchain_core.documents.transformers import BaseDocumentTransformer
 from langsmith import Client
 from langgraph.graph import StateGraph, START
-from typing_extensions import List, Literal, TypedDict, Dict, Union, Type
-import tkinter as tk
-from tkinter import filedialog
+
+
 
 logger_ = logging.getLogger(__name__)
 
@@ -95,7 +99,27 @@ class EnvLoader:
 
 
 class LangInit:
-    """Helper class to instantiate a Langchain Routine"""
+    """Helper class to instantiate and manage a Langchain Routine.
+    This class provides a unified interface for initializing and configuring
+    components needed for a Langchain-based application, including the client,
+    prompt templates, embeddings, vector stores, and language models.
+    
+    Attributes:
+        client: A Langchain Client instance for API interactions.
+        prompt_template: The prompt template pulled from Langchain Hub.
+        embeddings: Text embeddings model (not initialized by default).
+        vector_store: Vector database for storing embeddings (not initialized by default).
+        model: Language model for generating responses (not initialized by default).
+        loader: Document loader for text processing (not initialized by default).
+    
+    Examples:
+        >>> lang_init = LangInit()
+        >>> lang_init.lc_client_init(env_config={"LANGCHAIN_API_KEY": "your_api_key"})
+        >>> lang_init.pull_prompt(prompt_url="rlm/rag-prompt", include_model=True)
+        >>> lang_init.chat_model_init(model_url="accounts/fireworks/models/llama-v3p1-70b-instruct", 
+        ...                           model_provider="fireworks")
+        >>> lang_init.set_loader(PyPDFLoader)
+    """
 
     def __init__(self):
         self.client = self.lc_client_init()
@@ -103,7 +127,7 @@ class LangInit:
         self.embeddings = None
         self.vector_store = None
         self.model = None
-        self.splitter = None
+        self.loader = None
 
     def lc_client_init(self, env_config=dotenv_values()):
         """Initialize langchain client with provided environment configuration."""
@@ -149,14 +173,14 @@ class LangInit:
             logger_.error(f"Failed to initialize chat model: {str(e)}")
             return self
 
-    def load_splitter(self, text_splitter_cls):
-        """Load text splitter with specified configuration."""
-        try:
-            self.splitter = text_splitter_cls
-            return self
-        except Exception as e:
-            logger_.error(f"Failed to load text splitter: {str(e)}")
-            return self
+    def set_loader(self, loader_class):
+        """Store a document loader class to be used for file processing.
+
+        This doesn't instantiate the loader yet, but stores the class
+        for later instantiation with file paths.
+        """
+        self.loader = loader_class
+        return self.loader
 
 
 class State(TypedDict):
@@ -245,141 +269,185 @@ class RAG:
             return {"answer": "LLM not initialized properly."}
 
 
-def echo(message, history):
-    return message
-
-
-# with gr.Blocks(css="css/custom.css") as demo:
-#     gr.Markdown("# Moodle AI Assistant")
-
-#     def load_files_to_knowledge(selected_files):
-#         """Process selected files and add them to the RAG knowledge base."""
-#         if not selected_files:
-#             return "No files selected. Please select files to load."
-
-#         all_splits = []
-#         for file_path in selected_files:
-#             try:
-#                 if file_path.lower().endswith(".pdf"):
-#                     loader = PyPDFLoader(file_path=file_path)
-#                 elif file_path.lower().endswith((".txt", ".md")):
-#                     loader = TextLoader(file_path=file_path)
-#                 else:
-#                     continue  # Skip unsupported file types
-
-#                 splits = loader.load()
-#                 all_splits.extend(splits)
-#             except Exception as e:
-#                 logger_.error(f"Error processing file {file_path}: {str(e)}")
-
-#         if all_splits:
-#             rag.add_documents(documents=all_splits)
-#             logger_.info(
-#                 "Successfully loaded {len(all_splits)} document chunks into knowledge base."
-#             )
-#         else:
-#             return "No valid documents were processed. Please check file types and try again."
-
-#     with gr.Row():
-#         with gr.Column(scale=1):
-#             gr.Markdown("### Files")
-#             file_explorer = gr.FileExplorer(rag.get_cwd())
-#             load_knowledge = gr.Button("Load to knowledge")
-#             knowledge_status = gr.Textbox(label="Status", interactive=False)
-#             load_knowledge.click(
-#                 fn=load_files_to_knowledge,
-#                 inputs=file_explorer,
-#                 outputs=knowledge_status,
-#             )
-
-#         with gr.Column(scale=5):
-#             chat_interface = gr.ChatInterface(
-#                 fn=echo,
-#                 type="messages",
-#                 chatbot=gr.Chatbot(type="messages"),
-#                 textbox=gr.Textbox(placeholder="Ask something...", container=True),
-#                 submit_btn="Submit",
-#                 stop_btn="Stop",
-#                 show_progress="hidden",
-#             )
-
-
 class GraphBuilder:
     def __init__(self, state):
         self.state_graph = StateGraph(state)
-    
-    def to_runnable(self, func, name:str=""):
-        if name=="":
+        self.edges = set()
+        self.nodes = set([START])
+
+    def to_runnable(self, func, name: str = ""):
+        if name == "":
             name = func.__name__ + "_runnable"
-        return RunnableLambda(lambda state_: func(state_), name=name)
+        runnable = RunnableLambda(lambda state_: func(state_), name=name)
+        self.nodes.add(str(runnable.name))  # Track this node
+        return runnable
 
-    def add_sequence(self, sequence:List):
+    def add_sequence(self, sequence: List):
+        """Add a sequence of nodes with edges connecting them in order."""
+        if not sequence:
+            raise ValueError("Cannot add empty sequence")
+
+        # Add all nodes to our tracking
+        for node in sequence:
+            self.nodes.add(node)
+
+        # Add edges between consecutive nodes
+        for i in range(len(sequence) - 1):
+            source, target = sequence[i], sequence[i + 1]
+            self.edges.add((source, target))
+
+        # Add the sequence to the state graph
         self.state_graph.add_sequence(sequence)
+        return self
 
-    def add_edge(self, edge_name):
-        self.state_graph.add_edge(START, edge_name)
-    
-    def compile(self):
+    def add_start_edge(self, target):
+        """Connect the START node to a target node."""
+        if target not in self.nodes:
+            raise ValueError(f"Target node '{target}' has not been added to the graph")
+
+        self.edges.add((START, target))
+        self.state_graph.add_edge(START, target)
+        return self
+
+    def add_edge(self, source, target):
+        """Add an edge between two nodes."""
+        # Validate source and target exist
+        for node, name in [(source, "Source"), (target, "Target")]:
+            if node not in self.nodes:
+                raise ValueError(
+                    f"{name} node '{node}' has not been added to the graph"
+                )
+
+        # Check if graph has any START connections
+        if not any(src == START for src, _ in self.edges):
+            raise ValueError("Graph has no START edges. Call add_start_edge first.")
+
+        # Add the edge to our tracking and the state graph
+        self.edges.add((source, target))
+        self.state_graph.add_edge(source, target)
+        return self
+
+    def validate(self):
+        """Validate that the graph is properly connected."""
+        if not any(src == START for src, _ in self.edges):
+            raise ValueError("Graph has no START edges. Call add_start_edge first.")
+        return True
+
+    def build_graph(self, state_graph, functions=None):
+        """Build a graph from a list of RAG class function names.
+
+        Args:
+            state: The state type for the graph
+            functions: List of function names from RAG class to convert to runnables.
+                       If None, defaults to ["retrieve", "generate"]
+
+        Returns:
+            A compiled StateGraph
+        """
+        if functions is None:
+            functions = ["retrieve", "generate"]
+
+        runnables = []
+        for func_name in functions:
+            if not hasattr(rag, func_name):
+                raise ValueError(f"Function '{func_name}' not found in RAG class")
+            func = getattr(rag, func_name)
+            runnable = state_graph.to_runnable(func=func)
+            runnables.append(runnable)
+
+        # Add the sequence of runnables
+        if runnables:
+            state_graph.add_sequence(runnables)
+            state_graph.add_start_edge(runnables[0].name)
+            logger_.info(f"\nBuilt graph with functions: {functions}\nin that order")
+            return state_graph.compile_graph()
+        else:
+            raise ValueError("No functions provided to build graph")
+
+    def compile_graph(self):
+        """Validate and compile the graph."""
+        self.validate()
         return self.state_graph.compile()
 
 
-if __name__ == "__main__":
-    # Initialize LangInit and get prompt
+with gr.Blocks(css="css/custom.css") as demo:
+    gr.Markdown("# Moodle AI Assistant")
+    
+    state = State
     env = EnvLoader()
     lang = LangInit()
     rag = RAG()
 
-    lang.load_splitter(PyPDFLoader)
+    loader = lang.set_loader(PyPDFLoader)
     prompt = lang.pull_prompt()
     rag.set_llm(lang.chat_model_init().model)
 
-    state = State
+    
     all_splits = []
     documents = []
-    # Set up Tkinter dialog to select files
-    root = tk.Tk()
-    root.withdraw()  # Hide the main window
-    documents = list(
-        filedialog.askopenfilenames(
-            title="Select files to add to knowledge base",
-            filetypes=[
-                ("Document files", "*.pdf;*.txt;*.md"),
-                ("PDF files", "*.pdf"),
-                ("Text files", "*.txt"),
-                ("Markdown files", "*.md"),
-                ("All files", "*.*"),
-            ],
-        )
-    )
-    root.destroy()
 
-    if not documents:
-        print("No files selected. Please run the program again to select files.")
-    else:
-        print(f"Selected {len(documents)} files to process.")
-        for file in documents:
-            file_path = file
-            if lang.splitter:
-                if file_path:
-                    loader = lang.splitter(file_path=file_path)
-                    splits = loader.load()
-                    all_splits.extend(splits)
+    def load_files_to_knowledge(selected_files):
+        """Process selected files and add them to the RAG knowledge base."""
+        if not selected_files:
+            return "No files selected. Please select files to load."
 
-    rag.add_documents(documents=all_splits)
+        all_splits = []
+        for file_path in selected_files:
+            try:
+                if file_path.lower().endswith(".pdf"):
+                    loader = PyPDFLoader(file_path=file_path)
+                elif file_path.lower().endswith((".txt", ".md")):
+                    loader = TextLoader(file_path=file_path)
+                else:
+                    continue  # Skip unsupported file types
 
-    state_graph = GraphBuilder(state)
-    retrieve_runnable = state_graph.to_runnable(func=rag.retrieve)
-    generate_runnable = state_graph.to_runnable(func=rag.generate)
-    state_graph.add_sequence([retrieve_runnable, generate_runnable])
-    state_graph.add_edge(edge_name="retrieve_runnable") # this adds an edge called "retrieve" to START (pls generalize the function 'add_edge')
-    graph = state_graph.compile()
+                splits = loader.load()
+                all_splits.extend(splits)
+            except Exception as e:
+                logger_.error(f"Error processing file {file_path}: {str(e)}")
 
-    async def run():
-        async for message, metadata in graph.astream(
-            {"question": "What are the main steps to build a RAG?"},
-            stream_mode="messages",
-        ):
-            print(message.content)  # type: ignore
+        if all_splits:
+            rag.add_documents(documents=all_splits)
+            logger_.info(
+                f"Successfully loaded {len(all_splits)} document chunks into knowledge base."
+            )
+            return f"Successfully loaded {len(all_splits)} document chunks into knowledge base."
+        else:
+            return "No valid documents were processed. Please check file types and try again."
 
-    asyncio.run(run())
-    # demo.launch()
+    async def generate_answer(user_query:str, history:List[Dict[str, str]], *, stream_mode="messages") -> Generator:
+        history_lc = []
+        for msg in history:
+            if msg["role"] == "user":
+                history_lc.append(HumanMessage(content=msg["content"]))
+            elif msg["role"] == "assistant":
+                history_lc.append(AIMessage(content=msg["content"]))
+            history_lc.append(HumanMessage(content=user_query))
+    
+    
+    with gr.Row():
+        with gr.Column(scale=1):
+            gr.Markdown("### Files")
+            file_explorer = gr.FileExplorer(root_dir=rag.get_cwd())
+            load_knowledge = gr.Button("Load to knowledge")
+            knowledge_status = gr.Textbox(label="Status", interactive=False)
+            load_knowledge.click(
+                fn=load_files_to_knowledge,
+                inputs=file_explorer,
+                outputs=knowledge_status,
+            )
+
+        with gr.Column(scale=5):
+            chat_interface = gr.ChatInterface(
+                fn=echo,
+                type="messages",
+                chatbot=gr.Chatbot(type="messages"),
+                textbox=gr.Textbox(placeholder="Ask something...", container=True),
+                submit_btn="Submit",
+                stop_btn="Stop",
+                show_progress="hidden",
+            )
+
+
+if __name__ == "__main__":
+    demo.launch()
