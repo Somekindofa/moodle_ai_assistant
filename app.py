@@ -7,7 +7,7 @@ import tkinter as tk
 from dotenv import dotenv_values, load_dotenv
 from functools import partial
 from tkinter import filedialog
-from typing_extensions import List, Literal, TypedDict, Dict, Union, Type, Generator
+from typing_extensions import List, Literal, TypedDict, Dict, Union, Type, Generator, AsyncGenerator
 
 from langchain import hub
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
@@ -380,7 +380,7 @@ with gr.Blocks(css="css/custom.css") as demo:
 
     loader = lang.set_loader(PyPDFLoader)
     prompt = lang.pull_prompt()
-    rag.set_llm(lang.chat_model_init().model)
+    rag.set_llm(lang.chat_model_init().model) # setting default llm to llama-v3p1-70b-instruct
 
     
     all_splits = []
@@ -415,14 +415,17 @@ with gr.Blocks(css="css/custom.css") as demo:
         else:
             return "No valid documents were processed. Please check file types and try again."
 
-    async def generate_answer(user_query:str, history:List[Dict[str, str]], *, stream_mode="messages") -> Generator:
+    async def generate_answer(user_query:str, history:List[Dict[str, str]], *, stream_mode="messages") -> AsyncGenerator:
         history_lc = []
         for msg in history:
             if msg["role"] == "user":
                 history_lc.append(HumanMessage(content=msg["content"]))
             elif msg["role"] == "assistant":
                 history_lc.append(AIMessage(content=msg["content"]))
-            history_lc.append(HumanMessage(content=user_query))
+        history_lc.append(HumanMessage(content=user_query))
+        if rag.llm:
+            llm_res = await rag.llm.astream(history_lc)
+        
     
     
     with gr.Row():
