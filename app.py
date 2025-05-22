@@ -7,7 +7,10 @@ import tkinter as tk
 from dotenv import dotenv_values, load_dotenv
 from functools import partial
 from tkinter import filedialog
-from typing_extensions import List, Literal, TypedDict, Dict, Union, Type, Generator, AsyncGenerator
+from typing_extensions import List, Literal, TypedDict, Dict, Union, Type, Generator, AsyncGenerator, Callable
+
+
+from langsmith import Client
 
 from langchain import hub
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
@@ -24,8 +27,9 @@ from langchain_text_splitters.base import TextSplitter
 from langchain_core.documents.base import Document
 from langchain_core.messages import BaseMessage
 from langchain_core.documents.transformers import BaseDocumentTransformer
-from langsmith import Client
+
 from langgraph.graph import StateGraph, START
+from langgraph.graph.state import CompiledStateGraph
 
 
 
@@ -251,7 +255,6 @@ class RAG:
         logger_.info("LLM updated successfully")
 
     def generate(self, state, *, prompt=None):
-        print(f"\nState in GENERATE is: {state}\n")
         docs_content = "\n\n".join(doc.page_content for doc in state["context"])
 
         if prompt:
@@ -259,23 +262,63 @@ class RAG:
                 {"question": state["question"], "context": docs_content}
             )
         else:
-            # Fallback if no prompt is available
-            message = f"Question: {state['question']}\n\nContext: {docs_content}"
+            raise ValueError("Please provide a prompt.")
 
         if self.llm:
             response = self.llm.invoke(message)
             return {"answer": response.content}
         else:
-            return {"answer": "LLM not initialized properly."}
+            raise 
 
 
 class GraphBuilder:
+    """A utility class for building and managing state graphs in the RAG framework.
+    This class simplifies the creation of state graphs by tracking nodes and edges,
+    validating connections, and providing a fluent API for graph construction.
+    Attributes:
+        state_graph (StateGraph): The underlying state graph being built
+        edges (set): Set of tuples representing graph edges (source, target)
+        nodes (set): Set of node identifiers in the graph
+    Methods:
+        `_to_runnable`: Converts a function to a runnable node with tracking
+        `add_sequence`: Add a sequence of connected nodes to the graph
+        `add_start_edge`: Connect the ```START``` node to a target node
+        `add_edge`: Add an edge between existing nodes
+        `_validate`: Ensure the graph is properly connected
+        `build_graph`: Build a graph from RAG class functions
+        `compile_graph`: Validate and compile the final state graph
+    Example:
+        >>> # Define your state type
+        >>> class RAGState(TypedDict):
+        >>>     query: str
+        >>>     documents: List[Document]
+        >>>     response: str
+        >>> 
+        >>> # Initialize graph builder
+        >>> builder = GraphBuilder(RAGState)
+        >>>
+        >>> # Define your RAG functions
+        >>> def retrieve(state: RAGState) -> RAGState:
+        >>>     # Retrieval logic
+        >>>     return state
+        >>> def generate(state: RAGState) -> RAGState:
+        >>>     # Generation logic
+        >>>     return state
+        >>>
+        >>> # Create the graph
+        >>> graph = builder.add_sequence(['retrieve', 'generate'])
+        >>>                 .add_start_edge('retrieve')
+        >>>                 .compile_graph()
+
+        >>> # Execute the graph
+        >>> result = graph.invoke({"query": "What is RAG?", "documents": [], "response": ""})"""
+
     def __init__(self, state):
         self.state_graph = StateGraph(state)
         self.edges = set()
         self.nodes = set([START])
 
-    def to_runnable(self, func, name: str = ""):
+    def _to_runnable(self, func, name: str = "") -> RunnableLambda[Callable[[StateGraph], StateGraph], str]:
         if name == "":
             name = func.__name__ + "_runnable"
         runnable = RunnableLambda(lambda state_: func(state_), name=name)
@@ -327,13 +370,13 @@ class GraphBuilder:
         self.state_graph.add_edge(source, target)
         return self
 
-    def validate(self):
+    def _validate(self):
         """Validate that the graph is properly connected."""
         if not any(src == START for src, _ in self.edges):
             raise ValueError("Graph has no START edges. Call add_start_edge first.")
         return True
 
-    def build_graph(self, state_graph, functions=None):
+    def build_graph(self, state_graph, functions=None) -> StateGraph:
         """Build a graph from a list of RAG class function names.
 
         Args:
@@ -352,21 +395,21 @@ class GraphBuilder:
             if not hasattr(rag, func_name):
                 raise ValueError(f"Function '{func_name}' not found in RAG class")
             func = getattr(rag, func_name)
-            runnable = state_graph.to_runnable(func=func)
+            runnable = self._to_runnable(func=func)
             runnables.append(runnable)
-
+ 
         # Add the sequence of runnables
         if runnables:
             state_graph.add_sequence(runnables)
             state_graph.add_start_edge(runnables[0].name)
             logger_.info(f"\nBuilt graph with functions: {functions}\nin that order")
-            return state_graph.compile_graph()
+            return state_graph
         else:
             raise ValueError("No functions provided to build graph")
 
-    def compile_graph(self):
-        """Validate and compile the graph."""
-        self.validate()
+    def compile_graph(self) -> CompiledStateGraph:
+        """Validate and compile the graph into a ```CompiledStateGraph``` object."""
+        self._validate()
         return self.state_graph.compile()
 
 
@@ -377,6 +420,8 @@ with gr.Blocks(css="css/custom.css") as demo:
     env = EnvLoader()
     lang = LangInit()
     rag = RAG()
+    builder = GraphBuilder(state)
+    graph = 
 
     loader = lang.set_loader(PyPDFLoader)
     prompt = lang.pull_prompt()
@@ -424,7 +469,10 @@ with gr.Blocks(css="css/custom.css") as demo:
                 history_lc.append(AIMessage(content=msg["content"]))
         history_lc.append(HumanMessage(content=user_query))
         if rag.llm:
-            llm_res = await rag.llm.astream(history_lc)
+            async for tok, meta in graph.astream(
+                {"question": user_query}, stream_mode=stream_mode
+            ):
+                
         
     
     
