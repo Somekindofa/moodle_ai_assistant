@@ -23,6 +23,7 @@ from langchain_chroma import Chroma
 from langchain_community.document_loaders.text import TextLoader
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_experimental.text_splitter import SemanticChunker
+from langchain_text_splitters import CharacterTextSplitter, TextSplitter
 from langchain_text_splitters.base import TextSplitter
 from langchain_core.documents.base import Document
 from langchain_core.messages import BaseMessage
@@ -131,7 +132,6 @@ class LangInit:
         self.embeddings = None
         self.vector_store = None
         self.model = None
-        self.loader = None
 
     def lc_client_init(self, env_config=dotenv_values()):
         """Initialize langchain client with provided environment configuration."""
@@ -176,15 +176,6 @@ class LangInit:
         except Exception as e:
             logger_.error(f"Failed to initialize chat model: {str(e)}")
             return self
-
-    def set_loader(self, loader_class):
-        """Store a document loader class to be used for file processing.
-
-        This doesn't instantiate the loader yet, but stores the class
-        for later instantiation with file paths.
-        """
-        self.loader = loader_class
-        return self.loader
 
 
 class State(TypedDict):
@@ -376,7 +367,7 @@ class GraphBuilder:
             raise ValueError("Graph has no START edges. Call add_start_edge first.")
         return True
 
-    def build_graph(self, state_graph, functions=None) -> StateGraph:
+    def build_graph(self, state_graph, *, rag, functions=None) -> StateGraph:
         """Build a graph from a list of RAG class function names.
 
         Args:
@@ -421,33 +412,33 @@ with gr.Blocks(css="css/custom.css") as demo:
     lang = LangInit()
     rag = RAG()
     builder = GraphBuilder(state)
-    graph = 
+    builder_sg = builder.build_graph(state_graph=state, rag=rag)
+    graph = builder_sg.compile()
 
-    loader = lang.set_loader(PyPDFLoader)
-    prompt = lang.pull_prompt()
+    prompt = lang.pull_prompt() # pulling basic prompt from "rlm/rag-prompt"
     rag.set_llm(lang.chat_model_init().model) # setting default llm to llama-v3p1-70b-instruct
 
     
     all_splits = []
     documents = []
 
-    def load_files_to_knowledge(selected_files):
+    def load_and_split(files, splitter_cls=CharacterTextSplitter):
         """Process selected files and add them to the RAG knowledge base."""
-        if not selected_files:
+        if not files:
             return "No files selected. Please select files to load."
-
+        splitter = splitter_cls()
         all_splits = []
-        for file_path in selected_files:
+        for file_path in files:
             try:
                 if file_path.lower().endswith(".pdf"):
-                    loader = PyPDFLoader(file_path=file_path)
+                    loader = PyPDFLoader(file_path=file_path)   # For PDFs, using this loader
                 elif file_path.lower().endswith((".txt", ".md")):
-                    loader = TextLoader(file_path=file_path)
+                    loader = TextLoader(file_path=file_path)    # For basic Text files, using this loader
                 else:
                     continue  # Skip unsupported file types
 
-                splits = loader.load()
-                all_splits.extend(splits)
+                doc_split = loader.load_and_split(text_splitter=splitter)
+                all_splits.extend(doc_split)
             except Exception as e:
                 logger_.error(f"Error processing file {file_path}: {str(e)}")
 
@@ -456,9 +447,8 @@ with gr.Blocks(css="css/custom.css") as demo:
             logger_.info(
                 f"Successfully loaded {len(all_splits)} document chunks into knowledge base."
             )
-            return f"Successfully loaded {len(all_splits)} document chunks into knowledge base."
         else:
-            return "No valid documents were processed. Please check file types and try again."
+            logger_.error("Could not split the documents.")
 
     async def generate_answer(user_query:str, history:List[Dict[str, str]], *, stream_mode="messages") -> AsyncGenerator:
         history_lc = []
