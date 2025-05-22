@@ -7,7 +7,17 @@ import tkinter as tk
 from dotenv import dotenv_values, load_dotenv
 from functools import partial
 from tkinter import filedialog
-from typing_extensions import List, Literal, TypedDict, Dict, Union, Type, Generator, AsyncGenerator, Callable
+from typing_extensions import (
+    List,
+    Literal,
+    TypedDict,
+    Dict,
+    Union,
+    Type,
+    Generator,
+    AsyncGenerator,
+    Callable,
+)
 
 
 from langsmith import Client
@@ -31,7 +41,7 @@ from langchain_core.documents.transformers import BaseDocumentTransformer
 
 from langgraph.graph import StateGraph, START
 from langgraph.graph.state import CompiledStateGraph
-
+from langgraph.types import StreamMode
 
 
 logger_ = logging.getLogger(__name__)
@@ -59,6 +69,13 @@ MODEL_PROVIDERS = Literal[
     "xai",
     "perplexity",
 ]
+
+
+class State(TypedDict):
+    question: str  # User query
+    context: List[Document]
+    answer: str
+    history: List[Dict[str, str]]
 
 
 class EnvLoader:
@@ -108,7 +125,7 @@ class LangInit:
     This class provides a unified interface for initializing and configuring
     components needed for a Langchain-based application, including the client,
     prompt templates, embeddings, vector stores, and language models.
-    
+
     Attributes:
         client: A Langchain Client instance for API interactions.
         prompt_template: The prompt template pulled from Langchain Hub.
@@ -116,12 +133,12 @@ class LangInit:
         vector_store: Vector database for storing embeddings (not initialized by default).
         model: Language model for generating responses (not initialized by default).
         loader: Document loader for text processing (not initialized by default).
-    
+
     Examples:
         >>> lang_init = LangInit()
         >>> lang_init.lc_client_init(env_config={"LANGCHAIN_API_KEY": "your_api_key"})
         >>> lang_init.pull_prompt(prompt_url="rlm/rag-prompt", include_model=True)
-        >>> lang_init.chat_model_init(model_url="accounts/fireworks/models/llama-v3p1-70b-instruct", 
+        >>> lang_init.chat_model_init(model_url="accounts/fireworks/models/llama-v3p1-70b-instruct",
         ...                           model_provider="fireworks")
         >>> lang_init.set_loader(PyPDFLoader)
     """
@@ -164,25 +181,6 @@ class LangInit:
             logger_.error(f"Failed to pull prompt from {prompt_url}: {str(e)}")
             return None
 
-    def chat_model_init(
-        self,
-        model_url="accounts/fireworks/models/llama-v3p1-70b-instruct",
-        model_provider="fireworks",
-    ):
-        """Initialize chat model from specified provider."""
-        try:
-            self.model = init_chat_model(model_url, model_provider=model_provider)
-            return self
-        except Exception as e:
-            logger_.error(f"Failed to initialize chat model: {str(e)}")
-            return self
-
-
-class State(TypedDict):
-    question: str  # User query
-    context: List[Document]
-    answer: str
-
 
 class RAG:
     """Setup for Retrieval Augmented Generation."""
@@ -190,8 +188,7 @@ class RAG:
     def __init__(
         self,
         collection_name="example_collection",
-        persist_directory="./chroma_langchain_db",
-        llm=None,
+        persist_directory="./chroma_langchain_db"
     ):
         """Initialize RAG setup with default configuration."""
         try:
@@ -204,11 +201,22 @@ class RAG:
                 persist_directory=persist_directory,
             )
             self.history = []
-            self.llm = llm
+            self.llm = self.llm_init()
             logger_.info(f"Initialized RAG setup with collection '{collection_name}'")
         except Exception as e:
             logger_.error(f"Failed to initialize RAG setup: {str(e)}")
-            raise
+
+    def llm_init(
+        self,
+        model_url="accounts/fireworks/models/llama-v3p1-70b-instruct",
+        model_provider="fireworks",
+    ):
+        """Initialize chat model from specified provider."""
+        try:
+            return init_chat_model(model_url, model_provider=model_provider)
+        except Exception as e:
+            logger_.error(f"Failed to initialize chat model: {str(e)}")
+            return None
 
     def get_cwd(self):
         """Get current working directory."""
@@ -236,7 +244,6 @@ class RAG:
             return []
 
     def retrieve(self, state):
-        print(f"\nState in RETRIEVE is: {state}\n")
         retrieved_docs = self.vector_store.similarity_search(state["question"])
         return {"context": retrieved_docs}
 
@@ -259,7 +266,7 @@ class RAG:
             response = self.llm.invoke(message)
             return {"answer": response.content}
         else:
-            raise 
+            raise
 
 
 class GraphBuilder:
@@ -284,7 +291,7 @@ class GraphBuilder:
         >>>     query: str
         >>>     documents: List[Document]
         >>>     response: str
-        >>> 
+        >>>
         >>> # Initialize graph builder
         >>> builder = GraphBuilder(RAGState)
         >>>
@@ -302,14 +309,17 @@ class GraphBuilder:
         >>>                 .compile_graph()
 
         >>> # Execute the graph
-        >>> result = graph.invoke({"query": "What is RAG?", "documents": [], "response": ""})"""
+        >>> result = graph.invoke({"question": "What is RAG?"}, stream_mode="messages")
+    """
 
     def __init__(self, state):
         self.state_graph = StateGraph(state)
         self.edges = set()
         self.nodes = set([START])
 
-    def _to_runnable(self, func, name: str = "") -> RunnableLambda[Callable[[StateGraph], StateGraph], str]:
+    def _to_runnable(
+        self, func, name: str = ""
+    ) -> RunnableLambda[Callable[[StateGraph], StateGraph], str]:
         if name == "":
             name = func.__name__ + "_runnable"
         runnable = RunnableLambda(lambda state_: func(state_), name=name)
@@ -388,7 +398,7 @@ class GraphBuilder:
             func = getattr(rag, func_name)
             runnable = self._to_runnable(func=func)
             runnables.append(runnable)
- 
+
         # Add the sequence of runnables
         if runnables:
             state_graph.add_sequence(runnables)
@@ -406,7 +416,7 @@ class GraphBuilder:
 
 with gr.Blocks(css="css/custom.css") as demo:
     gr.Markdown("# Moodle AI Assistant")
-    
+
     state = State
     env = EnvLoader()
     lang = LangInit()
@@ -415,10 +425,11 @@ with gr.Blocks(css="css/custom.css") as demo:
     builder_sg = builder.build_graph(state_graph=state, rag=rag)
     graph = builder_sg.compile()
 
-    prompt = lang.pull_prompt() # pulling basic prompt from "rlm/rag-prompt"
-    rag.set_llm(lang.chat_model_init().model) # setting default llm to llama-v3p1-70b-instruct
+    prompt = lang.pull_prompt()  # pulling basic prompt from "rlm/rag-prompt"
+    rag.set_llm(
+        lang.chat_model_init().model
+    )  # setting default llm to llama-v3p1-70b-instruct
 
-    
     all_splits = []
     documents = []
 
@@ -431,9 +442,13 @@ with gr.Blocks(css="css/custom.css") as demo:
         for file_path in files:
             try:
                 if file_path.lower().endswith(".pdf"):
-                    loader = PyPDFLoader(file_path=file_path)   # For PDFs, using this loader
+                    loader = PyPDFLoader(
+                        file_path=file_path
+                    )  # For PDFs, using this loader
                 elif file_path.lower().endswith((".txt", ".md")):
-                    loader = TextLoader(file_path=file_path)    # For basic Text files, using this loader
+                    loader = TextLoader(
+                        file_path=file_path
+                    )  # For basic Text files, using this loader
                 else:
                     continue  # Skip unsupported file types
 
@@ -450,7 +465,12 @@ with gr.Blocks(css="css/custom.css") as demo:
         else:
             logger_.error("Could not split the documents.")
 
-    async def generate_answer(user_query:str, history:List[Dict[str, str]], *, stream_mode="messages") -> AsyncGenerator:
+    async def generate_answer(
+        user_query: str,
+        history: List[Dict[str, str]],
+        *,
+        stream_mode: StreamMode = "messages",
+    ) -> AsyncGenerator:
         history_lc = []
         for msg in history:
             if msg["role"] == "user":
@@ -458,14 +478,11 @@ with gr.Blocks(css="css/custom.css") as demo:
             elif msg["role"] == "assistant":
                 history_lc.append(AIMessage(content=msg["content"]))
         history_lc.append(HumanMessage(content=user_query))
-        if rag.llm:
-            async for tok, meta in graph.astream(
-                {"question": user_query}, stream_mode=stream_mode
-            ):
-                
-        
-    
-    
+        async for tok, meta in graph.astream(
+            {"question": user_query}, stream_mode=stream_mode
+        ):
+            yield tok
+
     with gr.Row():
         with gr.Column(scale=1):
             gr.Markdown("### Files")
