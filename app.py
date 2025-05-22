@@ -17,6 +17,7 @@ from typing_extensions import (
     Generator,
     AsyncGenerator,
     Callable,
+    Any,
 )
 
 
@@ -148,7 +149,6 @@ class LangInit:
         self.prompt_template = self.pull_prompt()
         self.embeddings = None
         self.vector_store = None
-        self.model = None
 
     def lc_client_init(self, env_config=dotenv_values()):
         """Initialize langchain client with provided environment configuration."""
@@ -188,7 +188,7 @@ class RAG:
     def __init__(
         self,
         collection_name="example_collection",
-        persist_directory="./chroma_langchain_db"
+        persist_directory="./chroma_langchain_db",
     ):
         """Initialize RAG setup with default configuration."""
         try:
@@ -243,14 +243,9 @@ class RAG:
             logger_.error(f"Error during similarity search: {str(e)}")
             return []
 
-    def retrieve(self, state):
+    def retrieve(self, state: State) -> Dict[str, Any]:
         retrieved_docs = self.vector_store.similarity_search(state["question"])
         return {"context": retrieved_docs}
-
-    def set_llm(self, llm):
-        """Set or update the language model."""
-        self.llm = llm
-        logger_.info("LLM updated successfully")
 
     def generate(self, state, *, prompt=None):
         docs_content = "\n\n".join(doc.page_content for doc in state["context"])
@@ -264,9 +259,22 @@ class RAG:
 
         if self.llm:
             response = self.llm.invoke(message)
-            return {"answer": response.content}
+            current_history = state.get(
+                "history", []
+            )  # get the current history from the state
+            updated_history = current_history + [
+                {
+                    "role": "user",
+                    "content": state["question"],
+                    "role": "assistant",
+                    "content": response.content,
+                }
+            ]
+            return {"answer": response.content, "history": updated_history}
         else:
-            raise
+            raise ValueError(
+                "No LLM found. Please make sure that the RAG LLM is correctly instantiated."
+            )
 
 
 class GraphBuilder:
@@ -426,9 +434,6 @@ with gr.Blocks(css="css/custom.css") as demo:
     graph = builder_sg.compile()
 
     prompt = lang.pull_prompt()  # pulling basic prompt from "rlm/rag-prompt"
-    rag.set_llm(
-        lang.chat_model_init().model
-    )  # setting default llm to llama-v3p1-70b-instruct
 
     all_splits = []
     documents = []
