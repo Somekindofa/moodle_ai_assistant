@@ -46,6 +46,13 @@ from langgraph.types import StreamMode
 
 
 logger_ = logging.getLogger(__name__)
+# Create console handler
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+
+# Add the handler to your logger
+logger_.addHandler(console_handler)
+logger_.setLevel(logging.INFO)
 
 MODEL_PROVIDERS = Literal[
     "openai",
@@ -76,7 +83,7 @@ class State(TypedDict):
     question: str  # User query
     context: List[Document]
     answer: str
-    history: List[Dict[str, str]]
+    history: List[Dict[str, Any]]
 
 
 class EnvLoader:
@@ -189,6 +196,7 @@ class RAG:
         self,
         collection_name="example_collection",
         persist_directory="./chroma_langchain_db",
+        prompt=None,
     ):
         """Initialize RAG setup with default configuration."""
         try:
@@ -200,9 +208,15 @@ class RAG:
                 embedding_function=self.embeddings,
                 persist_directory=persist_directory,
             )
-            self.history = []
             self.llm = self.llm_init()
+            self.prompt = prompt
             logger_.info(f"Initialized RAG setup with collection '{collection_name}'")
+            if not prompt:
+                logger_.warning(
+                    "Prompt not loaded. Please provide `prompt` argument to class builder."
+                )
+            else:
+                logger_.warning(f"Prompt loaded")
         except Exception as e:
             logger_.error(f"Failed to initialize RAG setup: {str(e)}")
 
@@ -221,10 +235,6 @@ class RAG:
     def get_cwd(self):
         """Get current working directory."""
         return os.getcwd()
-
-    def get_history(self):
-        """Get conversation history."""
-        return self.history
 
     def add_documents(self, documents):
         """Add documents to the vector store."""
@@ -247,28 +257,23 @@ class RAG:
         retrieved_docs = self.vector_store.similarity_search(state["question"])
         return {"context": retrieved_docs}
 
-    def generate(self, state, *, prompt=None):
+    def generate(self, state) -> Dict[str, Any]:
         docs_content = "\n\n".join(doc.page_content for doc in state["context"])
 
-        if prompt:
-            message = prompt.invoke(
+        if self.prompt:
+            message = self.prompt.invoke(
                 {"question": state["question"], "context": docs_content}
             )
+
         else:
             raise ValueError("Please provide a prompt.")
 
         if self.llm:
             response = self.llm.invoke(message)
-            current_history = state.get(
-                "history", []
-            )  # get the current history from the state
+            current_history = state.get("history", [])
             updated_history = current_history + [
-                {
-                    "role": "user",
-                    "content": state["question"],
-                    "role": "assistant",
-                    "content": response.content,
-                }
+                {"role": "user", "content": state["question"]},
+                {"role": "assistant", "content": response.content},
             ]
             return {"answer": response.content, "history": updated_history}
         else:
@@ -385,7 +390,7 @@ class GraphBuilder:
             raise ValueError("Graph has no START edges. Call add_start_edge first.")
         return True
 
-    def build_graph(self, state_graph, *, rag, functions=None) -> StateGraph:
+    def build_graph(self, state, *, rag, functions=None):
         """Build a graph from a list of RAG class function names.
 
         Args:
@@ -398,7 +403,6 @@ class GraphBuilder:
         """
         if functions is None:
             functions = ["retrieve", "generate"]
-
         runnables = []
         for func_name in functions:
             if not hasattr(rag, func_name):
@@ -409,10 +413,10 @@ class GraphBuilder:
 
         # Add the sequence of runnables
         if runnables:
-            state_graph.add_sequence(runnables)
-            state_graph.add_start_edge(runnables[0].name)
-            logger_.info(f"\nBuilt graph with functions: {functions}\nin that order")
-            return state_graph
+            self.state_graph.add_sequence(runnables)
+            self.add_start_edge(runnables[0].name)
+            logger_.info(f"\nBuilt graph with functions: {functions} in that order\n")
+            return self
         else:
             raise ValueError("No functions provided to build graph")
 
@@ -428,12 +432,10 @@ with gr.Blocks(css="css/custom.css") as demo:
     state = State
     env = EnvLoader()
     lang = LangInit()
-    rag = RAG()
+    rag = RAG(prompt=lang.prompt_template)
     builder = GraphBuilder(state)
-    builder_sg = builder.build_graph(state_graph=state, rag=rag)
-    graph = builder_sg.compile()
-
-    prompt = lang.pull_prompt()  # pulling basic prompt from "rlm/rag-prompt"
+    builder_sg = builder.build_graph(state=state, rag=rag)
+    graph = builder_sg.compile_graph()
 
     all_splits = []
     documents = []
@@ -447,13 +449,9 @@ with gr.Blocks(css="css/custom.css") as demo:
         for file_path in files:
             try:
                 if file_path.lower().endswith(".pdf"):
-                    loader = PyPDFLoader(
-                        file_path=file_path
-                    )  # For PDFs, using this loader
+                    loader = PyPDFLoader(file_path=file_path)
                 elif file_path.lower().endswith((".txt", ".md")):
-                    loader = TextLoader(
-                        file_path=file_path
-                    )  # For basic Text files, using this loader
+                    loader = TextLoader(file_path=file_path)
                 else:
                     continue  # Skip unsupported file types
 
@@ -467,6 +465,7 @@ with gr.Blocks(css="css/custom.css") as demo:
             logger_.info(
                 f"Successfully loaded {len(all_splits)} document chunks into knowledge base."
             )
+            return all_splits
         else:
             logger_.error("Could not split the documents.")
 
@@ -483,10 +482,16 @@ with gr.Blocks(css="css/custom.css") as demo:
             elif msg["role"] == "assistant":
                 history_lc.append(AIMessage(content=msg["content"]))
         history_lc.append(HumanMessage(content=user_query))
-        async for tok, meta in graph.astream(
-            {"question": user_query}, stream_mode=stream_mode
+        acc_answer = ""
+        async for chunk, _ in graph.astream(
+            {"question": user_query, "history": history}, stream_mode=stream_mode
         ):
-            yield tok
+            if hasattr(chunk, "content"):
+                chunk_content = chunk.content
+            else:
+                chunk_content = str(chunk)
+            acc_answer += chunk_content
+            yield acc_answer
 
     with gr.Row():
         with gr.Column(scale=1):
@@ -495,14 +500,14 @@ with gr.Blocks(css="css/custom.css") as demo:
             load_knowledge = gr.Button("Load to knowledge")
             knowledge_status = gr.Textbox(label="Status", interactive=False)
             load_knowledge.click(
-                fn=load_files_to_knowledge,
+                fn=load_and_split,
                 inputs=file_explorer,
                 outputs=knowledge_status,
             )
 
         with gr.Column(scale=5):
             chat_interface = gr.ChatInterface(
-                fn=echo,
+                fn=generate_answer,
                 type="messages",
                 chatbot=gr.Chatbot(type="messages"),
                 textbox=gr.Textbox(placeholder="Ask something...", container=True),
