@@ -1,5 +1,5 @@
 .env
 test*
 *_db/
-certificate*
 *.sqlite3
+.gradio/
