@@ -3,3 +3,4 @@ test*
 *_db/
 *.sqlite3
 .gradio/
+chroma_langchain_db/
