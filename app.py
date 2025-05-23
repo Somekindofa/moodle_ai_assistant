@@ -256,14 +256,9 @@ class RAG:
         try:
             if file_paths == "all":
                 # Clear the entire collection
-                self.vector_store.delete_collection()
-                self.vector_store = Chroma(
-                    collection_name=self.vector_store._collection_name,
-                    embedding_function=self.embeddings,
-                    persist_directory=self.vector_store._persist_directory,
-                )
-                logger_.info("Cleared entire vector store collection")
-                return True
+                self.vector_store.reset_collection()
+                logger_.info("Cleared entire vector store collection. New instance created")
+                return self.vector_store
 
             # For specific files, we need their document IDs
             # This requires tracking document metadata during insertion
@@ -279,16 +274,15 @@ class RAG:
                 logger_.info(
                     f"Removed {len(ids_to_remove)} documents from vector store"
                 )
-                return True
+                return self.vector_store
             else:
                 logger_.info(
                     f"No documents found to remove for the specified file paths"
                 )
-                return False
+                return self.vector_store
 
         except Exception as e:
-            logger_.error(f"Failed to remove documents: {str(e)}")
-            return False
+            raise ValueError()
 
     def similarity_search(self, query, k=4):
         """Perform similarity search with the given query."""
@@ -486,10 +480,18 @@ with gr.Blocks(css="css/custom.css") as demo:
     all_splits = []
     documents = []
 
-    def load_and_split(files, splitter_cls=CharacterTextSplitter):
+    def _load_to_dataframe(docs: Dict[str, Any]) -> pd.DataFrame:
+        df = pd.DataFrame({
+            "ID": docs["ids"],
+            "Title": [doc.get("title", None) for doc in docs['metadatas']],
+            "Source": [doc.get("source", None) for doc in docs['metadatas']]
+        })
+        return df
+
+    def load_and_split(files, splitter_cls=CharacterTextSplitter) -> pd.DataFrame:
         """Process selected files and add them to the RAG knowledge base."""
         if not files:
-            return "No files selected. Please select files to load."
+            raise ValueError("No files selected. Please select files to load.")
         splitter = splitter_cls()
         all_splits = []
         for file_path in files:
@@ -512,36 +514,9 @@ with gr.Blocks(css="css/custom.css") as demo:
                 f"Successfully loaded {len(all_splits)} document chunks into knowledge base."
             )
 
-            def _load_to_dataframe(
-                splits: List[Dict[str, Any]]
-            ):
-                dataframe = pd.DataFrame()
-                rows = []
-                for split in splits:
-                    if "metadatas" and "ids" in split.keys():
-                        split_id = split.get("ids")
-                        split_meta = split.get("metadatas")
-                        if split_meta:
-                            split_meta_title = split_meta.get("title")
-                            split_meta_source = split_meta.get("source")
-
-                            if not isinstance(split_meta_title, str):
-                                raise TypeError(
-                                    f"Expected string, got {type(split_meta_title)} instead"
-                                )
-                            if not isinstance(split_meta_source, str):
-                                raise TypeError(
-                                    f"Expected string, got {type(split_meta_source)} instead"
-                                )
-                            row = {
-                                "id": split_id,
-                                "title": split_meta_title,
-                                "source": split_meta_source
-                            }
-                            rows.append(row)
-                return pd.DataFrame(rows)
-        else:
-            logger_.error("Could not split the documents.")
+            return _load_to_dataframe(rag.vector_store.get())
+        logger_.error("Could not split the documents.")
+        return pd.DataFrame()
 
     async def generate_answer(
         user_query: str,
@@ -571,7 +546,6 @@ with gr.Blocks(css="css/custom.css") as demo:
         with gr.Column(scale=1):
             gr.Markdown("### Files")
             file_explorer = gr.FileExplorer(root_dir=rag.get_cwd())
-            load_knowledge = gr.Button("Load to knowledge")
 
         with gr.Column(scale=5):
             chat_interface = gr.ChatInterface(
@@ -584,15 +558,21 @@ with gr.Blocks(css="css/custom.css") as demo:
                 show_progress="hidden",
             )
     knowledge_df = gr.Dataframe(
-        headers=["Title", "File path", "Id"],
+        headers=["id", "title", "source"],
+        interactive=False
     )
     file_explorer.change(
         fn=load_and_split,
         inputs=file_explorer,
-        outputs=knowledge_status,
+        outputs=knowledge_df,
         show_progress="minimal",
     )
 
+    refresh_df = gr.Button("Refresh Knowledge Base", variant="primary")
+    refresh_df.click(
+        fn=lambda: rag.remove_documents("all"),
+        outputs=None
+    ).then()
 
 if __name__ == "__main__":
     demo.launch()
