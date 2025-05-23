@@ -1,3 +1,5 @@
 .env
 test*
 .gradio/
+*.sqlite3
+*_db/
