@@ -573,6 +573,6 @@ with gr.Blocks(css="css/custom.css") as demo:
         fn=lambda: rag.remove_documents("all"),
         outputs=None
     ).then()
-
+    # TODO
 if __name__ == "__main__":
     demo.launch()
