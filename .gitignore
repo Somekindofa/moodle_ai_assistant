@@ -2,3 +2,4 @@
 test*
 *_db/
 certificate*
+*.sqlite3
