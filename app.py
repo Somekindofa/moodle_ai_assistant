@@ -3,6 +3,7 @@ import warnings
 import asyncio
 import logging
 import gradio as gr
+import pandas as pd
 import tkinter as tk
 from dotenv import dotenv_values, load_dotenv
 from functools import partial
@@ -48,9 +49,10 @@ from langgraph.types import StreamMode
 logger_ = logging.getLogger(__name__)
 # Create console handler
 console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
-
-# Add the handler to your logger
+formatter = logging.Formatter(
+    "%(asctime)s   %(levelname)s   %(name)s:   %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+)
+console_handler.setFormatter(formatter)
 logger_.addHandler(console_handler)
 logger_.setLevel(logging.INFO)
 
@@ -216,7 +218,7 @@ class RAG:
                     "Prompt not loaded. Please provide `prompt` argument to class builder."
                 )
             else:
-                logger_.warning(f"Prompt loaded")
+                logger_.info(f"Prompt loaded")
         except Exception as e:
             logger_.error(f"Failed to initialize RAG setup: {str(e)}")
 
@@ -243,6 +245,50 @@ class RAG:
             logger_.info(f"Added {len(documents)} documents to vector store")
         except Exception as e:
             logger_.error(f"Failed to add documents: {str(e)}")
+
+    # Add this to your RAG class
+    def remove_documents(self, file_paths: Union[List[str], Literal["all"]] = "all"):
+        """Remove documents from the vector store based on file path.
+
+        Args:
+            file_paths: List of file paths to remove. If None, clear the entire collection.
+        """
+        try:
+            if file_paths == "all":
+                # Clear the entire collection
+                self.vector_store.delete_collection()
+                self.vector_store = Chroma(
+                    collection_name=self.vector_store._collection_name,
+                    embedding_function=self.embeddings,
+                    persist_directory=self.vector_store._persist_directory,
+                )
+                logger_.info("Cleared entire vector store collection")
+                return True
+
+            # For specific files, we need their document IDs
+            # This requires tracking document metadata during insertion
+            ids_to_remove = []
+            for file_path in file_paths:
+                # Get IDs of documents with this file path in metadata
+                results = self.vector_store.get(where={"source": file_path})
+                if results and "ids" in results:
+                    ids_to_remove.extend(results["ids"])
+
+            if ids_to_remove:
+                self.vector_store.delete(ids=ids_to_remove)
+                logger_.info(
+                    f"Removed {len(ids_to_remove)} documents from vector store"
+                )
+                return True
+            else:
+                logger_.info(
+                    f"No documents found to remove for the specified file paths"
+                )
+                return False
+
+        except Exception as e:
+            logger_.error(f"Failed to remove documents: {str(e)}")
+            return False
 
     def similarity_search(self, query, k=4):
         """Perform similarity search with the given query."""
@@ -415,7 +461,7 @@ class GraphBuilder:
         if runnables:
             self.state_graph.add_sequence(runnables)
             self.add_start_edge(runnables[0].name)
-            logger_.info(f"\nBuilt graph with functions: {functions} in that order\n")
+            logger_.info(f"Built graph with functions: {functions} in that order")
             return self
         else:
             raise ValueError("No functions provided to build graph")
@@ -465,7 +511,35 @@ with gr.Blocks(css="css/custom.css") as demo:
             logger_.info(
                 f"Successfully loaded {len(all_splits)} document chunks into knowledge base."
             )
-            return all_splits
+
+            def _load_to_dataframe(
+                splits: List[Dict[str, Any]]
+            ):
+                dataframe = pd.DataFrame()
+                rows = []
+                for split in splits:
+                    if "metadatas" and "ids" in split.keys():
+                        split_id = split.get("ids")
+                        split_meta = split.get("metadatas")
+                        if split_meta:
+                            split_meta_title = split_meta.get("title")
+                            split_meta_source = split_meta.get("source")
+
+                            if not isinstance(split_meta_title, str):
+                                raise TypeError(
+                                    f"Expected string, got {type(split_meta_title)} instead"
+                                )
+                            if not isinstance(split_meta_source, str):
+                                raise TypeError(
+                                    f"Expected string, got {type(split_meta_source)} instead"
+                                )
+                            row = {
+                                "id": split_id,
+                                "title": split_meta_title,
+                                "source": split_meta_source
+                            }
+                            rows.append(row)
+                return pd.DataFrame(rows)
         else:
             logger_.error("Could not split the documents.")
 
@@ -487,7 +561,7 @@ with gr.Blocks(css="css/custom.css") as demo:
             {"question": user_query, "history": history}, stream_mode=stream_mode
         ):
             if hasattr(chunk, "content"):
-                chunk_content = chunk.content
+                chunk_content = chunk.content  # type: ignore
             else:
                 chunk_content = str(chunk)
             acc_answer += chunk_content
@@ -498,12 +572,6 @@ with gr.Blocks(css="css/custom.css") as demo:
             gr.Markdown("### Files")
             file_explorer = gr.FileExplorer(root_dir=rag.get_cwd())
             load_knowledge = gr.Button("Load to knowledge")
-            knowledge_status = gr.Textbox(label="Status", interactive=False)
-            load_knowledge.click(
-                fn=load_and_split,
-                inputs=file_explorer,
-                outputs=knowledge_status,
-            )
 
         with gr.Column(scale=5):
             chat_interface = gr.ChatInterface(
@@ -515,6 +583,15 @@ with gr.Blocks(css="css/custom.css") as demo:
                 stop_btn="Stop",
                 show_progress="hidden",
             )
+    knowledge_df = gr.Dataframe(
+        headers=["Title", "File path", "Id"],
+    )
+    file_explorer.change(
+        fn=load_and_split,
+        inputs=file_explorer,
+        outputs=knowledge_status,
+        show_progress="minimal",
+    )
 
 
 if __name__ == "__main__":
