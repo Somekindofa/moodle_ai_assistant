@@ -2,9 +2,12 @@ import os
 import warnings
 import asyncio
 import logging
+import sqlite3
 import gradio as gr
 import pandas as pd
 import tkinter as tk
+from pathlib import Path
+from datetime import datetime
 from dotenv import dotenv_values, load_dotenv
 from functools import partial
 from tkinter import filedialog
@@ -21,6 +24,8 @@ from typing_extensions import (
     Any,
 )
 
+from gradio_backend_sqlite_columns import MetadataForm
+from database_manager import DatabaseManager
 
 from langsmith import Client
 
@@ -466,113 +471,200 @@ class GraphBuilder:
         return self.state_graph.compile()
 
 
+def _load_to_dataframe(docs: Dict[str, Any]) -> pd.DataFrame:
+    df = pd.DataFrame({
+        "ID": docs["ids"],
+        "Title": [doc.get("title", None) for doc in docs['metadatas']],
+        "Source": [doc.get("source", None) for doc in docs['metadatas']]
+    })
+    return df
+
+def load_and_split(files, splitter_cls=CharacterTextSplitter) -> pd.DataFrame:
+    """Process selected files and add them to the RAG knowledge base."""
+    if not files:
+        raise ValueError("No files selected. Please select files to load.")
+    splitter = splitter_cls()
+    all_splits = []
+    for file_path in files:
+        try:
+            if file_path.lower().endswith(".pdf"):
+                loader = PyPDFLoader(file_path=file_path)
+            elif file_path.lower().endswith((".txt", ".md")):
+                loader = TextLoader(file_path=file_path)
+            else:
+                continue  # Skip unsupported file types
+
+            doc_split = loader.load_and_split(text_splitter=splitter)
+            all_splits.extend(doc_split)
+        except Exception as e:
+            logger_.error(f"Error processing file {file_path}: {str(e)}")
+
+    if all_splits:
+        rag.add_documents(documents=all_splits)
+        logger_.info(
+            f"Successfully loaded {len(all_splits)} document chunks into knowledge base."
+        )
+
+        return _load_to_dataframe(rag.vector_store.get())
+    logger_.error("Could not split the documents.")
+    return pd.DataFrame()
+
+
+state = State
+env = EnvLoader()
+lang = LangInit()
+rag = RAG(prompt=lang.prompt_template)
+builder = GraphBuilder(state)
+builder_sg = builder.build_graph(state=state, rag=rag)
+graph = builder_sg.compile_graph()
+db_manager = DatabaseManager()  # New database manager instance
+all_splits = []
+documents = []
+current_db_df = pd.DataFrame()  # Stores current database view
+
+
+async def generate_answer(
+    user_query: str,
+    history: List[Dict[str, str]],
+    *,
+    stream_mode: StreamMode = "messages",
+) -> AsyncGenerator:
+    history_lc = []
+    for msg in history:
+        if msg["role"] == "user":
+            history_lc.append(HumanMessage(content=msg["content"]))
+        elif msg["role"] == "assistant":
+            history_lc.append(AIMessage(content=msg["content"]))
+    history_lc.append(HumanMessage(content=user_query))
+    acc_answer = ""
+    async for chunk, _ in graph.astream(
+        {"question": user_query, "history": history}, stream_mode=stream_mode
+    ):
+        if hasattr(chunk, "content"):
+            chunk_content = chunk.content  # type: ignore
+        else:
+            chunk_content = str(chunk)
+        acc_answer += chunk_content
+        yield acc_answer
+
 with gr.Blocks(css="css/custom.css") as demo:
     gr.Markdown("# Moodle AI Assistant")
 
-    state = State
-    env = EnvLoader()
-    lang = LangInit()
-    rag = RAG(prompt=lang.prompt_template)
-    builder = GraphBuilder(state)
-    builder_sg = builder.build_graph(state=state, rag=rag)
-    graph = builder_sg.compile_graph()
+    # Create tabbed interface - this is the main change to your existing app structure
+    with gr.Tabs():
+        # Original Chat Tab - preserving your existing functionality
+        with gr.TabItem("Chat Interface"):
+            with gr.Row():
+                with gr.Column(scale=1):
+                    gr.Markdown("### Files")
+                    file_explorer = gr.FileExplorer(root_dir=rag.get_cwd())
 
-    all_splits = []
-    documents = []
-
-    def _load_to_dataframe(docs: Dict[str, Any]) -> pd.DataFrame:
-        df = pd.DataFrame({
-            "ID": docs["ids"],
-            "Title": [doc.get("title", None) for doc in docs['metadatas']],
-            "Source": [doc.get("source", None) for doc in docs['metadatas']]
-        })
-        return df
-
-    def load_and_split(files, splitter_cls=CharacterTextSplitter) -> pd.DataFrame:
-        """Process selected files and add them to the RAG knowledge base."""
-        if not files:
-            raise ValueError("No files selected. Please select files to load.")
-        splitter = splitter_cls()
-        all_splits = []
-        for file_path in files:
-            try:
-                if file_path.lower().endswith(".pdf"):
-                    loader = PyPDFLoader(file_path=file_path)
-                elif file_path.lower().endswith((".txt", ".md")):
-                    loader = TextLoader(file_path=file_path)
-                else:
-                    continue  # Skip unsupported file types
-
-                doc_split = loader.load_and_split(text_splitter=splitter)
-                all_splits.extend(doc_split)
-            except Exception as e:
-                logger_.error(f"Error processing file {file_path}: {str(e)}")
-
-        if all_splits:
-            rag.add_documents(documents=all_splits)
-            logger_.info(
-                f"Successfully loaded {len(all_splits)} document chunks into knowledge base."
+                with gr.Column(scale=5):
+                    chat_interface = gr.ChatInterface(
+                        fn=generate_answer,
+                        type="messages",
+                        chatbot=gr.Chatbot(type="messages"),
+                        textbox=gr.Textbox(placeholder="Ask something...", container=True),
+                        submit_btn="Submit",
+                        stop_btn="Stop",
+                        show_progress="hidden",
+                    )
+            
+            knowledge_df = gr.Dataframe(
+                headers=["id", "title", "source"],
+                interactive=False,
+                label="Knowledge Base Contents"
+            )
+            file_explorer.change(
+                fn=load_and_split,
+                inputs=file_explorer,
+                outputs=knowledge_df,
+                show_progress="minimal",
             )
 
-            return _load_to_dataframe(rag.vector_store.get())
-        logger_.error("Could not split the documents.")
-        return pd.DataFrame()
-
-    async def generate_answer(
-        user_query: str,
-        history: List[Dict[str, str]],
-        *,
-        stream_mode: StreamMode = "messages",
-    ) -> AsyncGenerator:
-        history_lc = []
-        for msg in history:
-            if msg["role"] == "user":
-                history_lc.append(HumanMessage(content=msg["content"]))
-            elif msg["role"] == "assistant":
-                history_lc.append(AIMessage(content=msg["content"]))
-        history_lc.append(HumanMessage(content=user_query))
-        acc_answer = ""
-        async for chunk, _ in graph.astream(
-            {"question": user_query, "history": history}, stream_mode=stream_mode
-        ):
-            if hasattr(chunk, "content"):
-                chunk_content = chunk.content  # type: ignore
-            else:
-                chunk_content = str(chunk)
-            acc_answer += chunk_content
-            yield acc_answer
-
-    with gr.Row():
-        with gr.Column(scale=1):
-            gr.Markdown("### Files")
-            file_explorer = gr.FileExplorer(root_dir=rag.get_cwd())
-
-        with gr.Column(scale=5):
-            chat_interface = gr.ChatInterface(
-                fn=generate_answer,
-                type="messages",
-                chatbot=gr.Chatbot(type="messages"),
-                textbox=gr.Textbox(placeholder="Ask something...", container=True),
-                submit_btn="Submit",
-                stop_btn="Stop",
-                show_progress="hidden",
+            refresh_df = gr.Button("Refresh Knowledge Base", variant="primary")
+            refresh_df.click(
+                fn=lambda: rag.remove_documents("all"),
+                outputs=None
             )
-    knowledge_df = gr.Dataframe(
-        headers=["id", "title", "source"],
-        interactive=False
-    )
-    file_explorer.change(
-        fn=load_and_split,
-        inputs=file_explorer,
-        outputs=knowledge_df,
-        show_progress="minimal",
-    )
+        
+        # New Backend Tab - your requested database management interface
+        with gr.TabItem("Backend"):
+            gr.Markdown("### Database Management Interface")
+            
+            with gr.Row():
+                with gr.Column(scale=1):
+                    gr.Markdown("#### File Upload")
+                    # File Explorer for adding files to database - filter for specific types
+                    backend_file_explorer = gr.FileExplorer(
+                        root_dir=rag.get_cwd(),
+                        label="Select Files (.wav, .mp4, .txt, .pdf)"
+                    )
+                    
+                    gr.Markdown("#### Database Selection")
+                    db_selector = gr.File(
+                        label="Select Database (.db files)",
+                        file_count="single",
+                        file_types=[".db"]
+                    )
+                    
+                    db_status = gr.Textbox(
+                        label="Database Status", 
+                        value="No database selected",
+                        interactive=False
+                    )
+                
+                with gr.Column(scale=2):
+                    gr.Markdown("#### Database Viewer")
+                    # Database Viewer - Dataframe is perfect for showing table-like data
+                    database_viewer = gr.Dataframe(
+                        label="Database Contents",
+                        interactive=False,  # Read-only view
+                        wrap=True
+                    )
+                    
+                    refresh_db_btn = gr.Button("Refresh Database View", variant="secondary")
+            
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("#### Add New Entry")
+                    entry_form_container = gr.Column(visible=False) #hidden at first
+                    with entry_form_container:
+                        metadata_form = MetadataForm()
+                    add_entry_btn = gr.Button("Add to Database", variant="primary", visible=False)
+                    entry_status = gr.Textbox(
+                        label="Entry Status",
+                        value="Select a database to see available fields",
+                        interactive=False
+                    )
+            
+            db_selector.change(
+                fn=update_interface_for_database,
+                inputs=db_selector,
+                outputs=[database_viewer, db_status, entry_form_container, add_entry_btn, entry_status]
+            )
+            
+            backend_file_explorer.change(
+                fn=process_files_for_database,
+                inputs=backend_file_explorer,
+                outputs=[gr.Dataframe(visible=False), entry_status]
+            ).then(
+                fn=lambda comp: comp.render(),
+                inputs=entry_form_container
+            )
+            
+            # Add entry handler
+            add_entry_btn.click(
+                fn=lambda *list: add_database_entry_dynamic(*list),
+                inputs=metadata_form.get_component_values(),
+                outputs=[database_viewer, entry_status]
+            )
+            
+            # Refresh database view handler
+            refresh_db_btn.click(
+                fn=refresh_database_view,
+                outputs=database_viewer
+            )
 
-    refresh_df = gr.Button("Refresh Knowledge Base", variant="primary")
-    refresh_df.click(
-        fn=lambda: rag.remove_documents("all"),
-        outputs=None
-    ).then()
-    # TODO
 if __name__ == "__main__":
     demo.launch()
