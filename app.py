@@ -600,20 +600,7 @@ with gr.Blocks(css="css/custom.css") as demo:
                         root_dir=rag.get_cwd(),
                         label="Select Files (.wav, .mp4, .txt, .pdf)"
                     )
-                    
-                    gr.Markdown("#### Database Selection")
-                    db_selector = gr.File(
-                        label="Select Database (.db files)",
-                        file_count="single",
-                        file_types=[".db"]
-                    )
-                    
-                    db_status = gr.Textbox(
-                        label="Database Status", 
-                        value="No database selected",
-                        interactive=False
-                    )
-                
+
                 with gr.Column(scale=2):
                     gr.Markdown("#### Database Viewer")
                     # Database Viewer - Dataframe is perfect for showing table-like data
@@ -637,34 +624,6 @@ with gr.Blocks(css="css/custom.css") as demo:
                         value="Select a database to see available fields",
                         interactive=False
                     )
-            
-            db_selector.change(
-                fn=update_interface_for_database,
-                inputs=db_selector,
-                outputs=[database_viewer, db_status, entry_form_container, add_entry_btn, entry_status]
-            )
-            
-            backend_file_explorer.change(
-                fn=process_files_for_database,
-                inputs=backend_file_explorer,
-                outputs=[gr.Dataframe(visible=False), entry_status]
-            ).then(
-                fn=lambda comp: comp.render(),
-                inputs=entry_form_container
-            )
-            
-            # Add entry handler
-            add_entry_btn.click(
-                fn=lambda *list: add_database_entry_dynamic(*list),
-                inputs=metadata_form.get_component_values(),
-                outputs=[database_viewer, entry_status]
-            )
-            
-            # Refresh database view handler
-            refresh_db_btn.click(
-                fn=refresh_database_view,
-                outputs=database_viewer
-            )
 
 if __name__ == "__main__":
     demo.launch()
