@@ -2,3 +2,4 @@
 .gradio/
 *.sqlite3
 *_db/
+logging*
