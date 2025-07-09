@@ -24,7 +24,6 @@ from typing_extensions import (
     Any,
 )
 
-from gradio_backend_sqlite_columns import MetadataForm
 from database_manager import DatabaseManager
 
 from langsmith import Client
@@ -611,19 +610,6 @@ with gr.Blocks(css="css/custom.css") as demo:
                     )
                     
                     refresh_db_btn = gr.Button("Refresh Database View", variant="secondary")
-            
-            with gr.Row():
-                with gr.Column():
-                    gr.Markdown("#### Add New Entry")
-                    entry_form_container = gr.Column(visible=False) #hidden at first
-                    with entry_form_container:
-                        metadata_form = MetadataForm()
-                    add_entry_btn = gr.Button("Add to Database", variant="primary", visible=False)
-                    entry_status = gr.Textbox(
-                        label="Entry Status",
-                        value="Select a database to see available fields",
-                        interactive=False
-                    )
 
 if __name__ == "__main__":
     demo.launch()
