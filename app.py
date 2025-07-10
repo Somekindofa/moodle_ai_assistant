@@ -24,7 +24,7 @@ from typing_extensions import (
     Any,
 )
 
-from database_manager import DatabaseManager
+from src.database.database_manager import DatabaseManager
 
 from langsmith import Client
 
