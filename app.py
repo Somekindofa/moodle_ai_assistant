@@ -24,8 +24,6 @@ from typing_extensions import (
     Any,
 )
 
-from src.database.database_manager import DatabaseManager
-
 from langsmith import Client
 
 from langchain import hub
@@ -516,7 +514,6 @@ rag = RAG(prompt=lang.prompt_template)
 builder = GraphBuilder(state)
 builder_sg = builder.build_graph(state=state, rag=rag)
 graph = builder_sg.compile_graph()
-db_manager = DatabaseManager()  # New database manager instance
 all_splits = []
 documents = []
 current_db_df = pd.DataFrame()  # Stores current database view
