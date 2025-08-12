@@ -259,7 +259,9 @@ class RAG:
             if file_paths == "all":
                 # Clear the entire collection
                 self.vector_store.reset_collection()
-                logger_.info("Cleared entire vector store collection. New instance created")
+                logger_.info(
+                    "Cleared entire vector store collection. New instance created"
+                )
                 return self.vector_store
 
             # For specific files, we need their document IDs
@@ -432,35 +434,61 @@ class GraphBuilder:
             raise ValueError("Graph has no START edges. Call add_start_edge first.")
         return True
 
-    def build_graph(self, state, *, rag, functions=None):
-        """Build a graph from a list of RAG class function names.
+    def _create_runnables_from_functions(
+        self, rag, functions: List[str]
+    ) -> List[RunnableLambda]:
+        """Create runnable objects from RAG class function names.
 
         Args:
-            state: The state type for the graph
-            functions: List of function names from RAG class to convert to runnables.
-                       If None, defaults to ["retrieve", "generate"]
+            rag: The RAG instance containing the functions
+            functions: List of function names to convert to runnables
 
         Returns:
-            A compiled StateGraph
+            List of RunnableLambda objects
+
+        Raises:
+            ValueError: If a function doesn't exist in the RAG class
         """
-        if functions is None:
-            functions = ["retrieve", "generate"]
         runnables = []
         for func_name in functions:
             if not hasattr(rag, func_name):
                 raise ValueError(f"Function '{func_name}' not found in RAG class")
+
             func = getattr(rag, func_name)
             runnable = self._to_runnable(func=func)
             runnables.append(runnable)
 
-        # Add the sequence of runnables
-        if runnables:
-            self.state_graph.add_sequence(runnables)
-            self.add_start_edge(runnables[0].name)
-            logger_.info(f"Built graph with functions: {functions} in that order")
-            return self
-        else:
+        return runnables
+
+    def build_graph(self, *, rag, functions=None):
+        """Build a graph from a list of RAG class function names.
+
+        Args:
+            rag: The RAG instance containing the functions to use
+            functions: List of function names from RAG class to convert to runnables.
+                       If None, defaults to ["retrieve", "generate"]
+
+        Returns:
+            Self for method chaining
+
+        Raises:
+            ValueError: If no functions provided or functions don't exist in RAG class
+        """
+        if functions is None:
+            functions = ["retrieve", "generate"]
+
+        if not functions:
             raise ValueError("No functions provided to build graph")
+
+        # Create runnables from the specified functions
+        runnables = self._create_runnables_from_functions(rag, functions)
+
+        # Build the graph structure
+        self.state_graph.add_sequence(runnables)
+        self.add_start_edge(runnables[0].name)
+
+        logger_.info(f"Built graph with functions: {functions} in that order")
+        return self
 
     def compile_graph(self) -> CompiledStateGraph:
         """Validate and compile the graph into a ```CompiledStateGraph``` object."""
@@ -469,12 +497,15 @@ class GraphBuilder:
 
 
 def _load_to_dataframe(docs: Dict[str, Any]) -> pd.DataFrame:
-    df = pd.DataFrame({
-        "ID": docs["ids"],
-        "Title": [doc.get("title", None) for doc in docs['metadatas']],
-        "Source": [doc.get("source", None) for doc in docs['metadatas']]
-    })
+    df = pd.DataFrame(
+        {
+            "ID": docs["ids"],
+            "Title": [doc.get("title", None) for doc in docs["metadatas"]],
+            "Source": [doc.get("source", None) for doc in docs["metadatas"]],
+        }
+    )
     return df
+
 
 def load_and_split(files, splitter_cls=CharacterTextSplitter) -> pd.DataFrame:
     """Process selected files and add them to the RAG knowledge base."""
@@ -512,7 +543,7 @@ env = EnvLoader()
 lang = LangInit()
 rag = RAG(prompt=lang.prompt_template)
 builder = GraphBuilder(state)
-builder_sg = builder.build_graph(state=state, rag=rag)
+builder_sg = builder.build_graph(rag=rag)
 graph = builder_sg.compile_graph()
 all_splits = []
 documents = []
@@ -543,6 +574,7 @@ async def generate_answer(
         acc_answer += chunk_content
         yield acc_answer
 
+
 with gr.Blocks(css="css/custom.css") as demo:
     gr.Markdown("# Moodle AI Assistant")
 
@@ -560,16 +592,18 @@ with gr.Blocks(css="css/custom.css") as demo:
                         fn=generate_answer,
                         type="messages",
                         chatbot=gr.Chatbot(type="messages"),
-                        textbox=gr.Textbox(placeholder="Ask something...", container=True),
+                        textbox=gr.Textbox(
+                            placeholder="Ask something...", container=True
+                        ),
                         submit_btn="Submit",
                         stop_btn="Stop",
                         show_progress="hidden",
                     )
-            
+
             knowledge_df = gr.Dataframe(
                 headers=["id", "title", "source"],
                 interactive=False,
-                label="Knowledge Base Contents"
+                label="Knowledge Base Contents",
             )
             file_explorer.change(
                 fn=load_and_split,
@@ -579,22 +613,19 @@ with gr.Blocks(css="css/custom.css") as demo:
             )
 
             refresh_df = gr.Button("Refresh Knowledge Base", variant="primary")
-            refresh_df.click(
-                fn=lambda: rag.remove_documents("all"),
-                outputs=None
-            )
-        
+            refresh_df.click(fn=lambda: rag.remove_documents("all"), outputs=None)
+
         # New Backend Tab - your requested database management interface
         with gr.TabItem("Backend"):
             gr.Markdown("### Database Management Interface")
-            
+
             with gr.Row():
                 with gr.Column(scale=1):
                     gr.Markdown("#### File Upload")
                     # File Explorer for adding files to database - filter for specific types
                     backend_file_explorer = gr.FileExplorer(
                         root_dir=rag.get_cwd(),
-                        label="Select Files (.wav, .mp4, .txt, .pdf)"
+                        label="Select Files (.wav, .mp4, .txt, .pdf)",
                     )
 
                 with gr.Column(scale=2):
@@ -603,10 +634,13 @@ with gr.Blocks(css="css/custom.css") as demo:
                     database_viewer = gr.Dataframe(
                         label="Database Contents",
                         interactive=False,  # Read-only view
-                        wrap=True
+                        wrap=True,
                     )
-                    
-                    refresh_db_btn = gr.Button("Refresh Database View", variant="secondary")
+
+                    refresh_db_btn = gr.Button(
+                        "Refresh Database View", variant="secondary"
+                    )
 
 if __name__ == "__main__":
+    demo.launch()
     demo.launch()
