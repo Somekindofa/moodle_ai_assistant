@@ -119,27 +119,38 @@ class RAGService:
 
     def retrieve(self, state: ConversationState) -> Dict[str, Any]:
         """Retrieve relevant documents for a given state."""
-        retrieved_docs = self.similarity_search(state["question"])
-        return {"context": retrieved_docs}
+        # Check if we have any documents in the vector store
+        vector_data = self.get_vector_store_data()
+        has_documents = bool(vector_data.get("ids"))
+        
+        if has_documents:
+            retrieved_docs = self.similarity_search(state["question"])
+            return {"context": retrieved_docs}
+        else:
+            # No documents available - return empty context for pure generation
+            logger.info("No documents in vector store - switching to pure generation mode")
+            return {"context": []}
 
     def generate(self, state: ConversationState) -> Dict[str, Any]:
-        """Generate response using retrieved context."""
+        """Generate response using retrieved context or pure generation."""
         if not self.llm:
             raise ValueError("No LLM available. Please check LLM initialization.")
 
-        if not self.prompt_template:
-            raise ValueError(
-                "No prompt template available. Please provide a prompt template."
-            )
-
         try:
-            # Combine document content
-            docs_content = "\n\n".join(doc.page_content for doc in state["context"])
-
-            # Create message using prompt template
-            message = self.prompt_template.invoke(
-                {"question": state["question"], "context": docs_content}
-            )
+            # Check if we have context (documents)
+            has_context = bool(state.get("context"))
+            
+            if has_context and self.prompt_template:
+                # RAG mode: use context with prompt template
+                docs_content = "\n\n".join(doc.page_content for doc in state["context"])
+                message = self.prompt_template.invoke(
+                    {"question": state["question"], "context": docs_content}
+                )
+            else:
+                # Pure generation mode: direct question to LLM
+                logger.info("Using pure generation mode - no context available")
+                from langchain.schema import HumanMessage
+                message = [HumanMessage(content=state["question"])]
 
             # Generate response
             response = self.llm.invoke(message)

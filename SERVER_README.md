@@ -1,0 +1,79 @@
+# Moodle AI Assistant Backend Server
+
+## Overview
+
+This backend server acts as a proxy between a JavaScript frontend (Moodle block plugin) and the RAG system, providing streaming responses through a FastAPI web server.
+
+## Architecture
+
+```
+JavaScript Frontend (Moodle) → FastAPI Backend → RAG System → Fireworks.ai LLM → Streaming Response
+```
+
+## Operating Modes
+
+1. **RAG Mode**: When a `Documents` folder exists in the workspace or documents are loaded in the vector store
+2. **Pure Generation Mode**: When no documents are available, direct queries to the LLM
+
+## API Endpoints
+
+- `GET /` - Root endpoint with server info
+- `GET /api/health` - Health check
+- `GET /api/status` - System status (mode, document availability)
+- `POST /api/chat` - Main chat endpoint with Server-Sent Events streaming
+
+## Quick Start
+
+1. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Set up environment variables**:
+   Create a `.env` file with:
+   ```
+   FIREWORKS_API_KEY=your_fireworks_api_key
+   LANGCHAIN_API_KEY=your_langchain_api_key
+   ```
+
+3. **Run the server**:
+   ```bash
+   python main.py
+   ```
+   
+   Server will be available at: http://127.0.0.1:8000
+
+4. **API Documentation**:
+   Visit: http://127.0.0.1:8000/docs
+
+## Document Loading
+
+- Place documents in a `Documents` folder in the workspace root
+- Supported formats: `.pdf`, `.txt`, `.md`, `.wav`, `.mp4`
+- Documents are automatically loaded on server startup
+
+## JavaScript Integration
+
+See `client_example.py` for a complete example of how to integrate with the Moodle frontend.
+
+Key features:
+- Health checking
+- Status monitoring (RAG vs Generation mode)
+- Streaming responses with Server-Sent Events
+- Error handling
+
+## Configuration
+
+The server uses the existing configuration system from `config/settings.py`. Key settings:
+
+- LLM provider: Fireworks.ai
+- Vector store: ChromaDB
+- Embeddings: HuggingFace sentence-transformers
+- CORS: Enabled for cross-origin requests
+
+## Development
+
+For development with auto-reload:
+```bash
+uvicorn server:app --reload --host 127.0.0.1 --port 8000
+```

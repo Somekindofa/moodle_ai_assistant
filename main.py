@@ -1,38 +1,33 @@
 """
-Refactored main application for Moodle AI Assistant.
+Backend server entry point for Moodle AI Assistant.
 
-This is the new production-ready entry point that uses the modular pipeline architecture.
+This is the new production-ready entry point that launches the FastAPI server
+for the JavaScript frontend integration.
 """
 
 import logging
-from config.settings import ConfigurationManager, setup_logging
-from pipeline import MoodleAIAssistantPipeline
-from ui.gradio_interface import MoodleAIAssistantUI
+import uvicorn
+from config.settings import setup_logging
 
 
 def main():
     """Main application entry point."""
     # Setup logging
     logger = setup_logging()
-    logger.info("Starting Moodle AI Assistant...")
+    logger.info("Starting Moodle AI Assistant Backend Server...")
 
     try:
-        # Initialize configuration
-        config_manager = ConfigurationManager()
-
-        # Initialize pipeline
-        pipeline = MoodleAIAssistantPipeline(config_manager)
-
-        # Create UI
-        ui = MoodleAIAssistantUI(pipeline)
-        interface = ui.create_interface()
-
-        # Launch application
-        logger.info("Launching Gradio interface...")
-        interface.launch()
+        # Launch FastAPI server
+        uvicorn.run(
+            "server:app",
+            host="127.0.0.1",
+            port=8000,
+            reload=True,
+            log_level="info"
+        )
 
     except Exception as e:
-        logger.error(f"Failed to start application: {str(e)}")
+        logger.error(f"Failed to start server: {str(e)}")
         raise
 
 
