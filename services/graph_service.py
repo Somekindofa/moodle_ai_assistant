@@ -28,6 +28,13 @@ class ConversationGraphService:
         if not name:
             name = f"{func.__name__}_runnable"
 
+        # Ensure unique names by checking existing nodes
+        original_name = name
+        counter = 1
+        while name in self.nodes:
+            name = f"{original_name}_{counter}"
+            counter += 1
+
         runnable = RunnableLambda(lambda state: func(state), name=name)
         self.nodes.add(str(runnable.name))
         return runnable
