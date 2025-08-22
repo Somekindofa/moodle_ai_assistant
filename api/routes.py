@@ -26,16 +26,18 @@ def check_documents_folder() -> bool:
     return os.path.exists("Documents") and os.path.isdir("Documents")
 
 
-async def generate_sse_response(user_message: str, history: list) -> AsyncGenerator[str, None]:
+async def generate_sse_response(
+    user_message: str, history: list
+) -> AsyncGenerator[str, None]:
     """Generate Server-Sent Events response for streaming."""
     try:
         async for chunk in pipeline.generate_response(user_message, history):
             # Format as SSE event
             yield f"data: {chunk}\n\n"
-        
+
         # Send end-of-stream marker
         yield "data: [DONE]\n\n"
-        
+
     except Exception as e:
         yield f"data: ERROR: {str(e)}\n\n"
 
@@ -43,10 +45,7 @@ async def generate_sse_response(user_message: str, history: list) -> AsyncGenera
 @router.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint."""
-    return HealthResponse(
-        status="healthy",
-        timestamp=datetime.now().isoformat()
-    )
+    return HealthResponse(status="healthy", timestamp=datetime.now().isoformat())
 
 
 @router.get("/status", response_model=SystemStatus)
@@ -55,11 +54,11 @@ async def get_system_status():
     docs_exist = check_documents_folder()
     kb_data = pipeline.get_knowledge_base_status()
     vector_count = len(kb_data) if not kb_data.empty else 0
-    
+
     return SystemStatus(
         mode="rag" if docs_exist or vector_count > 0 else "generation",
         documents_folder_exists=docs_exist,
-        vector_store_count=vector_count
+        vector_store_count=vector_count,
     )
 
 
@@ -70,7 +69,7 @@ async def chat_stream(request: ChatRequest):
         history = request.history or []
         return EventSourceResponse(
             generate_sse_response(request.message, history),
-            media_type="text/event-stream"
+            media_type="text/event-stream",
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
