@@ -64,7 +64,7 @@ class RAGService:
         """Initialize chat model."""
         try:
             llm = init_chat_model(
-                self.config.llm_model_url, model_provider=self.config.llm_provider
+                self.config.llm_model_url, model_provider=self.config.llm_provider, streaming=True
             )
             logger.info(f"LLM initialized: {self.config.llm_model_url}")
             return llm
@@ -122,13 +122,20 @@ class RAGService:
         # Check if we have any documents in the vector store
         vector_data = self.get_vector_store_data()
         has_documents = bool(vector_data.get("ids"))
-        
+
         if has_documents:
-            retrieved_docs = self.similarity_search(state["question"])
-            return {"context": retrieved_docs}
+            retrieved_docs = self.similarity_search(state["question"]) # could be more efficient in terms of retrieval
+            if not retrieved_docs:
+                logger.info("No relevant documents found for the query")
+                return {"context": []}
+            else:
+                logger.info(f"Retrieved {len(retrieved_docs)} documents for the query")
+                return {"context": retrieved_docs}
         else:
             # No documents available - return empty context for pure generation
-            logger.info("No documents in vector store - switching to pure generation mode")
+            logger.info(
+                "No documents in vector store - switching to pure generation mode"
+            )
             return {"context": []}
 
     def generate(self, state: ConversationState) -> Dict[str, Any]:
@@ -139,7 +146,7 @@ class RAGService:
         try:
             # Check if we have context (documents)
             has_context = bool(state.get("context"))
-            
+
             if has_context and self.prompt_template:
                 # RAG mode: use context with prompt template
                 docs_content = "\n\n".join(doc.page_content for doc in state["context"])
@@ -150,6 +157,7 @@ class RAGService:
                 # Pure generation mode: direct question to LLM
                 logger.info("Using pure generation mode - no context available")
                 from langchain.schema import HumanMessage
+
                 message = [HumanMessage(content=state["question"])]
 
             # Generate response
