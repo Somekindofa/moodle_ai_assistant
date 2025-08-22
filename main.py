@@ -19,11 +19,7 @@ def main():
     try:
         # Launch FastAPI server
         uvicorn.run(
-            "server:app",
-            host="127.0.0.1",
-            port=8000,
-            reload=True,
-            log_level="info"
+            "server:app", host="127.0.0.1", port=8000, reload=True, log_level="info"
         )
 
     except Exception as e:
