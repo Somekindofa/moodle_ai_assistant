@@ -48,7 +48,7 @@ class AppConfig:
     )
     css_path: str = "css/custom.css"
     supported_file_types: List[str] = field(
-        default_factory=lambda: [".pdf", ".txt", ".md", ".wav", ".mp4"]
+        default_factory=lambda: [".pdf", ".txt", ".md"]
     )
 
 
