@@ -43,22 +43,24 @@ class MoodleAIAssistantPipeline:
         """Automatically load documents from Documents folder if it exists."""
         import os
         import glob
-        
+
         documents_folder = "Documents"
         if os.path.exists(documents_folder) and os.path.isdir(documents_folder):
             logger.info("Documents folder found - loading documents...")
-            
+
             # Find all supported files in Documents folder
             supported_extensions = self.config_manager.get_config().supported_file_types
             all_files = []
-            
+
             for ext in supported_extensions:
                 pattern = os.path.join(documents_folder, "**", f"*{ext}")
                 files = glob.glob(pattern, recursive=True)
                 all_files.extend(files)
-            
+
             if all_files:
-                logger.info(f"Found {len(all_files)} supported files in Documents folder")
+                logger.info(
+                    f"Found {len(all_files)} supported files in Documents folder"
+                )
                 self.load_documents(all_files)
             else:
                 logger.info("No supported files found in Documents folder")
@@ -156,15 +158,12 @@ class MoodleAIAssistantPipeline:
             history_lc.append(HumanMessage(content=user_query))
 
             # Stream response from conversation graph
-            accumulated_answer = ""
-
             async for chunk, _ in self.conversation_graph.astream(
-                {"question": user_query, "history": history}, stream_mode=stream_mode
+                {"question": user_query, "history": history}, stream_mode="messages"
             ):
                 chunk_content = getattr(chunk, "content", str(chunk))
-
-                accumulated_answer += chunk_content
-                yield accumulated_answer
+                if chunk_content:  # Only yield non-empty chunks
+                    yield chunk_content
 
         except Exception as e:
             logger.error(f"Failed to generate response: {str(e)}")
