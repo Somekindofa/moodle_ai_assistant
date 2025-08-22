@@ -6,12 +6,14 @@ from typing import List, Dict, Any, Optional
 
 class ChatRequest(BaseModel):
     """Request model for chat endpoint."""
+
     message: str
     history: Optional[List[Dict[str, str]]] = []
 
 
 class SystemStatus(BaseModel):
     """Response model for system status."""
+
     mode: str  # "rag" or "generation"
     documents_folder_exists: bool
     vector_store_count: int
@@ -19,5 +21,6 @@ class SystemStatus(BaseModel):
 
 class HealthResponse(BaseModel):
     """Response model for health check."""
+
     status: str
     timestamp: str
