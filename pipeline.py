@@ -159,9 +159,10 @@ class MoodleAIAssistantPipeline:
 
             # Stream response from conversation graph
             async for chunk, _ in self.conversation_graph.astream(
-                {"question": user_query, "history": history}, stream_mode="messages"
+                {"question": user_query, "history": history}, stream_mode=stream_mode
             ):
                 chunk_content = getattr(chunk, "content", str(chunk))
+                print(f"DEBUG PIPELINE: Raw chunk_content = {repr(chunk_content)}")
                 if chunk_content:  # Only yield non-empty chunks
                     yield chunk_content
 
