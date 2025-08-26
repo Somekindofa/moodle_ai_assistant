@@ -1,5 +1,6 @@
 """API routes for the Moodle AI Assistant backend server."""
 
+import json
 import os
 import asyncio
 from datetime import datetime
@@ -26,20 +27,16 @@ def check_documents_folder() -> bool:
     return os.path.exists("Documents") and os.path.isdir("Documents")
 
 
-async def generate_sse_response(
-    user_message: str, history: list
-) -> AsyncGenerator[str, None]:
-    """Generate Server-Sent Events response for streaming."""
+async def generate_simplified_stream(user_message: str, history: list):
+    """Generate a simpler JSON stream."""
     try:
         async for chunk in pipeline.generate_response(user_message, history):
-            # Format as SSE event
-            yield f"data: {chunk}\n\n"
-
-        # Send end-of-stream marker
-        yield "data: [DONE]\n\n"
-
+            yield json.dumps({"content": chunk}) + "\n"
+        
+        # End marker
+        yield json.dumps({"content": "[DONE]"}) + "\n"
     except Exception as e:
-        yield f"data: ERROR: {str(e)}\n\n"
+        yield json.dumps({"error": str(e)}) + "\n"
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -64,12 +61,12 @@ async def get_system_status():
 
 @router.post("/chat")
 async def chat_stream(request: ChatRequest):
-    """Main chat endpoint with streaming response."""
+    """Simplified chat endpoint with streaming response."""
     try:
         history = request.history or []
-        return EventSourceResponse(
-            generate_sse_response(request.message, history),
-            media_type="text/event-stream",
+        return StreamingResponse(
+            generate_simplified_stream(request.message, history),
+            media_type="application/json"
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
