@@ -8,8 +8,6 @@ from typing import AsyncGenerator
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from sse_starlette.sse import EventSourceResponse
-
 from api.models import ChatRequest, SystemStatus, HealthResponse
 from pipeline import MoodleAIAssistantPipeline
 from config.settings import ConfigurationManager
