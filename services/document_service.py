@@ -1,6 +1,7 @@
 """Document processing service for loading and splitting documents."""
 
 import logging
+import os
 from typing import List, Type, Optional
 from pathlib import Path
 
@@ -36,14 +37,21 @@ class DocumentProcessingService:
 
         for file_path in file_paths:
             try:
+                if not os.path.exists(file_path):
+                    logger.error(f"File does not exist: {file_path}")
+                    continue
+
                 documents = self._load_single_file(file_path, splitter)
                 all_documents.extend(documents)
-                logger.info(
-                    f"Successfully processed {file_path}: {len(documents)} chunks"
-                )
+                if documents:
+                    logger.info(f"Successfully processed {file_path}: {len(documents)} chunks")
+                else:
+                    logger.warning(f"No documents extracted from {file_path}")
 
             except Exception as e:
                 logger.error(f"Error processing file {file_path}: {str(e)}")
+                import traceback
+                logger.debug(f"Full traceback: {traceback.format_exc()}")
                 continue
 
         logger.info(f"Total documents processed: {len(all_documents)}")
@@ -59,7 +67,7 @@ class DocumentProcessingService:
         if file_extension == ".pdf":
             loader = PyPDFLoader(file_path=file_path)
         elif file_extension in [".txt", ".md"]:
-            loader = TextLoader(file_path=file_path)
+            loader = TextLoader(file_path=file_path, encoding="utf-8")
         else:
             logger.warning(
                 f"Unsupported file type: {file_extension} for file {file_path}"
