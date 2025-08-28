@@ -162,8 +162,7 @@ class MoodleAIAssistantPipeline:
                 {"question": user_query, "history": history}, stream_mode=stream_mode
             ):
                 chunk_content = getattr(chunk, "content", str(chunk))
-                print(f"DEBUG PIPELINE: Raw chunk_content = {repr(chunk_content)}")
-                if chunk_content:  # Only yield non-empty chunks
+                if chunk_content:
                     yield chunk_content
 
         except Exception as e:
