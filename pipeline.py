@@ -44,28 +44,29 @@ class MoodleAIAssistantPipeline:
         import os
         import glob
 
-        documents_folder = "Documents"
+        documents_folder = "documents"
         if os.path.exists(documents_folder) and os.path.isdir(documents_folder):
             logger.info("Documents folder found - loading documents...")
 
-            # Find all supported files in Documents folder
+            # Find all supported files in documents folder
             supported_extensions = self.config_manager.get_config().supported_file_types
             all_files = []
 
             for ext in supported_extensions:
                 pattern = os.path.join(documents_folder, "**", f"*{ext}")
                 files = glob.glob(pattern, recursive=True)
-                all_files.extend(files)
+                normalized_files = [os.path.normpath(f) for f in files]
+                all_files.extend(normalized_files)
 
             if all_files:
                 logger.info(
-                    f"Found {len(all_files)} supported files in Documents folder"
+                    f"Found {len(all_files)} supported files in documents folder"
                 )
                 self.load_documents(all_files)
             else:
-                logger.info("No supported files found in Documents folder")
+                logger.info("No supported files found in documents folder")
         else:
-            logger.info("No Documents folder found - will use pure generation mode")
+            logger.info("No documents folder found - will use pure generation mode")
 
     def _build_conversation_graph(self):
         """Build and compile the conversation graph."""
@@ -158,6 +159,7 @@ class MoodleAIAssistantPipeline:
             history_lc.append(HumanMessage(content=user_query))
 
             # Stream response from conversation graph
+            logger.info(f"Generating response for query: {user_query} with history of {len(history)} messages")
             async for chunk, _ in self.conversation_graph.astream(
                 {"question": user_query, "history": history}, stream_mode=stream_mode
             ):
