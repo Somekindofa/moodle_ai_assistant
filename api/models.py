@@ -3,12 +3,18 @@
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 
+class ChatMessage(BaseModel):
+    """Represents a chat message."""
+    
+    role: str  # "user" or "assistant"
+    content: str
+
 
 class ChatRequest(BaseModel):
     """Request model for chat endpoint."""
 
     message: str
-    history: Optional[List[Dict[str, str]]] = []
+    history: Optional[List[ChatMessage]] = []
 
 
 class SystemStatus(BaseModel):
