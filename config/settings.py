@@ -23,6 +23,8 @@ def setup_logging() -> logging.Logger:
         root_logger.addHandler(console_handler)
         root_logger.setLevel(logging.INFO)
 
+    logging.getLogger("watchfiles").setLevel(logging.WARNING)
+    logging.getLogger("watchfiles.main").setLevel(logging.WARNING)
     # Also return a logger for this module
     logger = logging.getLogger(__name__)
     return logger
