@@ -2,6 +2,7 @@
 
 import os
 import logging
+import re
 from typing import List, Dict, Any, Union, Optional
 from typing_extensions import Literal
 
@@ -107,12 +108,19 @@ class RAGService:
             logger.error(f"Failed to remove documents: {str(e)}")
             raise
 
-    def similarity_search(self, query: str, k: Optional[int] = None) -> List[Document]:
+    def similarity_search(self, query: str, k: Optional[int] = None, show_score: bool = False, score_thresh: float = 0.6) -> Union[List[Document], List[tuple[Document, float]]]:
         """Perform similarity search with the given query."""
         try:
             k = k or self.config.similarity_search_k
-            results = self.vector_store.similarity_search(query, k=k)
+            if show_score:
+                results = self.vector_store.similarity_search_with_relevance_scores(query, k=k)
+                results = [(doc, score) for doc, score in results if score > score_thresh]
+            else:
+                results = self.vector_store.similarity_search(query, k=k)
+
+            logger.info(f"Similarity search returned {len(results)} results")
             return results
+
         except Exception as e:
             logger.error(f"Error during similarity search: {str(e)}")
             return []
