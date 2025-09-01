@@ -7,6 +7,7 @@ from api.models import ChatMessage
 
 from langchain.schema import HumanMessage, AIMessage
 from langgraph.types import StreamMode
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from config.settings import ConfigurationManager
 from services.langchain_service import LangChainService
