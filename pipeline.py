@@ -3,6 +3,7 @@
 import logging
 import pandas as pd
 from typing import List, Dict, Any, AsyncGenerator, Optional
+from api.models import ChatMessage
 
 from langchain.schema import HumanMessage, AIMessage
 from langgraph.types import StreamMode
@@ -143,23 +144,38 @@ class MoodleAIAssistantPipeline:
     async def generate_response(
         self,
         user_query: str,
-        history: List[Dict[str, str]],
+        history: List[ChatMessage],
         stream_mode: StreamMode = "messages",
     ) -> AsyncGenerator[str, None]:
-        """Generate streaming response for user query."""
+        """Generate streaming response for user query with optional history."""
         try:
             # Convert history to LangChain format
             history_lc = []
             for msg in history:
-                if msg["role"] == "user":
-                    history_lc.append(HumanMessage(content=msg["content"]))
-                elif msg["role"] == "assistant":
-                    history_lc.append(AIMessage(content=msg["content"]))
+                if hasattr(msg, 'role') and hasattr(msg, 'content'):
+                    role = msg.role
+                    content = msg.content
+                elif isinstance(msg, dict):
+                    role = msg.get("role")
+                    content = msg.get("content")
+                else:
+                    logger.warning(f"Skipping unsupported message format: {type(msg)}")
+                    continue
+
+                if content is None:
+                    content = ""
+                elif not isinstance(content, str):
+                    content = str(content)
+
+                if role == "user":
+                    history_lc.append(HumanMessage(content=content))
+                elif role == "assistant":
+                    history_lc.append(AIMessage(content=content))
 
             history_lc.append(HumanMessage(content=user_query))
 
             # Stream response from conversation graph
-            logger.info(f"Generating response for query: {user_query} with history of {len(history)} messages")
+            logger.info(f"Generating response for query: {user_query} with history of {len(history_lc)} messages:\n {history_lc}")
             async for chunk, _ in self.conversation_graph.astream(
                 {"question": user_query, "history": history}, stream_mode=stream_mode
             ):
