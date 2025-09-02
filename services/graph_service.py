@@ -6,6 +6,7 @@ from typing import List, Callable, Dict, Any, Optional
 from langchain_core.runnables import RunnableLambda
 from langgraph.graph import StateGraph, START
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.graph.message import add_messages
 
 from core.types import ConversationState
 from services.rag_service import RAGService
@@ -28,6 +29,13 @@ class ConversationGraphService:
         if not name:
             name = f"{func.__name__}_runnable"
 
+        # Ensure unique names by checking existing nodes
+        original_name = name
+        counter = 1
+        while name in self.nodes:
+            name = f"{original_name}_{counter}"
+            counter += 1
+
         runnable = RunnableLambda(lambda state: func(state), name=name)
         self.nodes.add(str(runnable.name))
         return runnable
@@ -43,7 +51,7 @@ class ConversationGraphService:
         runnables = []
         for func_name in functions:
             if not hasattr(self.rag_service, func_name):
-                raise ValueError(f"Function '{func_name}' not found in RAG service")
+                raise ValueError(f"Function '`{func_name}`' not implemented in RAG service.\nPlease implement '`{func_name}`' method in `RAGService` class.")
 
             func = getattr(self.rag_service, func_name)
             runnable = self._create_runnable(func)

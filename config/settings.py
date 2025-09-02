@@ -10,18 +10,23 @@ from dataclasses import dataclass, field
 # Configure logging
 def setup_logging() -> logging.Logger:
     """Setup application logging configuration."""
-    logger = logging.getLogger(__name__)
-
-    if not logger.handlers:  # Avoid duplicate handlers
+    # Configure the root logger instead of just the current module's logger
+    root_logger = logging.getLogger()
+    
+    if not root_logger.handlers:  # Avoid duplicate handlers
         console_handler = logging.StreamHandler()
         formatter = logging.Formatter(
             "%(asctime)s   %(levelname)s   %(name)s:   %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
         console_handler.setFormatter(formatter)
-        logger.addHandler(console_handler)
-        logger.setLevel(logging.INFO)
+        root_logger.addHandler(console_handler)
+        root_logger.setLevel(logging.INFO)
 
+    logging.getLogger("watchfiles").setLevel(logging.WARNING)
+    logging.getLogger("watchfiles.main").setLevel(logging.WARNING)
+    # Also return a logger for this module
+    logger = logging.getLogger(__name__)
     return logger
 
 
@@ -48,7 +53,7 @@ class AppConfig:
     )
     css_path: str = "css/custom.css"
     supported_file_types: List[str] = field(
-        default_factory=lambda: [".pdf", ".txt", ".md", ".wav", ".mp4"]
+        default_factory=lambda: [".pdf", ".txt", ".md"]
     )
 
 
