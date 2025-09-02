@@ -15,7 +15,6 @@ class ChatRequest(BaseModel):
     """Request model for chat endpoint."""
 
     message: str
-    history: Optional[List[ChatMessage]] = []
 
 
 class SystemStatus(BaseModel):
