@@ -2,12 +2,19 @@
 
 import logging
 import pandas as pd
-from typing import List, Dict, Any, AsyncGenerator, Optional
+from typing import List, Dict, Any, AsyncGenerator, Optional, Union
+
+import test
+import uuid, hashlib
 from api.models import ChatMessage
 
 from langchain.schema import HumanMessage, AIMessage
-from langgraph.types import StreamMode
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables.config import RunnableConfig
+
+from langgraph.graph.state import CompiledStateGraph
+from langgraph.types import StreamMode
+
 
 from config.settings import ConfigurationManager
 from services.langchain_service import LangChainService
@@ -17,7 +24,8 @@ from services.graph_service import ConversationGraphService
 
 
 logger = logging.getLogger(__name__)
-
+test_thread_id = "abc123"
+test_config = RunnableConfig(run_id=uuid.UUID(hashlib.md5(test_thread_id.encode()).hexdigest()))
 
 class MoodleAIAssistantPipeline:
     """Main pipeline orchestrating the Moodle AI Assistant services."""
@@ -27,9 +35,7 @@ class MoodleAIAssistantPipeline:
 
         # Initialize services in dependency order
         self.langchain_service = LangChainService(self.config_manager)
-        self.rag_service = RAGService(
-            self.config_manager, self.langchain_service.get_prompt_template()
-        )
+        self.rag_service = RAGService(self.config_manager)
         self.document_service = DocumentProcessingService(self.config_manager)
         self.graph_service = ConversationGraphService(self.rag_service)
 
@@ -45,6 +51,7 @@ class MoodleAIAssistantPipeline:
         """Automatically load documents from Documents folder if it exists."""
         import os
         import glob
+
 
         documents_folder = "documents"
         if os.path.exists(documents_folder) and os.path.isdir(documents_folder):
@@ -70,7 +77,7 @@ class MoodleAIAssistantPipeline:
         else:
             logger.info("No documents folder found - will use pure generation mode")
 
-    def _build_conversation_graph(self):
+    def _build_conversation_graph(self) -> CompiledStateGraph:
         """Build and compile the conversation graph."""
         try:
             return self.graph_service.build_conversation_graph().compile_graph()
@@ -144,41 +151,13 @@ class MoodleAIAssistantPipeline:
 
     async def generate_response(
         self,
-        user_query: str,
-        history: List[ChatMessage],
+        messages: Union[str, List[str], List[ChatMessage]],
         stream_mode: StreamMode = "messages",
     ) -> AsyncGenerator[str, None]:
         """Generate streaming response for user query with optional history."""
         try:
-            # Convert history to LangChain format
-            history_lc = []
-            for msg in history:
-                if hasattr(msg, 'role') and hasattr(msg, 'content'):
-                    role = msg.role
-                    content = msg.content
-                elif isinstance(msg, dict):
-                    role = msg.get("role")
-                    content = msg.get("content")
-                else:
-                    logger.warning(f"Skipping unsupported message format: {type(msg)}")
-                    continue
-
-                if content is None:
-                    content = ""
-                elif not isinstance(content, str):
-                    content = str(content)
-
-                if role == "user":
-                    history_lc.append(HumanMessage(content=content))
-                elif role == "assistant":
-                    history_lc.append(AIMessage(content=content))
-
-            history_lc.append(HumanMessage(content=user_query))
-
-            # Stream response from conversation graph
-            logger.info(f"Generating response for query: {user_query} with history of {len(history_lc)} messages:\n {history_lc}")
             async for chunk, _ in self.conversation_graph.astream(
-                {"question": user_query, "history": history}, stream_mode=stream_mode
+                {"question": messages, "context": history}, stream_mode=stream_mode, config=test_config)
             ):
                 chunk_content = getattr(chunk, "content", str(chunk))
                 if chunk_content:
