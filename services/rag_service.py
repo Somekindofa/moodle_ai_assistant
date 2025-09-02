@@ -1,5 +1,6 @@
 """RAG service for document retrieval and generation."""
 
+from math import log
 import os
 import logging
 import re
@@ -10,6 +11,7 @@ from langchain.chat_models import init_chat_model
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents.base import Document
+from langchain import hub
 
 from config.settings import ConfigurationManager
 from core.types import ConversationState
@@ -21,12 +23,10 @@ logger = logging.getLogger(__name__)
 class RAGService:
     """Service for RAG (Retrieval Augmented Generation) operations."""
 
-    def __init__(self, config_manager: ConfigurationManager, prompt_template=None):
+    def __init__(self, config_manager: ConfigurationManager):
         self.config_manager = config_manager
-        self.config = config_manager.get_config().rag
-        self.prompt_template = prompt_template
-
-        # Initialize components
+        self.config = self.config_manager.get_config().rag
+        self.prompt_template = self._load_prompt_template()
         self.embeddings = self._initialize_embeddings()
         self.vector_store = self._initialize_vector_store()
         self.llm = self._initialize_llm()
@@ -34,6 +34,17 @@ class RAGService:
         logger.info(
             f"RAG service initialized with collection '{self.config.collection_name}'"
         )
+
+    def _load_prompt_template(self) -> None:
+        """Load prompt template from LangChain Hub."""
+        try:
+            self.prompt_template = hub.pull(self.config.prompt_url, include_model=True)
+            logger.info(f"Prompt template loaded from {self.config.prompt_url}")
+            return self.prompt_template
+
+        except Exception as e:
+            logger.error(f"Failed to load prompt template: {str(e)}")
+            return None
 
     def _initialize_embeddings(self) -> HuggingFaceEmbeddings:
         """Initialize HuggingFace embeddings."""
@@ -132,7 +143,8 @@ class RAGService:
         has_documents = bool(vector_data.get("ids"))
 
         if has_documents:
-            retrieved_docs = self.similarity_search(state["question"]) # could be more efficient in terms of retrieval
+            logger.info("Performing similarity search on the last user message_prompt: %s", str(state.get("messages")[-1]))
+            retrieved_docs = self.similarity_search(str(state.get("messages")[-1])) # could be more efficient in terms of retrieval
             if not retrieved_docs:
                 logger.info("No relevant documents found for the query")
                 return {"context": []}
@@ -157,19 +169,19 @@ class RAGService:
 
             if has_context and self.prompt_template:
                 # RAG mode: use context with prompt template
-                docs_content = "\n\n".join(doc.page_content for doc in state["context"])
-                message = self.prompt_template.invoke(
-                    {"question": state["question"], "context": docs_content}
+                docs_content = "\n\n".join(doc.page_content for doc in state.get("context", []))
+                message_prompt = self.prompt_template.invoke(
+                    {"question": state.get("messages"), "context": docs_content}
                 )
             else:
                 # Pure generation mode: direct question to LLM
                 logger.info("Using pure generation mode - no context available")
                 from langchain.schema import HumanMessage
 
-                message = [HumanMessage(content=state["question"])]
+                message_prompt = [HumanMessage(content=str(state.get("messages")[-1]))]
 
             # Generate response
-            response = self.llm.invoke(message)
+            response = self.llm.invoke(message_prompt)
 
             # Update conversation history
             current_history = state.get("history", [])
