@@ -26,13 +26,12 @@ def check_documents_folder() -> bool:
     return os.path.exists("Documents") and os.path.isdir("Documents")
 
 
-async def generate_simplified_stream(user_message: str, history: list[ChatMessage]) -> AsyncGenerator[str, None]:
+async def generate_simplified_stream(user_messages: str) -> AsyncGenerator[str, None]:
     """Generate a simpler JSON stream."""
     try:
-        logger.info(f"\nReceived user message: {user_message}")
-        logger.info(f"Conversation history: {history}\n")
-        async for chunk in pipeline.generate_response(user_message, history):
-            yield json.dumps({"content": chunk}) + "\n"
+        logger.info(f"\nReceived user message: {user_messages}")
+        async for chunk in pipeline.generate_response(user_messages):
+                yield json.dumps({"content": chunk}) + "\n"
         yield json.dumps({"content": "[DONE]"}) + "\n"
 
     except Exception as e:
@@ -63,9 +62,8 @@ async def get_system_status():
 async def chat_stream(request: ChatRequest):
     """Simplified chat endpoint with streaming response."""
     try:
-        history = request.history or []
         return StreamingResponse(
-            generate_simplified_stream(request.message, history),
+            generate_simplified_stream(request.message),
             media_type="application/json"
         )
     except Exception as e:
