@@ -50,7 +50,7 @@ class ConversationGraphService:
         runnables = []
         for func_name in functions:
             if not hasattr(self.rag_service, func_name):
-                raise ValueError(f"Function '{func_name}' not found in RAG service")
+                raise ValueError(f"Function '`{func_name}`' not implemented in RAG service.\nPlease implement '`{func_name}`' method in `RAGService` class.")
 
             func = getattr(self.rag_service, func_name)
             runnable = self._create_runnable(func)

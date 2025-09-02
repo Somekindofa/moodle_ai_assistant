@@ -1,14 +1,21 @@
 """Pydantic models for API requests and responses."""
 
+from re import L
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
+
+class ChatMessage(BaseModel):
+    """Represents a chat message."""
+    
+    role: Literal["user", "assistant", "system"]
+    content: str
 
 
 class ChatRequest(BaseModel):
     """Request model for chat endpoint."""
 
     message: str
-    history: Optional[List[Dict[str, str]]] = []
+    history: Optional[List[ChatMessage]] = []
 
 
 class SystemStatus(BaseModel):

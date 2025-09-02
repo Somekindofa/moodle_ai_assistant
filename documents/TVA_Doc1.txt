@@ -1,0 +1,7 @@
+7. TV Assembly - Document 1: Panel Mounting and Circuit Integration
+
+Modern TV assembly begins with installing the LCD or OLED panel onto the main chassis. The fragile display is aligned and secured with brackets and adhesive pads to ensure structural stability.
+
+The next stage involves integrating the mainboard, which controls video processing, and the power board. Ribbon cables connect the panel to the mainboard, and these must be inserted carefully to avoid bent pins or loose connections. Additional components such as speakers and backlight drivers are mounted at this stage.
+
+Proper grounding and static discharge precautions are mandatory to prevent damage to sensitive circuits.

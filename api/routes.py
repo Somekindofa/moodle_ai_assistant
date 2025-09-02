@@ -5,10 +5,11 @@ import os
 import asyncio
 from datetime import datetime
 from typing import AsyncGenerator
+from venv import logger
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from api.models import ChatRequest, SystemStatus, HealthResponse
+from api.models import ChatMessage, ChatRequest, SystemStatus, HealthResponse
 from pipeline import MoodleAIAssistantPipeline
 from config.settings import ConfigurationManager
 
@@ -25,14 +26,15 @@ def check_documents_folder() -> bool:
     return os.path.exists("Documents") and os.path.isdir("Documents")
 
 
-async def generate_simplified_stream(user_message: str, history: list):
+async def generate_simplified_stream(user_message: str, history: list[ChatMessage]) -> AsyncGenerator[str, None]:
     """Generate a simpler JSON stream."""
     try:
+        logger.info(f"\nReceived user message: {user_message}")
+        logger.info(f"Conversation history: {history}\n")
         async for chunk in pipeline.generate_response(user_message, history):
             yield json.dumps({"content": chunk}) + "\n"
-        
-        # End marker
         yield json.dumps({"content": "[DONE]"}) + "\n"
+
     except Exception as e:
         yield json.dumps({"error": str(e)}) + "\n"
 

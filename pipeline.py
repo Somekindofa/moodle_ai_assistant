@@ -3,9 +3,11 @@
 import logging
 import pandas as pd
 from typing import List, Dict, Any, AsyncGenerator, Optional
+from api.models import ChatMessage
 
 from langchain.schema import HumanMessage, AIMessage
 from langgraph.types import StreamMode
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from config.settings import ConfigurationManager
 from services.langchain_service import LangChainService
@@ -44,28 +46,29 @@ class MoodleAIAssistantPipeline:
         import os
         import glob
 
-        documents_folder = "Documents"
+        documents_folder = "documents"
         if os.path.exists(documents_folder) and os.path.isdir(documents_folder):
             logger.info("Documents folder found - loading documents...")
 
-            # Find all supported files in Documents folder
+            # Find all supported files in documents folder
             supported_extensions = self.config_manager.get_config().supported_file_types
             all_files = []
 
             for ext in supported_extensions:
                 pattern = os.path.join(documents_folder, "**", f"*{ext}")
                 files = glob.glob(pattern, recursive=True)
-                all_files.extend(files)
+                normalized_files = [os.path.normpath(f) for f in files]
+                all_files.extend(normalized_files)
 
             if all_files:
                 logger.info(
-                    f"Found {len(all_files)} supported files in Documents folder"
+                    f"Found {len(all_files)} supported files in documents folder"
                 )
                 self.load_documents(all_files)
             else:
-                logger.info("No supported files found in Documents folder")
+                logger.info("No supported files found in documents folder")
         else:
-            logger.info("No Documents folder found - will use pure generation mode")
+            logger.info("No documents folder found - will use pure generation mode")
 
     def _build_conversation_graph(self):
         """Build and compile the conversation graph."""
@@ -142,28 +145,43 @@ class MoodleAIAssistantPipeline:
     async def generate_response(
         self,
         user_query: str,
-        history: List[Dict[str, str]],
+        history: List[ChatMessage],
         stream_mode: StreamMode = "messages",
     ) -> AsyncGenerator[str, None]:
-        """Generate streaming response for user query."""
+        """Generate streaming response for user query with optional history."""
         try:
             # Convert history to LangChain format
             history_lc = []
             for msg in history:
-                if msg["role"] == "user":
-                    history_lc.append(HumanMessage(content=msg["content"]))
-                elif msg["role"] == "assistant":
-                    history_lc.append(AIMessage(content=msg["content"]))
+                if hasattr(msg, 'role') and hasattr(msg, 'content'):
+                    role = msg.role
+                    content = msg.content
+                elif isinstance(msg, dict):
+                    role = msg.get("role")
+                    content = msg.get("content")
+                else:
+                    logger.warning(f"Skipping unsupported message format: {type(msg)}")
+                    continue
+
+                if content is None:
+                    content = ""
+                elif not isinstance(content, str):
+                    content = str(content)
+
+                if role == "user":
+                    history_lc.append(HumanMessage(content=content))
+                elif role == "assistant":
+                    history_lc.append(AIMessage(content=content))
 
             history_lc.append(HumanMessage(content=user_query))
 
             # Stream response from conversation graph
+            logger.info(f"Generating response for query: {user_query} with history of {len(history_lc)} messages:\n {history_lc}")
             async for chunk, _ in self.conversation_graph.astream(
                 {"question": user_query, "history": history}, stream_mode=stream_mode
             ):
                 chunk_content = getattr(chunk, "content", str(chunk))
-                print(f"DEBUG PIPELINE: Raw chunk_content = {repr(chunk_content)}")
-                if chunk_content:  # Only yield non-empty chunks
+                if chunk_content:
                     yield chunk_content
 
         except Exception as e:
