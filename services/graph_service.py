@@ -1,12 +1,12 @@
 """Graph service for building and managing conversation workflows."""
 
 import logging
-from typing import List, Callable, Dict, Any, Optional
+from typing import List, Callable, Dict, Any, Optional, TypedDict, Union
 
 from langchain_core.runnables import RunnableLambda
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph, START
 from langgraph.graph.state import CompiledStateGraph
-from langgraph.graph.message import add_messages
 
 from core.types import ConversationState
 from services.rag_service import RAGService
@@ -71,11 +71,15 @@ class ConversationGraphService:
         logger.info(f"Conversation graph built with functions: {functions}")
         return self
 
-    def compile_graph(self) -> CompiledStateGraph:
+    def compile_graph(self, checkpointer=MemorySaver()) -> CompiledStateGraph:
         """Compile the state graph."""
         if not any(src == START for src, _ in self.edges):
             raise ValueError("Graph has no START edges. Cannot compile.")
 
-        compiled_graph = self.state_graph.compile()
-        logger.info("Conversation graph compiled successfully")
-        return compiled_graph
+        try:
+            compiled_graph = self.state_graph.compile(checkpointer=checkpointer)
+            logger.info("Conversation graph compiled successfully")
+            return compiled_graph
+        except Exception as e:
+            logger.error(f"Error compiling conversation graph: {e}")
+            raise
