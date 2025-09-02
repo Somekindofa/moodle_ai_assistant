@@ -6,6 +6,7 @@ from typing import List, Callable, Dict, Any, Optional
 from langchain_core.runnables import RunnableLambda
 from langgraph.graph import StateGraph, START
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.graph.message import add_messages
 
 from core.types import ConversationState
 from services.rag_service import RAGService
