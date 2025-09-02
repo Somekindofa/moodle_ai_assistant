@@ -3,12 +3,16 @@
 from typing import List, Dict, Any
 from typing_extensions import TypedDict
 from langchain_core.documents.base import Document
+from langgraph.graph import MessagesState
 
 
-class ConversationState(TypedDict):
-    """State management for conversation flow."""
+class ConversationState(MessagesState):
+    """State management for conversation flow.
+    
+    This class manages the context and history of the conversation.
+    It's a subclassed `MessagesState` with additional `context` management capabilities.
+    """
 
-    question: str
+    ##TODO Refactor to suggest an appropriate reducer to update context
+    ## context: Annotated[List[Document], reducer]
     context: List[Document]
-    answer: str
-    history: List[Dict[str, Any]]
