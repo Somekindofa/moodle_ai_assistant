@@ -8,3 +8,5 @@ tests/
 hello_world_*/
 node-modules/
 client_example.py
+.code-workspace
+.vscode/
