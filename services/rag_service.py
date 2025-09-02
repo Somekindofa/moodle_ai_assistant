@@ -2,6 +2,7 @@
 
 import os
 import logging
+import re
 from typing import List, Dict, Any, Union, Optional
 from typing_extensions import Literal
 
@@ -64,7 +65,7 @@ class RAGService:
         """Initialize chat model."""
         try:
             llm = init_chat_model(
-                self.config.llm_model_url, model_provider=self.config.llm_provider
+                self.config.llm_model_url, model_provider=self.config.llm_provider, streaming=True
             )
             logger.info(f"LLM initialized: {self.config.llm_model_url}")
             return llm
@@ -107,39 +108,65 @@ class RAGService:
             logger.error(f"Failed to remove documents: {str(e)}")
             raise
 
-    def similarity_search(self, query: str, k: Optional[int] = None) -> List[Document]:
+    def similarity_search(self, query: str, k: Optional[int] = None, show_score: bool = False, score_thresh: float = 0.6) -> Union[List[Document], List[tuple[Document, float]]]:
         """Perform similarity search with the given query."""
         try:
             k = k or self.config.similarity_search_k
-            results = self.vector_store.similarity_search(query, k=k)
+            if show_score:
+                results = self.vector_store.similarity_search_with_relevance_scores(query, k=k)
+                results = [(doc, score) for doc, score in results if score > score_thresh]
+            else:
+                results = self.vector_store.similarity_search(query, k=k)
+
+            logger.info(f"Similarity search returned {len(results)} results")
             return results
+
         except Exception as e:
             logger.error(f"Error during similarity search: {str(e)}")
             return []
 
     def retrieve(self, state: ConversationState) -> Dict[str, Any]:
         """Retrieve relevant documents for a given state."""
-        retrieved_docs = self.similarity_search(state["question"])
-        return {"context": retrieved_docs}
+        # Check if we have any documents in the vector store
+        vector_data = self.get_vector_store_data()
+        has_documents = bool(vector_data.get("ids"))
+
+        if has_documents:
+            retrieved_docs = self.similarity_search(state["question"]) # could be more efficient in terms of retrieval
+            if not retrieved_docs:
+                logger.info("No relevant documents found for the query")
+                return {"context": []}
+            else:
+                logger.info(f"Retrieved {len(retrieved_docs)} documents for the query")
+                return {"context": retrieved_docs}
+        else:
+            # No documents available - return empty context for pure generation
+            logger.info(
+                "No documents in vector store - switching to pure generation mode"
+            )
+            return {"context": []}
 
     def generate(self, state: ConversationState) -> Dict[str, Any]:
-        """Generate response using retrieved context."""
+        """Generate response using retrieved context or pure generation."""
         if not self.llm:
             raise ValueError("No LLM available. Please check LLM initialization.")
 
-        if not self.prompt_template:
-            raise ValueError(
-                "No prompt template available. Please provide a prompt template."
-            )
-
         try:
-            # Combine document content
-            docs_content = "\n\n".join(doc.page_content for doc in state["context"])
+            # Check if we have context (documents)
+            has_context = bool(state.get("context"))
 
-            # Create message using prompt template
-            message = self.prompt_template.invoke(
-                {"question": state["question"], "context": docs_content}
-            )
+            if has_context and self.prompt_template:
+                # RAG mode: use context with prompt template
+                docs_content = "\n\n".join(doc.page_content for doc in state["context"])
+                message = self.prompt_template.invoke(
+                    {"question": state["question"], "context": docs_content}
+                )
+            else:
+                # Pure generation mode: direct question to LLM
+                logger.info("Using pure generation mode - no context available")
+                from langchain.schema import HumanMessage
+
+                message = [HumanMessage(content=state["question"])]
 
             # Generate response
             response = self.llm.invoke(message)

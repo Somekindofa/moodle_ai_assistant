@@ -46,6 +46,7 @@ from langchain_core.documents.transformers import BaseDocumentTransformer
 from langgraph.graph import StateGraph, START
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import StreamMode
+import uvicorn
 
 
 logger_ = logging.getLogger(__name__)
@@ -586,73 +587,7 @@ async def generate_answer(
         acc_answer += chunk_content
         yield acc_answer
 
-
-with gr.Blocks(css="css/custom.css") as demo:
-    gr.Markdown("# Moodle AI Assistant")
-
-    # Create tabbed interface - this is the main change to your existing app structure
-    with gr.Tabs():
-        # Original Chat Tab - preserving your existing functionality
-        with gr.TabItem("Chat Interface"):
-            with gr.Row():
-                with gr.Column(scale=1):
-                    gr.Markdown("### Files")
-                    file_explorer = gr.FileExplorer(root_dir=rag.get_cwd())
-
-                with gr.Column(scale=5):
-                    chat_interface = gr.ChatInterface(
-                        fn=generate_answer,
-                        type="messages",
-                        chatbot=gr.Chatbot(type="messages"),
-                        textbox=gr.Textbox(
-                            placeholder="Ask something...", container=True
-                        ),
-                        submit_btn="Submit",
-                        stop_btn="Stop",
-                        show_progress="hidden",
-                    )
-
-            knowledge_df = gr.Dataframe(
-                headers=["id", "title", "source"],
-                interactive=False,
-                label="Knowledge Base Contents",
-            )
-            file_explorer.change(
-                fn=load_and_split,
-                inputs=file_explorer,
-                outputs=knowledge_df,
-                show_progress="minimal",
-            )
-
-            refresh_df = gr.Button("Refresh Knowledge Base", variant="primary")
-            refresh_df.click(fn=lambda: rag.remove_documents("all"), outputs=None)
-
-        # New Backend Tab - your requested database management interface
-        with gr.TabItem("Backend"):
-            gr.Markdown("### Database Management Interface")
-
-            with gr.Row():
-                with gr.Column(scale=1):
-                    gr.Markdown("#### File Upload")
-                    # File Explorer for adding files to database - filter for specific types
-                    backend_file_explorer = gr.FileExplorer(
-                        root_dir=rag.get_cwd(),
-                        label="Select Files (.wav, .mp4, .txt, .pdf)",
-                    )
-
-                with gr.Column(scale=2):
-                    gr.Markdown("#### Database Viewer")
-                    # Database Viewer - Dataframe is perfect for showing table-like data
-                    database_viewer = gr.Dataframe(
-                        label="Database Contents",
-                        interactive=False,  # Read-only view
-                        wrap=True,
-                    )
-
-                    refresh_db_btn = gr.Button(
-                        "Refresh Database View", variant="secondary"
-                    )
-
 if __name__ == "__main__":
-    demo.launch()
-    demo.launch()
+    import server
+    uvicorn.run("server:app", host="0.0.0.0", port=8000)
+    

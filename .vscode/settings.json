@@ -5,5 +5,9 @@
             "envManager": "ms-python.python:conda",
             "packageManager": "ms-python.python:conda"
         }
-    ]
+    ],
+    "files.autoSave": "afterDelay",
+    "files.autoSaveDelay": 500,
+    "python.analysis.typeCheckingMode": "standard",
+    "python.analysis.autoImportCompletions": true
 }
