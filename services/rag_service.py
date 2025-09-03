@@ -76,7 +76,9 @@ class RAGService:
         """Initialize chat model."""
         try:
             llm = init_chat_model(
-                self.config.llm_model_url, model_provider=self.config.llm_provider, streaming=True
+                self.config.llm_model_url,
+                model_provider=self.config.llm_provider,
+                streaming=True,
             )
             logger.info(f"LLM initialized: {self.config.llm_model_url}")
             return llm
@@ -119,13 +121,23 @@ class RAGService:
             logger.error(f"Failed to remove documents: {str(e)}")
             raise
 
-    def similarity_search(self, query: str, k: Optional[int] = None, show_score: bool = False, score_thresh: float = 0.6) -> Union[List[Document], List[tuple[Document, float]]]:
+    def similarity_search(
+        self,
+        query: str,
+        k: Optional[int] = None,
+        show_score: bool = False,
+        score_thresh: float = 0.6,
+    ) -> Union[List[Document], List[tuple[Document, float]]]:
         """Perform similarity search with the given query."""
         try:
             k = k or self.config.similarity_search_k
             if show_score:
-                results = self.vector_store.similarity_search_with_relevance_scores(query, k=k)
-                results = [(doc, score) for doc, score in results if score > score_thresh]
+                results = self.vector_store.similarity_search_with_relevance_scores(
+                    query, k=k
+                )
+                results = [
+                    (doc, score) for doc, score in results if score > score_thresh
+                ]
             else:
                 results = self.vector_store.similarity_search(query, k=k)
 
@@ -143,8 +155,13 @@ class RAGService:
         has_documents = bool(vector_data.get("ids"))
 
         if has_documents:
-            logger.info("Performing similarity search on the last user message_prompt: %s", str(state.get("messages")[-1]))
-            retrieved_docs = self.similarity_search(str(state.get("messages")[-1])) # could be more efficient in terms of retrieval
+            logger.info(
+                "Performing similarity search on the last user message_prompt: %s",
+                str(state.get("messages")[-1]),
+            )
+            retrieved_docs = self.similarity_search(
+                str(state.get("messages")[-1])
+            )  # could be more efficient in terms of retrieval
             if not retrieved_docs:
                 logger.info("No relevant documents found for the query")
                 return {"context": []}
@@ -164,33 +181,26 @@ class RAGService:
             raise ValueError("No LLM available. Please check LLM initialization.")
 
         try:
-            # Check if we have context (documents)
-            has_context = bool(state.get("context"))
+            context_docs = state.get("context", [])
+            filled_prompt = None
 
-            if has_context and self.prompt_template:
-                # RAG mode: use context with prompt template
-                docs_content = "\n\n".join(doc.page_content for doc in state.get("context", []))
-                message_prompt = self.prompt_template.invoke(
-                    {"question": state.get("messages"), "context": docs_content}
+            context_texts = (
+                "\n\n".join([doc.page_content for doc in context_docs])
+                if context_docs
+                else "No relevant documents found."
+            )
+
+            if self.prompt_template:
+                filled_prompt = self.prompt_template.invoke(
+                    {
+                        "question": str(state.get("messages")[-1]),
+                        "context": context_texts,
+                    }
                 )
-            else:
-                # Pure generation mode: direct question to LLM
-                logger.info("Using pure generation mode - no context available")
-                from langchain.schema import HumanMessage
 
-                message_prompt = [HumanMessage(content=str(state.get("messages")[-1]))]
-
-            # Generate response
-            response = self.llm.invoke(message_prompt)
-
-            # Update conversation history
-            current_history = state.get("history", [])
-            updated_history = current_history + [
-                {"role": "user", "content": state["question"]},
-                {"role": "assistant", "content": response.content},
-            ]
-
-            return {"answer": response.content, "history": updated_history}
+            if filled_prompt:
+                response = self.llm.generate(filled_prompt)
+                return response
 
         except Exception as e:
             logger.error(f"Failed to generate response: {str(e)}")
