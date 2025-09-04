@@ -131,24 +131,26 @@ class RAGService:
         self,
         query: str,
         k: Optional[int] = None,
-        show_score: bool = False,
         score_thresh: float = 0.6,
-    ) -> Union[List[Document], List[tuple[Document, float]]]:
+    ) -> List[tuple[Document, float]]:
         """Perform similarity search with the given query."""
         try:
             k = k or self.config.similarity_search_k
-            if show_score:
-                results = self.vector_store.similarity_search_with_relevance_scores(
-                    query, k=k
-                )
-                results = [
-                    (doc, score) for doc, score in results if score > score_thresh
-                ]
-            else:
-                results = self.vector_store.similarity_search(query, k=k)
+            seen_docs = set()
+            unique_results = []
+            results = self.vector_store.similarity_search_with_relevance_scores(
+                query, k=k, score_threshold=score_thresh
+            )
+            for doc, score in results:
+                score = 1 - abs(score)
+                if score > score_thresh:
+                    doc_content = str(doc.metadata.get("source"))
+                    if doc_content not in seen_docs:
+                        seen_docs.add(doc_content)
+                        unique_results.append((doc, score))
 
             logger.info(f"Similarity search returned {len(results)} results")
-            return results
+            return unique_results
 
         except Exception as e:
             logger.error(f"Error during similarity search: {str(e)}")
@@ -160,14 +162,15 @@ class RAGService:
         vector_data = self.get_vector_store_data()
         has_documents = bool(vector_data.get("ids"))
 
-        if has_documents:
+        if has_documents: 
             logger.info(
                 "Performing similarity search on the last user message_prompt: %s",
                 str(state.get("messages")[-1]),
             )
             retrieved_docs = self.similarity_search(
-                str(state.get("messages")[-1])
-            )  # could be more efficient in terms of retrieval
+                str(state.get("messages")[-1]),
+                score_thresh=0.7
+            )
             if not retrieved_docs:
                 logger.info("No relevant documents found for the query")
                 return {"context": []}
@@ -175,7 +178,6 @@ class RAGService:
                 logger.info(f"Retrieved {len(retrieved_docs)} documents for the query")
                 return {"context": retrieved_docs}
         else:
-            # No documents available - return empty context for pure generation
             logger.info(
                 "No documents in vector store - switching to pure generation mode"
             )
@@ -191,7 +193,7 @@ class RAGService:
             filled_prompt = None
 
             context_texts = (
-                "\n\n".join([doc.page_content for doc in context_docs])
+                "\n\n".join([doc.page_content for (doc, _) in context_docs])
                 if context_docs
                 else "No relevant documents found."
             )
