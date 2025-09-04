@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse
 from api.models import ChatMessage, ChatRequest, SystemStatus, HealthResponse
 from pipeline import MoodleAIAssistantPipeline
 from config.settings import ConfigurationManager
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage, AnyMessage
 
 
 router = APIRouter()
