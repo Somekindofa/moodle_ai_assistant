@@ -43,10 +43,6 @@ class DocumentProcessingService:
 
                 documents = self._load_single_file(file_path, splitter)
                 all_documents.extend(documents)
-                if documents:
-                    logger.info(f"Successfully processed {file_path}: {len(documents)} chunks")
-                else:
-                    logger.warning(f"No documents extracted from {file_path}")
 
             except Exception as e:
                 logger.error(f"Error processing file {file_path}: {str(e)}")
