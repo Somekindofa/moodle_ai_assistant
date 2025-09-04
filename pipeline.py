@@ -11,6 +11,7 @@ from api.models import ChatMessage
 from langchain.schema import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.config import RunnableConfig
+from langchain_core.messages import AnyMessage
 
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import StreamMode
@@ -25,7 +26,7 @@ from services.graph_service import ConversationGraphService
 
 logger = logging.getLogger(__name__)
 test_thread_id = "abc123"
-test_config = RunnableConfig(run_id=uuid.UUID(hashlib.md5(test_thread_id.encode()).hexdigest()))
+test_config = RunnableConfig({"configurable": {"thread_id": test_thread_id}})
 
 class MoodleAIAssistantPipeline:
     """Main pipeline orchestrating the Moodle AI Assistant services."""
@@ -51,7 +52,6 @@ class MoodleAIAssistantPipeline:
         """Automatically load documents from Documents folder if it exists."""
         import os
         import glob
-
 
         documents_folder = "documents"
         if os.path.exists(documents_folder) and os.path.isdir(documents_folder):
@@ -151,21 +151,22 @@ class MoodleAIAssistantPipeline:
 
     async def generate_response(
         self,
-        messages: Union[str, List[str], List[ChatMessage]],
+        message: str,
         stream_mode: StreamMode = "messages",
     ) -> AsyncGenerator[str, None]:
         """Generate streaming response for user query with optional history."""
         try:
             async for chunk, _ in self.conversation_graph.astream(
-                {"question": messages, "context": history}, stream_mode=stream_mode, config=test_config)
+                {"messages": message}, stream_mode=stream_mode, config=test_config
             ):
                 chunk_content = getattr(chunk, "content", str(chunk))
                 if chunk_content:
                     yield chunk_content
 
         except Exception as e:
-            logger.error(f"Failed to generate response: {str(e)}")
-            yield f"Error generating response: {str(e)}"
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            yield f"Error generating response: {traceback.format_exc()}"
 
     def get_current_directory(self) -> str:
         """Get current working directory."""
