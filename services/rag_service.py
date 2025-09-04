@@ -11,6 +11,8 @@ from langchain.chat_models import init_chat_model
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents.base import Document
+from langchain_core.messages import BaseMessage
+from langchain_core.prompts import PromptTemplate
 from langchain import hub
 
 from config.settings import ConfigurationManager
@@ -35,7 +37,7 @@ class RAGService:
             f"RAG service initialized with collection '{self.config.collection_name}'"
         )
 
-    def _load_prompt_template(self) -> None:
+    def _load_prompt_template(self) -> Optional[PromptTemplate]:
         """Load prompt template from LangChain Hub."""
         try:
             self.prompt_template = hub.pull(self.config.prompt_url, include_model=True)
@@ -44,7 +46,11 @@ class RAGService:
 
         except Exception as e:
             logger.error(f"Failed to load prompt template: {str(e)}")
-            return None
+            self.prompt_template = PromptTemplate.from_template(
+                "Context: {context}\n\nQuestion: {question}\n\nAnswer:"
+            )
+            logger.info("Using fallback prompt template")
+            return self.prompt_template
 
     def _initialize_embeddings(self) -> HuggingFaceEmbeddings:
         """Initialize HuggingFace embeddings."""
@@ -175,7 +181,7 @@ class RAGService:
             )
             return {"context": []}
 
-    def generate(self, state: ConversationState) -> Dict[str, Any]:
+    def generate(self, state: ConversationState) -> Union[BaseMessage, str]:
         """Generate response using retrieved context or pure generation."""
         if not self.llm:
             raise ValueError("No LLM available. Please check LLM initialization.")
@@ -193,13 +199,19 @@ class RAGService:
             if self.prompt_template:
                 filled_prompt = self.prompt_template.invoke(
                     {
-                        "question": str(state.get("messages")[-1]),
+                        "question": str(state.get("messages")),
                         "context": context_texts,
                     }
                 )
 
             if filled_prompt:
-                response = self.llm.generate(filled_prompt)
+                response = self.llm.invoke(filled_prompt)
+                return response
+            else:
+                # Fallback: direct LLM invocation without prompt template
+                logger.warning("No prompt template available, using direct LLM invocation")
+                fallback_prompt = f"Question: {str(state.get('messages'))}\nContext: {context_texts}\nAnswer:"
+                response = self.llm.invoke(fallback_prompt)
                 return response
 
         except Exception as e:
