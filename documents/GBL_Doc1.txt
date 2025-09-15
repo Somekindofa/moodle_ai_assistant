@@ -1,7 +1,11 @@
 1. Glassblowing - Document 1: Furnace Gathering and Handling
 
-Glassblowing begins with heating the raw glass in a furnace at extremely high temperatures, usually around 1,100°C to 1,200°C. The artisan uses a blowpipe made of steel, which acts as a handle and a blowing instrument.
+Glassblowing begins with heating the raw glass in a furnace at extremely high temperatures, usually around 1,100°C to 1,200°C.
+The artisan uses a blowpipe made of steel, which acts as a handle and a blowing instrument.
 
-The process starts by preheating the blowpipe to prevent thermal shock when it enters the molten glass. The pipe is then dipped into the furnace to gather molten glass onto its tip. This stage is called “gathering.” The artisan rotates the pipe continuously to keep the glass mass symmetrical and prevent sagging.
+The process starts by preheating the blowpipe to prevent thermal shock when it enters the molten glass.
+The pipe is then dipped into the furnace to gather molten glass onto its tip. This stage is called “gathering.”
+The artisan rotates the pipe continuously to keep the glass mass symmetrical and prevent sagging.
 
-Once the glass is gathered, it must be rolled on a marver (a flat, heat-resistant steel surface) to shape it into a cylindrical form and to remove irregularities. During this stage, temperature management is crucial; letting the glass cool too much will make it unworkable, while overheating can cause it to drip.
+Once the glass is gathered, it must be rolled on a marver (a flat, heat-resistant steel surface) to shape it into a cylindrical form and to remove irregularities.
+During this stage, temperature management is crucial; letting the glass cool too much will make it unworkable, while overheating can cause it to drip.
