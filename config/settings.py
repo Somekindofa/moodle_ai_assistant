@@ -40,7 +40,7 @@ class RAGConfig:
     llm_model_url: str = "accounts/fireworks/models/llama-v3p1-70b-instruct"
     llm_provider: str = "fireworks"
     prompt_url: str = "rlm/rag-prompt"
-    similarity_search_k: int = 4
+    similarity_search_k: int = 15
 
 
 @dataclass
