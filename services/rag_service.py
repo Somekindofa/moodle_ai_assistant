@@ -208,6 +208,7 @@ class RAGService:
             raise ValueError("No LLM available. Please check LLM initialization.")
 
         try:
+            logger.info(f"DEBUG - State at node generate: {state}")
             context_docs = state.get("context", [])
             filled_prompt = None
 
