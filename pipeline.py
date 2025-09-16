@@ -149,7 +149,7 @@ class MoodleAIAssistantPipeline:
     async def generate_response(
         self,
         message: str,
-        stream_mode: StreamMode = "messages",
+        stream_mode: StreamMode,
     ) -> AsyncGenerator[Union[tuple[str, List[Document]], str], None]:
         """Generate streaming response for user query with optional history."""
         try:
