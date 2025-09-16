@@ -12,7 +12,9 @@ from fastapi.responses import StreamingResponse
 from api.models import ChatMessage, ChatRequest, SystemStatus, HealthResponse
 from pipeline import MoodleAIAssistantPipeline
 from config.settings import ConfigurationManager
+
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage, AnyMessage
+from langgraph.types import StreamMode
 
 
 router = APIRouter()
@@ -21,22 +23,30 @@ router = APIRouter()
 config_manager = ConfigurationManager()
 pipeline = MoodleAIAssistantPipeline(config_manager)
 
+# Define Json escape
+json_escape = "\n"
 
 def check_documents_folder() -> bool:
     """Check if Documents folder exists in the workspace."""
     return os.path.exists("Documents") and os.path.isdir("Documents")
 
 
-async def generate_simplified_stream(user_messages: str) -> AsyncGenerator[str, None]:
+async def generate_simplified_stream(user_messages: str, stream_mode: StreamMode = "values") -> AsyncGenerator[str, None]:
     """Generate a simpler JSON stream."""
     try:
         logger.info(f"\nReceived user message: {user_messages}")
-        async for chunk in pipeline.generate_response(user_messages):
-                yield json.dumps({"content": chunk}) + "\n"
-        yield json.dumps({"content": "[DONE]"}) + "\n"
+        if stream_mode=="values":
+            async for (messages, context) in pipeline.generate_response(user_messages, stream_mode=stream_mode):
+                yield json.dumps({"content": messages, "documents": context}) + json_escape
+            yield json.dumps({"content": "[DONE]"}) + json_escape
+
+        if stream_mode=="messages":
+            async for chunk in pipeline.generate_response(user_messages, stream_mode=stream_mode):
+                yield json.dumps({"content": chunk}) + json_escape
+            yield json.dumps({"content": "[DONE]"}) + json_escape
 
     except Exception as e:
-        yield json.dumps({"error": str(e)}) + "\n"
+        yield json.dumps({"error": str(e)}) + json_escape
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -60,7 +70,7 @@ async def get_system_status():
 
 
 @router.post("/chat")
-async def chat_stream(request: ChatRequest):
+async def chat_stream(request: ChatRequest) -> StreamingResponse:
     """Simplified chat endpoint with streaming response."""
     try:
         return StreamingResponse(
