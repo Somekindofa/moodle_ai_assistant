@@ -1,12 +1,9 @@
 """Main application pipeline orchestrating all services."""
 
 import logging
+from xml.dom.minidom import Document
 import pandas as pd
 from typing import List, Dict, Any, AsyncGenerator, Optional, Union
-
-import test
-import uuid, hashlib
-from api.models import ChatMessage
 
 from langchain.schema import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -153,15 +150,40 @@ class MoodleAIAssistantPipeline:
         self,
         message: str,
         stream_mode: StreamMode = "messages",
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[Union[tuple[str, List[Document]], str], None]:
         """Generate streaming response for user query with optional history."""
         try:
-            async for chunk, _ in self.conversation_graph.astream(
-                {"messages": message}, stream_mode=stream_mode, config=test_config
-            ):
-                chunk_content = getattr(chunk, "content", str(chunk))
-                if chunk_content:
-                    yield chunk_content
+            if stream_mode=="messages":
+                async for chunk, _ in self.conversation_graph.astream(
+                    {"messages": message}, stream_mode=stream_mode, config=test_config
+                ):
+                    logger.info(f"DEBUG - Using stream_mode={stream_mode}\nReceived chunk {chunk}")
+                    chunk_content = getattr(chunk, "content", str(chunk))
+                    if chunk_content:
+                        yield chunk_content
+
+            elif stream_mode == "values":
+                async for state in self.conversation_graph.astream(
+                    {"messages": message}, stream_mode=stream_mode, config=test_config
+                ):
+                    logger.info(f"DEBUG - Using stream_mode={stream_mode}\nReceived state {state}")
+                    state_content_message = state.get(
+                        "messages", "No message found in the dictionary"
+                    )
+                    state_content_context = state.get("context", None)
+                    if state_content_message and state_content_context:
+                        logger.info(f"DEBUG - Sending tuple ({state_content_message}, {state_content_context})")
+                        yield (state_content_message, state_content_context)
+            else:
+                logger.warning(
+                    f"Unsupported stream_mode '{stream_mode}'. "
+                    f"Currently supported modes: 'messages', 'values'. "
+                    f"Please update the pipeline to handle this mode or use a supported one."
+                )
+                raise ValueError(
+                    f"Pipeline configuration error: stream_mode '{stream_mode}' is not implemented. "
+                    f"Supported modes: ['messages', 'values']"
+                )
 
         except Exception as e:
             import traceback
