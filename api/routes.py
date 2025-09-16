@@ -31,7 +31,7 @@ def check_documents_folder() -> bool:
     return os.path.exists("Documents") and os.path.isdir("Documents")
 
 
-async def generate_simplified_stream(user_messages: str, stream_mode: StreamMode = "values") -> AsyncGenerator[str, None]:
+async def generate_simplified_stream(user_messages: str, stream_mode: StreamMode = "messages") -> AsyncGenerator[str, None]:
     """Generate a simpler JSON stream."""
     try:
         logger.info(f"\nReceived user message: {user_messages}")
