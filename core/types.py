@@ -1,6 +1,6 @@
 """Core types and models for the Moodle AI Assistant."""
 
-from typing import List, Dict, Any
+from typing import Annotated, List, Dict, Any
 from typing_extensions import TypedDict
 from langchain_core.documents.base import Document
 from langgraph.graph import MessagesState
