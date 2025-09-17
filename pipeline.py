@@ -12,6 +12,7 @@ from langchain_core.messages import AnyMessage
 
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import StreamMode
+from streamlit import context
 
 
 from config.settings import ConfigurationManager
@@ -150,30 +151,44 @@ class MoodleAIAssistantPipeline:
         self,
         message: str,
         stream_mode: StreamMode,
-    ) -> AsyncGenerator[Union[tuple[str, List[Document]], str], None]:
+    ) -> AsyncGenerator[Union[tuple[List[AnyMessage], List[Document]], str], None]:
         """Generate streaming response for user query with optional history."""
         try:
             if stream_mode=="messages":
                 async for chunk, _ in self.conversation_graph.astream(
-                    {"messages": message}, stream_mode=stream_mode, config=test_config
+                    {"messages": [message]}, stream_mode=stream_mode, config=test_config
                 ):
-                    logger.info(f"DEBUG - Using stream_mode={stream_mode}\nReceived chunk {chunk}")
                     chunk_content = getattr(chunk, "content", str(chunk))
                     if chunk_content:
                         yield chunk_content
 
             elif stream_mode == "values":
                 async for state in self.conversation_graph.astream(
-                    {"messages": message}, stream_mode=stream_mode, config=test_config
+                    {"messages": [message]}, stream_mode=stream_mode, config=test_config
                 ):
-                    logger.info(f"DEBUG - Using stream_mode={stream_mode}\nReceived state {state}")
                     state_content_message = state.get(
                         "messages", "No message found in the dictionary"
                     )
                     state_content_context = state.get("context", None)
                     if state_content_message and state_content_context:
-                        logger.info(f"DEBUG - Sending tuple ({state_content_message}, {state_content_context})")
                         yield (state_content_message, state_content_context)
+
+            elif stream_mode == "updates":
+                accumulated_context = None  # Initialize to avoid unbound variable
+                async for update in self.conversation_graph.astream(
+                    {"messages": [message]}, stream_mode=stream_mode, config=test_config
+                ):
+                    for node_name, node_output in update.items():
+                        if node_name == "retrieve_runnable" and "context" in node_output:
+                            logger.info(f"There is a {node_name} update")
+                            accumulated_context = node_output["context"]
+
+                        elif node_name == "generate_runnable" and "messages" in node_output:
+                            messages = node_output.get("messages", [])
+                            if messages and accumulated_context:
+                                logger.info(f"There is a {node_name} update. Yielding\n({messages}, {accumulated_context})")
+                                yield (messages, accumulated_context)
+
             else:
                 logger.warning(
                     f"Unsupported stream_mode '{stream_mode}'. "
