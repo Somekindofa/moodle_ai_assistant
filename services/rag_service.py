@@ -185,6 +185,7 @@ class RAGService:
         # Check if we have any documents in the vector store
         vector_data = self.get_vector_store_data()
         has_documents = bool(vector_data.get("ids"))
+        logger.info(f"State at retrieve: {state}")
 
         if has_documents:
             retrieved_docs = self.similarity_search(
