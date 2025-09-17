@@ -31,19 +31,44 @@ def check_documents_folder() -> bool:
     return os.path.exists("Documents") and os.path.isdir("Documents")
 
 
-async def generate_simplified_stream(user_messages: str, stream_mode: StreamMode = "messages") -> AsyncGenerator[str, None]:
+async def generate_simplified_stream(user_messages: str, stream_mode: StreamMode) -> AsyncGenerator[str, None]:
     """Generate a simpler JSON stream."""
     try:
-        logger.info(f"\nReceived user message: {user_messages}")
-        if stream_mode=="values":
+        if stream_mode=="values" or stream_mode=="updates":
             async for (messages, context) in pipeline.generate_response(user_messages, stream_mode=stream_mode):
-                yield json.dumps({"content": messages, "documents": context}) + json_escape
+                serializable_documents = []
+                if context:
+                    for doc in context:
+                        serializable_documents.append({
+                            "id": getattr(doc, 'id', None),
+                            "page_content": doc.page_content,
+                            "metadata": doc.metadata
+                        })
+
+                # Convert messages to serializable format
+                serializable_messages = []
+                if messages:
+                    for msg in messages:
+                        serializable_messages.append({
+                            "content": getattr(msg, 'content', str(msg)),
+                            "type": getattr(msg, 'type', 'unknown'),
+                            "id": getattr(msg, 'id', None)
+                        })
+
+                yield json.dumps({
+                    "content": serializable_messages, 
+                    "documents": serializable_documents
+                }) + json_escape
             yield json.dumps({"content": "[DONE]"}) + json_escape
 
-        if stream_mode=="messages":
+        elif stream_mode=="messages":
             async for chunk in pipeline.generate_response(user_messages, stream_mode=stream_mode):
-                yield json.dumps({"content": chunk}) + json_escape
-            yield json.dumps({"content": "[DONE]"}) + json_escape
+                yield json.dumps({"messages": chunk}) + json_escape
+            yield json.dumps({"messages": "[DONE]"}) + json_escape
+
+    except GeneratorExit:
+        logger.info("Client disconnected during streaming")
+        raise
 
     except Exception as e:
         yield json.dumps({"error": str(e)}) + json_escape
@@ -74,7 +99,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
     """Simplified chat endpoint with streaming response."""
     try:
         return StreamingResponse(
-            generate_simplified_stream(request.message),
+            generate_simplified_stream(request.message, stream_mode="updates"),
             media_type="application/json"
         )
     except Exception as e:
