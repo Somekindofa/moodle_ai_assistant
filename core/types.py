@@ -15,4 +15,4 @@ class ConversationState(MessagesState):
 
     ##TODO Refactor to suggest an appropriate reducer to update context
     ## context: Annotated[List[Document], reducer]
-    context: List[tuple[Document, float]]
+    context: List[Document]
