@@ -4,6 +4,7 @@ import os
 import logging
 from typing import List, Dict, Any, Union, Optional
 from typing_extensions import Literal
+import json
 
 from langchain.chat_models import init_chat_model
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -36,9 +37,9 @@ class RAGService:
                 input_variables=["history", "context", "question"],
                 template="You are helping apprentices in arts and crafts to learn how to perform techniques and gain skills and insight into different domains. "\
                 "\n\nYou will use the following discussion history with your apprentice here " \
-                "\n\n<history>{history}</history>\n\n and this context " \
-                "\n\n<context>{context}</context>\n\n to answer the following query " \
-                "\n\n<query>{query}</query>." \
+                "\n\n<history>\n{history}\n</history>\n\n and this context " \
+                "\n\n<context>\n{context}\n</context>\n\n to answer the following query " \
+                "\n\n<query>\n{query}\n</query>." \
                 "When you do not have enough context to help you answer the query, just respond 'I do not know'",
             )
 
@@ -222,7 +223,7 @@ class RAGService:
             if self.prompt_template:
                 filled_prompt = self.prompt_template.invoke(
                     {   
-                        "history": state.get("messages")[:-1],
+                        "history": [f"{msg.type}: {msg.content}" for msg in state.get("messages", [])[:-1]],
                         "query": str(state.get("messages")[-1].content),
                         "context": context_texts,
                     }
