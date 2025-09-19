@@ -1,12 +1,9 @@
 """Main application pipeline orchestrating all services."""
 
 import logging
+from langchain_core.documents.base import Document
 import pandas as pd
-from typing import List, Dict, Any, AsyncGenerator, Optional, Union
-
-import test
-import uuid, hashlib
-from api.models import ChatMessage
+from typing import List, Dict, Any, AsyncGenerator, Optional, Union, overload, Literal
 
 from langchain.schema import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -15,6 +12,7 @@ from langchain_core.messages import AnyMessage
 
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import StreamMode
+from streamlit import context
 
 
 from config.settings import ConfigurationManager
@@ -27,6 +25,7 @@ from services.graph_service import ConversationGraphService
 logger = logging.getLogger(__name__)
 test_thread_id = "abc123"
 test_config = RunnableConfig({"configurable": {"thread_id": test_thread_id}})
+
 
 class MoodleAIAssistantPipeline:
     """Main pipeline orchestrating the Moodle AI Assistant services."""
@@ -152,21 +151,47 @@ class MoodleAIAssistantPipeline:
     async def generate_response(
         self,
         message: str,
-        stream_mode: StreamMode = "messages",
-    ) -> AsyncGenerator[str, None]:
+        stream_mode: StreamMode,
+    ) -> AsyncGenerator[tuple[List[AnyMessage], List[Document]], None]:
         """Generate streaming response for user query with optional history."""
         try:
-            async for chunk, _ in self.conversation_graph.astream(
-                {"messages": message}, stream_mode=stream_mode, config=test_config
-            ):
-                chunk_content = getattr(chunk, "content", str(chunk))
-                if chunk_content:
-                    yield chunk_content
+            if stream_mode == "updates":
+                accumulated_context = []  # Initialize to avoid unbound variable
+                async for update in self.conversation_graph.astream(
+                    {"messages": [message]}, stream_mode=stream_mode, config=test_config
+                ):
+                    for node_name, node_output in update.items():
+                        if (
+                            node_name == "retrieve_runnable"
+                            and "context" in node_output
+                        ):
+                            accumulated_context:List[Document] = node_output.get("context", [])
+
+                        elif (
+                            node_name == "generate_runnable"
+                            and "messages" in node_output
+                        ):
+                            messages:List[AnyMessage] = node_output.get("messages", [])
+                            if messages and accumulated_context:
+                                yield (messages, accumulated_context)
+
+            else:
+                logger.warning(
+                    f"Unsupported stream_mode '{stream_mode}'. "
+                    f"Currently supported modes: 'messages', 'values'. "
+                    f"Please update the pipeline to handle this mode or use a supported one."
+                )
+                raise ValueError(
+                    f"Pipeline configuration error: stream_mode '{stream_mode}' is not implemented. "
+                    f"Supported modes: ['messages', 'values']"
+                )
 
         except Exception as e:
             import traceback
+
             logger.error(f"Full traceback: {traceback.format_exc()}")
-            yield f"Error generating response: {traceback.format_exc()}"
+            error_message = AIMessage(content=f"Error generating response: {str(e)}")
+            yield ([error_message], [])
 
     def get_current_directory(self) -> str:
         """Get current working directory."""
