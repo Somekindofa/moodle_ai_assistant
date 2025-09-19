@@ -1,9 +1,9 @@
 """Main application pipeline orchestrating all services."""
 
 import logging
-from xml.dom.minidom import Document
+from langchain_core.documents.base import Document
 import pandas as pd
-from typing import List, Dict, Any, AsyncGenerator, Optional, Union
+from typing import List, Dict, Any, AsyncGenerator, Optional, Union, overload, Literal
 
 from langchain.schema import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -25,6 +25,7 @@ from services.graph_service import ConversationGraphService
 logger = logging.getLogger(__name__)
 test_thread_id = "abc123"
 test_config = RunnableConfig({"configurable": {"thread_id": test_thread_id}})
+
 
 class MoodleAIAssistantPipeline:
     """Main pipeline orchestrating the Moodle AI Assistant services."""
@@ -151,42 +152,27 @@ class MoodleAIAssistantPipeline:
         self,
         message: str,
         stream_mode: StreamMode,
-    ) -> AsyncGenerator[Union[tuple[List[AnyMessage], List[Document]], str], None]:
+    ) -> AsyncGenerator[tuple[List[AnyMessage], List[Document]], None]:
         """Generate streaming response for user query with optional history."""
         try:
-            if stream_mode=="messages":
-                async for chunk, _ in self.conversation_graph.astream(
-                    {"messages": [message]}, stream_mode=stream_mode, config=test_config
-                ):
-                    chunk_content = getattr(chunk, "content", str(chunk))
-                    if chunk_content:
-                        yield chunk_content
-
-            elif stream_mode == "values":
-                async for state in self.conversation_graph.astream(
-                    {"messages": [message]}, stream_mode=stream_mode, config=test_config
-                ):
-                    state_content_message = state.get(
-                        "messages", "No message found in the dictionary"
-                    )
-                    state_content_context = state.get("context", None)
-                    if state_content_message and state_content_context:
-                        yield (state_content_message, state_content_context)
-
-            elif stream_mode == "updates":
-                accumulated_context = None  # Initialize to avoid unbound variable
+            if stream_mode == "updates":
+                accumulated_context = []  # Initialize to avoid unbound variable
                 async for update in self.conversation_graph.astream(
                     {"messages": [message]}, stream_mode=stream_mode, config=test_config
                 ):
                     for node_name, node_output in update.items():
-                        if node_name == "retrieve_runnable" and "context" in node_output:
-                            logger.info(f"There is a {node_name} update")
-                            accumulated_context = node_output["context"]
+                        if (
+                            node_name == "retrieve_runnable"
+                            and "context" in node_output
+                        ):
+                            accumulated_context:List[Document] = node_output.get("context", [])
 
-                        elif node_name == "generate_runnable" and "messages" in node_output:
-                            messages = node_output.get("messages", [])
+                        elif (
+                            node_name == "generate_runnable"
+                            and "messages" in node_output
+                        ):
+                            messages:List[AnyMessage] = node_output.get("messages", [])
                             if messages and accumulated_context:
-                                logger.info(f"There is a {node_name} update. Yielding\n({messages}, {accumulated_context})")
                                 yield (messages, accumulated_context)
 
             else:
@@ -202,8 +188,10 @@ class MoodleAIAssistantPipeline:
 
         except Exception as e:
             import traceback
+
             logger.error(f"Full traceback: {traceback.format_exc()}")
-            yield f"Error generating response: {traceback.format_exc()}"
+            error_message = AIMessage(content=f"Error generating response: {str(e)}")
+            yield ([error_message], [])
 
     def get_current_directory(self) -> str:
         """Get current working directory."""
