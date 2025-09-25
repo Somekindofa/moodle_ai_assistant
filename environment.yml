@@ -1,4 +1,4 @@
-name: moodle-plugin
+name: moodle-assistant
 channels:
   - pytorch
   - nvidia
@@ -37,7 +37,7 @@ dependencies:
   - c-ares=1.34.5=h2466b09_0
   - ca-certificates=2025.4.26=h4c7d964_0
   - cachetools=5.5.2=pyhd8ed1ab_0
-  - certifi=2025.6.15=py312haa95532_0
+  - certifi=2025.7.14=py312haa95532_0
   - cffi=1.17.1=py312h4389bb4_0
   - chardet=5.2.0=pyhd8ed1ab_3
   - charset-normalizer=3.4.2=pyhd8ed1ab_0
@@ -335,4 +335,4 @@ dependencies:
       - groovy==0.1.2
       - onnxruntime==1.22.0
       - psutil==7.0.0
-prefix: C:\miniconda3\envs\moodle-plugin
+prefix: C:\Users\Theo Akbas\.conda\envs\moodle-assistant
