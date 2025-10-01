@@ -1,6 +1,5 @@
 """Pydantic models for API requests and responses."""
 
-from re import L
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional, Literal
 
@@ -15,6 +14,7 @@ class ChatRequest(BaseModel):
     """Request model for chat endpoint."""
 
     message: str
+    conversation_thread_id: str
 
 
 class SystemStatus(BaseModel):
