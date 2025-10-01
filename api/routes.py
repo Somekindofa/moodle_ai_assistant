@@ -2,14 +2,12 @@
 
 import json
 import os
-import asyncio
 from datetime import datetime
 from typing import AsyncGenerator, List
 from venv import logger
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from torch import Stream
 from api.models import ChatMessage, ChatRequest, SystemStatus, HealthResponse
 from pipeline import MoodleAIAssistantPipeline
 from config.settings import ConfigurationManager
