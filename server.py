@@ -47,7 +47,7 @@ app = FastAPI(
 # Configure CORS for JavaScript frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure this based on your Moodle domain
+    allow_origins=["http://localhost:8080"],  # Configure this based on your Moodle domain
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
