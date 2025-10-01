@@ -32,13 +32,13 @@ def check_documents_folder() -> bool:
 
 
 async def generate_simplified_stream(
-    user_messages: str, stream_mode: StreamMode
+    user_messages: str, conversation_thread_id: str, stream_mode: StreamMode
 ) -> AsyncGenerator[str, None]:
     """Generate a simpler JSON stream."""
     try:
         if stream_mode == "updates":
             async for messages, context in pipeline.generate_response(
-                user_messages, stream_mode=stream_mode
+                user_messages, conversation_thread_id, stream_mode=stream_mode
             ):
                 serializable_documents = []
                 if context:
@@ -104,7 +104,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
     """Simplified chat endpoint with streaming response."""
     try:
         return StreamingResponse(
-            generate_simplified_stream(request.message, stream_mode="updates"),
+            generate_simplified_stream(request.message, request.conversation_thread_id, stream_mode="updates"),
             media_type="application/json",
         )
     except Exception as e:
