@@ -36,12 +36,14 @@ async def generate_simplified_stream(
 ) -> AsyncGenerator[str, None]:
     """Generate a simpler JSON stream."""
     try:
+        accumulated_context = []
         if stream_mode == "updates":
             async for messages, context in pipeline.generate_response(
                 user_messages, conversation_thread_id, stream_mode=stream_mode
             ):
-                serializable_documents = []
+
                 if context:
+                    serializable_documents = []
                     for doc in context:
                         serializable_documents.append(
                             {
@@ -50,9 +52,10 @@ async def generate_simplified_stream(
                                 "metadata": doc.metadata,
                             }
                         )
+                    accumulated_context = serializable_documents
 
-                serializable_messages = []
                 if messages:
+                    serializable_messages = []
                     for msg in messages:
                         serializable_messages.append(
                             {
@@ -61,13 +64,13 @@ async def generate_simplified_stream(
                                 "id": getattr(msg, "id", None),
                             }
                         )
-
-                yield json.dumps(
-                    {
-                        "content": serializable_messages,
-                        "documents": serializable_documents,
-                    }
-                ) + json_escape
+                    # Yield immediately when we have messages
+                    yield json.dumps(
+                        {
+                            "content": serializable_messages,
+                            "documents": accumulated_context,
+                        }
+                    ) + json_escape
 
             yield json.dumps({"content": "[DONE]"}) + json_escape
 
@@ -106,6 +109,11 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
         return StreamingResponse(
             generate_simplified_stream(request.message, request.conversation_thread_id, stream_mode="updates"),
             media_type="application/json",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",  # Disable nginx buffering if present
+            }
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
