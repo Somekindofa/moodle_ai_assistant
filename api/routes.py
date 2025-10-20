@@ -4,13 +4,20 @@ import json
 import os
 import asyncio
 from datetime import datetime
-from typing import AsyncGenerator, List
+from typing import AsyncGenerator, List, Optional
 from venv import logger
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from torch import Stream
-from api.models import ChatMessage, ChatRequest, SystemStatus, HealthResponse
+from api.models import (
+    ChatMessage, 
+    ChatRequest, 
+    SystemStatus, 
+    HealthResponse,
+    AnnotationSyncRequest,
+    AnnotationStats
+)
 from pipeline import MoodleAIAssistantPipeline
 from config.settings import ConfigurationManager
 
@@ -109,5 +116,36 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
             generate_simplified_stream(request.message, stream_mode="updates"),
             media_type="application/json",
         )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/sync-annotations")
+async def sync_annotations(request: Optional[AnnotationSyncRequest] = None):
+    """Manually trigger annotation sync from SQLite to ChromaDB."""
+    try:
+        use_extended = request.use_extended if request else True
+        clear_existing = request.clear_existing if request else False
+        
+        count = pipeline.sync_annotations(
+            use_extended=use_extended,
+            clear_existing=clear_existing
+        )
+        
+        return {
+            "status": "success",
+            "documents_synced": count,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/annotation-stats", response_model=AnnotationStats)
+async def get_annotation_stats():
+    """Get statistics about annotations in database and vector store."""
+    try:
+        stats = pipeline.get_annotation_stats()
+        return AnnotationStats(**stats)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
