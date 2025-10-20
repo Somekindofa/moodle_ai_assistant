@@ -4,6 +4,7 @@ import os
 import logging
 from typing import List, Dict, Any, Union, Optional
 from typing_extensions import Literal
+from datetime import datetime
 import json
 
 from langchain.chat_models import init_chat_model
@@ -24,12 +25,19 @@ logger = logging.getLogger(__name__)
 class RAGService:
     """Service for RAG (Retrieval Augmented Generation) operations."""
 
-    def __init__(self, config_manager: ConfigurationManager, use_hub_template: bool = False):
+    def __init__(
+        self, 
+        config_manager: ConfigurationManager, 
+        use_hub_template: bool = False,
+        annotation_service: Optional[Any] = None
+    ):
         self.config_manager = config_manager
         self.config = self.config_manager.get_config().rag
         self.embeddings = self._initialize_embeddings()
         self.vector_store = self._initialize_vector_store()
         self.llm = self._initialize_llm()
+        self.annotation_service = annotation_service  # Optional dependency
+        
         if use_hub_template:
             self.prompt_template = self._load_prompt_template()
         else:
@@ -256,3 +264,136 @@ class RAGService:
     def get_current_directory(self) -> str:
         """Get current working directory."""
         return os.getcwd()
+
+    def sync_annotations_to_vector_store(
+        self,
+        use_extended: bool = True,
+        clear_existing: bool = False
+    ) -> int:
+        """
+        Sync completed annotations from SQLite to ChromaDB.
+        
+        Args:
+            use_extended: Whether to include extended transcripts
+            clear_existing: Whether to clear existing annotation documents first
+            
+        Returns:
+            Number of documents added to vector store
+        """
+        if not self.annotation_service:
+            logger.error("No annotation service available for syncing")
+            return 0
+        
+        try:
+            # Optionally clear existing annotation documents
+            if clear_existing:
+                self._clear_annotation_documents()
+            
+            # Fetch completed annotations
+            annotations = self.annotation_service.get_completed_annotations(
+                include_extended=use_extended
+            )
+            
+            if not annotations:
+                logger.info("No completed annotations to sync")
+                return 0
+            
+            # Convert to documents
+            all_documents = []
+            for annotation in annotations:
+                docs = self.annotation_service.annotation_to_documents(
+                    annotation, 
+                    use_extended=use_extended
+                )
+                all_documents.extend(docs)
+            
+            # Add to vector store
+            if all_documents:
+                self.add_documents(all_documents)
+                logger.info(
+                    f"Synced {len(all_documents)} annotation documents to vector store"
+                )
+                return len(all_documents)
+            
+            return 0
+            
+        except Exception as e:
+            logger.error(f"Failed to sync annotations: {str(e)}")
+            return 0
+
+    def sync_new_annotations(
+        self,
+        since_timestamp: datetime,
+        use_extended: bool = True
+    ) -> int:
+        """
+        Sync only new/updated annotations since a timestamp.
+        
+        Args:
+            since_timestamp: Only sync annotations updated after this time
+            use_extended: Whether to include extended transcripts
+            
+        Returns:
+            Number of documents added
+        """
+        if not self.annotation_service:
+            logger.error("No annotation service available for syncing")
+            return 0
+        
+        try:
+            annotations = self.annotation_service.get_annotations_since(
+                since_timestamp,
+                include_extended=use_extended
+            )
+            
+            if not annotations:
+                logger.info(f"No new annotations since {since_timestamp}")
+                return 0
+            
+            all_documents = []
+            for annotation in annotations:
+                docs = self.annotation_service.annotation_to_documents(
+                    annotation,
+                    use_extended=use_extended
+                )
+                all_documents.extend(docs)
+            
+            if all_documents:
+                self.add_documents(all_documents)
+                logger.info(
+                    f"Synced {len(all_documents)} new annotation documents"
+                )
+                return len(all_documents)
+            
+            return 0
+            
+        except Exception as e:
+            logger.error(f"Failed to sync new annotations: {str(e)}")
+            return 0
+
+    def _clear_annotation_documents(self) -> None:
+        """Remove all annotation-type documents from vector store."""
+        try:
+            results = self.vector_store.get(
+                where={"type": "video_annotation"}
+            )
+            if results and "ids" in results and results["ids"]:
+                self.vector_store.delete(ids=results["ids"])
+                logger.info(
+                    f"Cleared {len(results['ids'])} annotation documents from vector store"
+                )
+        except Exception as e:
+            logger.error(f"Failed to clear annotation documents: {str(e)}")
+
+    def get_annotation_documents_count(self) -> int:
+        """Get count of annotation documents in vector store."""
+        try:
+            results = self.vector_store.get(
+                where={"type": "video_annotation"}
+            )
+            count = len(results.get("ids", []))
+            logger.info(f"Found {count} annotation documents in vector store")
+            return count
+        except Exception as e:
+            logger.error(f"Failed to count annotation documents: {str(e)}")
+            return 0

@@ -18,6 +18,7 @@ from services.langchain_service import LangChainService
 from services.rag_service import RAGService
 from services.document_service import DocumentProcessingService
 from services.graph_service import ConversationGraphService
+from services.annotation_service import AnnotationService
 
 
 logger = logging.getLogger(__name__)
@@ -33,12 +34,19 @@ class MoodleAIAssistantPipeline:
 
         # Initialize services in dependency order
         self.langchain_service = LangChainService(self.config_manager)
-        self.rag_service = RAGService(self.config_manager)
+        self.annotation_service = AnnotationService(self.config_manager)
+        self.rag_service = RAGService(
+            self.config_manager,
+            annotation_service=self.annotation_service
+        )
         self.document_service = DocumentProcessingService(self.config_manager)
         self.graph_service = ConversationGraphService(self.rag_service)
 
         # Auto-load documents from Documents folder if it exists
         self._auto_load_documents()
+        
+        # Auto-sync annotations from database
+        self._auto_sync_annotations()
 
         # Build and compile conversation graph
         self.conversation_graph = self._build_conversation_graph()
@@ -73,6 +81,24 @@ class MoodleAIAssistantPipeline:
                 logger.info("No supported files found in documents folder")
         else:
             logger.info("No documents folder found - will use pure generation mode")
+
+    def _auto_sync_annotations(self) -> None:
+        """Automatically sync annotations from database on startup."""
+        try:
+            stats = self.annotation_service.get_annotation_stats()
+            logger.info(f"Annotation database stats: {stats}")
+            
+            if stats.get("completed_extended", 0) > 0:
+                count = self.rag_service.sync_annotations_to_vector_store(
+                    use_extended=True,
+                    clear_existing=False
+                )
+                logger.info(f"Auto-synced {count} annotation documents on startup")
+            else:
+                logger.info("No completed annotations found for auto-sync")
+                
+        except Exception as e:
+            logger.warning(f"Auto-sync of annotations failed: {str(e)}")
 
     def _build_conversation_graph(self) -> CompiledStateGraph:
         """Build and compile the conversation graph."""
@@ -198,3 +224,24 @@ class MoodleAIAssistantPipeline:
     def get_knowledge_base_status(self) -> pd.DataFrame:
         """Get current knowledge base status as DataFrame."""
         return self._create_knowledge_base_dataframe()
+
+    def sync_annotations(
+        self,
+        use_extended: bool = True,
+        clear_existing: bool = False
+    ) -> int:
+        """Manually trigger annotation sync."""
+        return self.rag_service.sync_annotations_to_vector_store(
+            use_extended=use_extended,
+            clear_existing=clear_existing
+        )
+
+    def get_annotation_stats(self) -> Dict[str, Any]:
+        """Get annotation statistics from both database and vector store."""
+        db_stats = self.annotation_service.get_annotation_stats()
+        vector_count = self.rag_service.get_annotation_documents_count()
+        
+        return {
+            **db_stats,
+            "vector_store_annotations": vector_count
+        }
