@@ -90,7 +90,7 @@ class MoodleAIAssistantPipeline:
             
             if stats.get("completed_extended", 0) > 0:
                 count = self.rag_service.sync_annotations_to_vector_store(
-                    use_extended=True,
+                    use_extended=False,  # Use raw transcripts only
                     clear_existing=False
                 )
                 logger.info(f"Auto-synced {count} annotation documents on startup")
@@ -101,9 +101,12 @@ class MoodleAIAssistantPipeline:
             logger.warning(f"Auto-sync of annotations failed: {str(e)}")
 
     def _build_conversation_graph(self) -> CompiledStateGraph:
-        """Build and compile the conversation graph."""
+        """Build and compile the conversation graph with query enhancement."""
         try:
-            return self.graph_service.build_conversation_graph().compile_graph()
+            # Updated sequence: retrieve -> enhance_query -> retrieve_final -> generate
+            return self.graph_service.build_conversation_graph(
+                functions=["retrieve", "enhance_query", "retrieve_final", "generate"]
+            ).compile_graph()
         except Exception as e:
             logger.error(f"Failed to build conversation graph: {str(e)}")
             raise
@@ -176,28 +179,48 @@ class MoodleAIAssistantPipeline:
         self,
         message: str,
         stream_mode: StreamMode,
-    ) -> AsyncGenerator[tuple[List[AnyMessage], List[Document]], None]:
-        """Generate streaming response for user query with optional history."""
+    ) -> AsyncGenerator[tuple[List[AnyMessage], List[Document], Optional[Dict[str, Any]]], None]:
+        """Generate streaming response for user query with optional history and video metadata."""
         try:
             if stream_mode == "updates":
                 accumulated_context = []  # Initialize to avoid unbound variable
+                accumulated_video_metadata = None  # Track video metadata
+                
                 async for update in self.conversation_graph.astream(
                     {"messages": [message]}, stream_mode=stream_mode, config=test_config
                 ):
                     for node_name, node_output in update.items():
+                        # Initial retrieval node
                         if (
                             node_name == "retrieve_runnable"
                             and "context" in node_output
                         ):
-                            accumulated_context:List[Document] = node_output.get("context", [])
+                            logger.info(f"Initial retrieval: {len(node_output.get('context', []))} docs")
+                        
+                        # Query enhancement node
+                        elif (
+                            node_name == "enhance_query_runnable"
+                            and "enhanced_query" in node_output
+                        ):
+                            logger.info(f"Enhanced query: {node_output.get('enhanced_query', 'N/A')}")
+                        
+                        # Final retrieval node (with video metadata)
+                        elif (
+                            node_name == "retrieve_final_runnable"
+                            and "context" in node_output
+                        ):
+                            accumulated_context: List[Document] = node_output.get("context", [])
+                            accumulated_video_metadata = node_output.get("video_metadata", None)
+                            logger.info(f"Final retrieval: {len(accumulated_context)} docs, video_metadata: {accumulated_video_metadata is not None}")
 
+                        # Generation node
                         elif (
                             node_name == "generate_runnable"
                             and "messages" in node_output
                         ):
-                            messages:List[AnyMessage] = node_output.get("messages", [])
+                            messages: List[AnyMessage] = node_output.get("messages", [])
                             if messages and accumulated_context:
-                                yield (messages, accumulated_context)
+                                yield (messages, accumulated_context, accumulated_video_metadata)
 
             else:
                 logger.warning(
@@ -215,7 +238,7 @@ class MoodleAIAssistantPipeline:
 
             logger.error(f"Full traceback: {traceback.format_exc()}")
             error_message = AIMessage(content=f"Error generating response: {str(e)}")
-            yield ([error_message], [])
+            yield ([error_message], [], None)
 
     def get_current_directory(self) -> str:
         """Get current working directory."""
@@ -227,7 +250,7 @@ class MoodleAIAssistantPipeline:
 
     def sync_annotations(
         self,
-        use_extended: bool = True,
+        use_extended: bool = False,  # Changed default to False - use raw transcripts
         clear_existing: bool = False
     ) -> int:
         """Manually trigger annotation sync."""
