@@ -179,18 +179,19 @@ class AnnotationService:
         documents = []
         
         # Base metadata shared by both documents
+        # Filter out None values as ChromaDB only accepts str, int, float, bool
         base_metadata = {
             "annotation_id": annotation["annotation_id"],
             "video_id": annotation["video_id"],
-            "video_filename": annotation["video_filename"],
-            "video_filepath": annotation["video_filepath"],
-            "start_time": annotation["start_time"],
-            "end_time": annotation["end_time"],
-            "duration": annotation["end_time"] - annotation["start_time"],
-            "audio_filepath": annotation["audio_filepath"],
-            "source_type": annotation["source_type"],
-            "project_name": annotation.get("project_name", "unknown"),
-            "annotation_created_at": annotation["annotation_created_at"],
+            "video_filename": annotation["video_filename"] or "unknown.mp4",
+            "video_filepath": annotation["video_filepath"] or "",
+            "start_time": float(annotation["start_time"]) if annotation["start_time"] is not None else 0.0,
+            "end_time": float(annotation["end_time"]) if annotation["end_time"] is not None else 0.0,
+            "duration": float(annotation["end_time"] - annotation["start_time"]) if annotation["end_time"] is not None and annotation["start_time"] is not None else 0.0,
+            "audio_filepath": annotation["audio_filepath"] or "",
+            "source_type": annotation["source_type"] or "unknown",
+            "project_name": annotation.get("project_name") or "unknown",
+            "annotation_created_at": annotation["annotation_created_at"] or "",
             "type": "video_annotation"
         }
         
@@ -198,7 +199,10 @@ class AnnotationService:
         if annotation.get("transcription"):
             transcription_metadata = base_metadata.copy()
             transcription_metadata["transcript_type"] = "raw"
-            transcription_metadata["source"] = f"{annotation['video_filename']}#{annotation['annotation_id']}_raw"
+            # Ensure source field has no None values
+            video_filename = annotation.get("video_filename") or "unknown.mp4"
+            annotation_id = annotation.get("annotation_id") or 0
+            transcription_metadata["source"] = f"{video_filename}#{annotation_id}_raw"
             
             documents.append(Document(
                 page_content=annotation["transcription"],
@@ -209,7 +213,10 @@ class AnnotationService:
         if use_extended and annotation.get("extended_transcript"):
             extended_metadata = base_metadata.copy()
             extended_metadata["transcript_type"] = "extended"
-            extended_metadata["source"] = f"{annotation['video_filename']}#{annotation['annotation_id']}_extended"
+            # Ensure source field has no None values
+            video_filename = annotation.get("video_filename") or "unknown.mp4"
+            annotation_id = annotation.get("annotation_id") or 0
+            extended_metadata["source"] = f"{video_filename}#{annotation_id}_extended"
             
             documents.append(Document(
                 page_content=annotation["extended_transcript"],
