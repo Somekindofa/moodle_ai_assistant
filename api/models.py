@@ -48,3 +48,17 @@ class AnnotationStats(BaseModel):
     total_videos: int
     videos_with_annotations: int
     vector_store_annotations: int
+
+
+class VideoMetadata(BaseModel):
+    """Video metadata for streaming and display."""
+    
+    video_id: str
+    filename: str
+    filepath: str
+    start_time: float
+    end_time: float
+    duration: float
+    video_url: str
+    annotation_id: Optional[int] = None
+    project_name: Optional[str] = None
