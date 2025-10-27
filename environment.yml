@@ -1,4 +1,4 @@
-name: moodle-plugin
+name: moodle-assistant
 channels:
   - defaults
 dependencies:
