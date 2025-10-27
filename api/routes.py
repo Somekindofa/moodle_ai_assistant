@@ -2,7 +2,6 @@
 
 import json
 import os
-import asyncio
 from datetime import datetime
 from typing import AsyncGenerator, List, Optional
 from venv import logger
@@ -41,10 +40,11 @@ def check_documents_folder() -> bool:
 
 
 async def generate_simplified_stream(
-    user_messages: str, stream_mode: StreamMode
+    user_messages: str, conversation_thread_id: str, stream_mode: StreamMode
 ) -> AsyncGenerator[str, None]:
     """Generate a simpler JSON stream with video metadata support."""
     try:
+        accumulated_context = []
         if stream_mode == "updates":
             video_metadata_sent = False
             
@@ -63,6 +63,7 @@ async def generate_simplified_stream(
                 
                 serializable_documents = []
                 if context:
+                    serializable_documents = []
                     for doc in context:
                         serializable_documents.append(
                             {
@@ -71,9 +72,10 @@ async def generate_simplified_stream(
                                 "metadata": doc.metadata,
                             }
                         )
+                    accumulated_context = serializable_documents
 
-                serializable_messages = []
                 if messages:
+                    serializable_messages = []
                     for msg in messages:
                         serializable_messages.append(
                             {
@@ -126,8 +128,13 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
     """Simplified chat endpoint with streaming response."""
     try:
         return StreamingResponse(
-            generate_simplified_stream(request.message, stream_mode="updates"),
+            generate_simplified_stream(request.message, request.conversation_thread_id, stream_mode="updates"),
             media_type="application/json",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",  # Disable nginx buffering if present
+            }
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
