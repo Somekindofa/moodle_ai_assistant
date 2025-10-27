@@ -178,16 +178,18 @@ class MoodleAIAssistantPipeline:
     async def generate_response(
         self,
         message: str,
+        conversation_thread_id: str,
         stream_mode: StreamMode,
     ) -> AsyncGenerator[tuple[List[AnyMessage], List[Document], Optional[Dict[str, Any]]], None]:
         """Generate streaming response for user query with optional history and video metadata."""
         try:
+            config = RunnableConfig({"configurable": {"thread_id": conversation_thread_id}})
             if stream_mode == "updates":
                 accumulated_context = []  # Initialize to avoid unbound variable
                 accumulated_video_metadata = None  # Track video metadata
                 
                 async for update in self.conversation_graph.astream(
-                    {"messages": [message]}, stream_mode=stream_mode, config=test_config
+                    {"messages": [message]}, stream_mode=stream_mode, config=config
                 ):
                     for node_name, node_output in update.items():
                         # Initial retrieval node
