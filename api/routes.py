@@ -49,7 +49,7 @@ async def generate_simplified_stream(
             video_metadata_sent = False
             
             async for messages, context, video_metadata in pipeline.generate_response(
-                user_messages, stream_mode=stream_mode
+                user_messages, conversation_thread_id=conversation_thread_id, stream_mode=stream_mode
             ):
                 # Send video metadata event FIRST if available and not yet sent
                 if video_metadata and not video_metadata_sent:
