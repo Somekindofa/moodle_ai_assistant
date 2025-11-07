@@ -43,11 +43,15 @@ class RAGService:
         else:
             self.prompt_template = PromptTemplate(
                 input_variables=["history", "context", "question"],
-                template="Vous aidez des apprentis dans les arts et l'artisanat à apprendre comment effectuer des techniques et acquérir des compétences et des connaissances dans différents domaines. "\
+                template="Vous aidez des apprentis dans les arts et l'artisanat à apprendre comment effectuer des techniques et acquérir des compétences et des connaissances dans le domaine de la soufflerie de verre. "\
                 "\n\nVous utiliserez l'historique de discussion suivant avec votre apprenti ici " \
                 "\n\n<history>\n{history}\n</history>\n\n et ce contexte " \
                 "\n\n<context>\n{context}\n</context>\n\n pour répondre à la requête suivante " \
-                "\n\n<query>\n{query}\n</query>.",
+                "\n\n<query>\n{query}\n</query>." \
+                "\n\nFournissez une réponse en français détaillée et instructive sur la manière de se positionner, les outils que l'on utilise, les erreurs communes." \
+                "\n\nSi le contexte ne contient pas d'informations pertinentes, répondez honnêtement que vous ne savez pas." \
+                "\n\nRépondez toujours en français." \
+                "\n\nUtilise le markdown pour formater ta réponse, en utilisant des listes à puces, des tableaux et des sections si nécessaire.",
             )
 
         logger.info(
