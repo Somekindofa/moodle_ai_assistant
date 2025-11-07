@@ -101,11 +101,11 @@ class MoodleAIAssistantPipeline:
             logger.warning(f"Auto-sync of annotations failed: {str(e)}")
 
     def _build_conversation_graph(self) -> CompiledStateGraph:
-        """Build and compile the conversation graph with query enhancement."""
+        """Build and compile the conversation graph with HyDE (Hypothetical Document Embeddings)."""
         try:
-            # Updated sequence: retrieve -> enhance_query -> retrieve_final -> generate
+            # New HyDE sequence: generate_hypothetical_document -> retrieve_with_hyde -> generate
             return self.graph_service.build_conversation_graph(
-                functions=["retrieve", "enhance_query", "retrieve_final", "generate"]
+                functions=["generate_hypothetical_document", "retrieve_with_hyde", "generate"]
             ).compile_graph()
         except Exception as e:
             logger.error(f"Failed to build conversation graph: {str(e)}")
@@ -181,7 +181,7 @@ class MoodleAIAssistantPipeline:
         conversation_thread_id: str,
         stream_mode: StreamMode,
     ) -> AsyncGenerator[tuple[List[AnyMessage], List[Document], Optional[Dict[str, Any]]], None]:
-        """Generate streaming response for user query with optional history and video metadata."""
+        """Generate streaming response for user query with HyDE-based retrieval and video metadata."""
         try:
             config = RunnableConfig({"configurable": {"thread_id": conversation_thread_id}})
             if stream_mode == "updates":
@@ -192,28 +192,23 @@ class MoodleAIAssistantPipeline:
                     {"messages": [message]}, stream_mode=stream_mode, config=config
                 ):
                     for node_name, node_output in update.items():
-                        # Initial retrieval node
+                        # HyDE generation node
                         if (
-                            node_name == "retrieve_runnable"
-                            and "context" in node_output
+                            node_name == "generate_hypothetical_document_runnable"
+                            and "hypothetical_document" in node_output
                         ):
-                            logger.info(f"Initial retrieval: {len(node_output.get('context', []))} docs")
+                            hyde_doc = node_output.get("hypothetical_document", "")
+                            preview = hyde_doc[:100] + "..." if hyde_doc and len(hyde_doc) > 100 else hyde_doc
+                            logger.info(f"HyDE generated: {preview}")
                         
-                        # Query enhancement node
+                        # HyDE-based retrieval node (with video metadata)
                         elif (
-                            node_name == "enhance_query_runnable"
-                            and "enhanced_query" in node_output
-                        ):
-                            logger.info(f"Enhanced query: {node_output.get('enhanced_query', 'N/A')}")
-                        
-                        # Final retrieval node (with video metadata)
-                        elif (
-                            node_name == "retrieve_final_runnable"
+                            node_name == "retrieve_with_hyde_runnable"
                             and "context" in node_output
                         ):
                             accumulated_context: List[Document] = node_output.get("context", [])
                             accumulated_video_metadata = node_output.get("video_metadata", None)
-                            logger.info(f"Final retrieval: {len(accumulated_context)} docs, video_metadata: {accumulated_video_metadata is not None}")
+                            logger.info(f"HyDE retrieval: {len(accumulated_context)} docs, video_metadata: {accumulated_video_metadata is not None}")
 
                         # Generation node
                         elif (
