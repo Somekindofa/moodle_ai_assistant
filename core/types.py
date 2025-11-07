@@ -17,4 +17,5 @@ class ConversationState(MessagesState):
     ## context: Annotated[List[Document], reducer]
     context: List[Document]
     video_metadata: Optional[Dict[str, Any]]
-    enhanced_query: Optional[str]  # Enhanced query from query enhancement node
+    hypothetical_document: Optional[str]  # HyDE-generated hypothetical document
+    enhanced_query: Optional[str]  # [LEGACY] Enhanced query from query enhancement node
