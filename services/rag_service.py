@@ -186,6 +186,10 @@ class RAGService:
             logger.error(f"Error during similarity search: {str(e)}")
             return []
 
+    def hyde_generate(self, state: ConversationState):
+        """Generate a Hypothetical document using HyDE method for subsequent similarity search"""
+        hyde_prompt: str = """You create """
+    
     def retrieve(self, state: ConversationState) -> Dict[str, Any]:
         """Retrieve relevant documents for a given state (initial retrieval for query enhancement)."""
         # Check if we have any documents in the vector store
@@ -212,147 +216,7 @@ class RAGService:
             )
             return {"context": [], "video_metadata": None}
 
-    def enhance_query(self, state: ConversationState) -> Dict[str, Any]:
-        """
-        Enhance user query using LLM based on initially retrieved documents.
 
-        This node receives:
-        - Original user query from messages[-1]
-        - Top 3 retrieved documents from context
-
-        It uses the LLM to enhance the query by incorporating relevant aspects
-        from the retrieved documents while preserving the original query's intent.
-
-        Returns:
-        - enhanced_query: The improved query string for final retrieval
-        """
-        if not self.llm:
-            logger.warning(
-                "No LLM available for query enhancement, using original query"
-            )
-            return {"enhanced_query": str(state.get("messages")[-1].content)}
-
-        try:
-            original_query = str(state.get("messages")[-1].content)
-            context_docs = state.get("context", [])
-
-            # If no context was retrieved, skip enhancement
-            if not context_docs:
-                logger.info("No context available, skipping query enhancement")
-                return {"enhanced_query": original_query}
-
-            # Prepare context snippets from retrieved documents
-            context_snippets = []
-            for i, doc in enumerate(context_docs[:3], 1):  # Use top 3 docs
-                # Extract key information from metadata
-                doc_type = doc.metadata.get("transcript_type", "text")
-                source = doc.metadata.get("source", "unknown")
-
-                # Truncate content to avoid overwhelming the LLM
-                content_preview = (
-                    doc.page_content[:300] + "..."
-                    if len(doc.page_content) > 300
-                    else doc.page_content
-                )
-
-                context_snippets.append(
-                    f"Document {i} ({doc_type} from {source}):\n{content_preview}"
-                )
-
-            context_text = "\n\n".join(context_snippets)
-
-            # Create enhancement prompt
-            enhancement_prompt = f"""You are a query enhancement assistant. Your task is to improve a user's query by incorporating relevant aspects from retrieved documents while preserving the original query's meaning and intent.
-
-Original User Query:
-{original_query}
-
-Retrieved Context Snippets (for reference only):
-{context_text}
-
-Instructions:
-1. Analyze the original query and identify its core intent
-2. Review the retrieved context snippets for relevant terminology, concepts, or domain-specific language
-3. Enhance the query by:
-   - Adding relevant technical terms or domain vocabulary from the context
-   - Incorporating synonyms or related concepts that appear in the retrieved documents
-   - Maintaining the original query's semantic meaning and user intent
-4. Keep the enhanced query concise (1-3 sentences maximum)
-5. Do NOT change the fundamental question being asked
-6. Do NOT simply copy text from the retrieved documents
-
-Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
-
-            # Invoke LLM for query enhancement
-            response = self.llm.invoke(enhancement_prompt)
-            # Handle response content which can be string or list
-            if isinstance(response.content, str):
-                enhanced_query = response.content.strip()
-            elif isinstance(response.content, list):
-                # Join list items if content is a list
-                enhanced_query = " ".join(
-                    [str(item) for item in response.content]
-                ).strip()
-            else:
-                enhanced_query = str(response.content).strip()
-
-            return {"enhanced_query": enhanced_query}
-
-        except Exception as e:
-            logger.error(f"Error during query enhancement: {str(e)}")
-            # Fallback to original query on error
-            return {"enhanced_query": str(state.get("messages")[-1].content)}
-
-    def retrieve_final(self, state: ConversationState) -> Dict[str, Any]:
-        """
-        Perform final retrieval using the enhanced query.
-
-        This retrieves the single most relevant document using the enhanced query
-        and extracts video metadata if applicable.
-
-        Returns:
-        - context: List containing the top retrieved document
-        - video_metadata: Video playback information if available
-        """
-        # Check if we have any documents in the vector store
-        vector_data = self.get_vector_store_data()
-        has_documents = bool(vector_data.get("ids"))
-
-        if not has_documents:
-            logger.info("No documents in vector store - skipping final retrieval")
-            return {"context": [], "video_metadata": None}
-
-        try:
-            # Get enhanced query from state
-            enhanced_query = state.get("enhanced_query")
-
-            # If no enhanced query, fall back to original
-            if not enhanced_query:
-                enhanced_query = str(state.get("messages")[-1].content)
-                logger.warning("No enhanced query found, using original query")
-
-            # Perform retrieval with enhanced query
-            # Use k=1 to get only the most relevant document
-            retrieved_docs = self.similarity_search(enhanced_query, k=15)
-
-            if not retrieved_docs:
-                logger.info("No relevant documents found with enhanced query")
-                return {"context": [], "video_metadata": None}
-
-            # Take only the top result
-            top_doc = [retrieved_docs[0]]
-            logger.info(
-                f"Final retrieval selected top document: {top_doc[0].metadata.get('source', 'unknown')}"
-            )
-
-            # Extract video metadata from the top document
-            video_metadata = self._extract_video_metadata(top_doc)
-
-            return {"context": top_doc, "video_metadata": video_metadata}
-
-        except Exception as e:
-            logger.error(f"Error during final retrieval: {str(e)}")
-            return {"context": [], "video_metadata": None}
 
     def generate(self, state: ConversationState) -> Dict[str, List[BaseMessage]]:
         """Generate response using retrieved context or pure generation."""
