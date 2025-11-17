@@ -16,7 +16,7 @@ class Prompts:
                     "\n\nUtilise le markdown pour formater ta réponse, en utilisant des listes à puces, des tableaux et des sections si nécessaire.""",
                 )
     hyde_prompt = PromptTemplate(
-            input_variables=[],
+            input_variables=["query"],
             template="""Your goal is to create a **HyDE (Hypothetical Document Embedding)** prompt that generates a believable, detailed, and contextually rich document about the process of glassblowing. This document will serve as a reference to compare against your existing transcripts in your vector store.
 
         Here’s how you can structure your HyDE prompt to ensure the LLM generates a high-quality, realistic document:
@@ -69,13 +69,8 @@ class Prompts:
 
         Chaque étape est une leçon de patience et de précision. La ventilation de l’atelier est cruciale pour éviter d’inhaler les particules fines, et la pratique régulière affine la coordination entre les mains et le corps. C’est un métier où chaque détail compte, et où l’expérience se transmet autant par les gestes que par les mots.
         ```
-
-        ---
-
-        ### **Why This Works for HyDE**
-        - **Richness:** The document is dense with technical and sensory details, making it a strong candidate for embedding and comparison.
-        - **Authenticity:** The first-person perspective and expert tips mimic real-world transcripts.
-        - **Contextual Depth:** It covers tools, techniques, safety, and common pitfalls, ensuring a comprehensive reference.
-
-        Would you like me to refine this further for a specific focus (e.g., beginner vs. advanced techniques, historical vs. modern methods)? Or would you like to test this prompt with your LLM?""",
+        Use the following query to generate the HyDE Document: 
+        \n\n
+        <query>\n{query}\n</query>
+        """,
     )
