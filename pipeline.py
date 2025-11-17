@@ -141,7 +141,7 @@ class MoodleAIAssistantPipeline:
     def clear_knowledge_base(self) -> None:
         """Clear all documents from the knowledge base."""
         try:
-            self.rag_service.remove_documents("all")
+            self.rag_service.vs_remove_documents("all")
             logger.info("Knowledge base cleared successfully")
         except Exception as e:
             logger.error(f"Failed to clear knowledge base: {str(e)}")

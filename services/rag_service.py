@@ -123,7 +123,7 @@ class RAGService:
             logger.error(f"Failed to add documents: {str(e)}")
             raise
 
-    def remove_documents(
+    def vs_remove_documents(
         self, file_paths: Union[List[str], Literal["all"]] = "all"
     ) -> None:
         """Remove documents from the vector store."""
