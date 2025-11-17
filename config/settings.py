@@ -2,6 +2,9 @@
 
 import os
 import logging
+
+from config.prompts import hyde_prompt
+from langchain.prompts import PromptTemplate
 from typing import List, Optional, Dict, Any
 from dotenv import load_dotenv, dotenv_values
 from dataclasses import dataclass, field
@@ -30,6 +33,7 @@ def setup_logging() -> logging.Logger:
     return logger
 
 
+
 @dataclass
 class RAGConfig:
     """Configuration for RAG system."""
@@ -40,6 +44,7 @@ class RAGConfig:
     llm_model_url: str = "accounts/fireworks/models/llama-v3p1-70b-instruct"
     llm_provider: str = "fireworks"
     prompt_url: str = "rlm/rag-prompt"
+    hyde_prompt: PromptTemplate = hyde_prompt
     similarity_search_k: int = 15
 
 
