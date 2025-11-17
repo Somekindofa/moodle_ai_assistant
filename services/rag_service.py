@@ -178,7 +178,6 @@ class RAGService:
             unique_results = []
             results = self.vector_store.max_marginal_relevance_search(query, k=k)
             for doc in results:
-                logger.info(f"Document {doc.metadata.get("source", "")}")
                 doc_content = str(doc.metadata.get("source"))
                 if doc_content not in seen_docs:
                     seen_docs.add(doc_content)
@@ -196,7 +195,6 @@ class RAGService:
         # Check if we have any documents in the vector store
         vector_data = self.get_vector_store_data()
         has_documents = bool(vector_data.get("ids"))
-        logger.info(f"State at retrieve: {state}")
 
         if has_documents:
             retrieved_docs = self.similarity_search(
@@ -209,7 +207,6 @@ class RAGService:
                 logger.info(f"Retrieved {len(retrieved_docs)} documents for initial retrieval")
                 
                 # Don't extract video metadata yet - that happens in final retrieval
-                
                 return {
                     "context": retrieved_docs,
                     "video_metadata": None
@@ -295,9 +292,6 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
                 enhanced_query = " ".join([str(item) for item in response.content]).strip()
             else:
                 enhanced_query = str(response.content).strip()
-            
-            logger.info(f"Original query: '{original_query}'")
-            logger.info(f"Enhanced query: '{enhanced_query}'")
             
             return {"enhanced_query": enhanced_query}
             
