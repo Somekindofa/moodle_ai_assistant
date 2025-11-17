@@ -36,15 +36,14 @@ class MoodleAIAssistantPipeline:
         self.langchain_service = LangChainService(self.config_manager)
         self.annotation_service = AnnotationService(self.config_manager)
         self.rag_service = RAGService(
-            self.config_manager,
-            annotation_service=self.annotation_service
+            self.config_manager, annotation_service=self.annotation_service
         )
         self.document_service = DocumentProcessingService(self.config_manager)
         self.graph_service = ConversationGraphService(self.rag_service)
 
         # Auto-load documents from Documents folder if it exists
         self._auto_load_documents()
-        
+
         # Auto-sync annotations from database
         self._auto_sync_annotations()
 
@@ -87,16 +86,15 @@ class MoodleAIAssistantPipeline:
         try:
             stats = self.annotation_service.get_annotation_stats()
             logger.info(f"Annotation database stats: {stats}")
-            
+
             if stats.get("completed_extended", 0) > 0:
                 count = self.rag_service.sync_annotations_to_vector_store(
-                    use_extended=False,  # Use raw transcripts only
-                    clear_existing=False
+                    use_extended=False, clear_existing=False  # Use raw transcripts only
                 )
                 logger.info(f"Auto-synced {count} annotation documents on startup")
             else:
                 logger.info("No completed annotations found for auto-sync")
-                
+
         except Exception as e:
             logger.warning(f"Auto-sync of annotations failed: {str(e)}")
 
@@ -128,7 +126,7 @@ class MoodleAIAssistantPipeline:
 
             if documents:
                 # Add to RAG service
-                self.rag_service.add_documents(documents)
+                self.rag_service.vs_add_documents(documents)
 
                 # Return updated knowledge base view
                 return self._create_knowledge_base_dataframe()
@@ -180,14 +178,18 @@ class MoodleAIAssistantPipeline:
         message: str,
         conversation_thread_id: str,
         stream_mode: StreamMode,
-    ) -> AsyncGenerator[tuple[List[AnyMessage], List[Document], Optional[Dict[str, Any]]], None]:
+    ) -> AsyncGenerator[
+        tuple[List[AnyMessage], List[Document], Optional[Dict[str, Any]]], None
+    ]:
         """Generate streaming response for user query with optional history and video metadata."""
         try:
-            config = RunnableConfig({"configurable": {"thread_id": conversation_thread_id}})
+            config = RunnableConfig(
+                {"configurable": {"thread_id": conversation_thread_id}}
+            )
             if stream_mode == "updates":
                 accumulated_context = []  # Initialize to avoid unbound variable
                 accumulated_video_metadata = None  # Track video metadata
-                
+
                 async for update in self.conversation_graph.astream(
                     {"messages": [message]}, stream_mode=stream_mode, config=config
                 ):
@@ -197,23 +199,33 @@ class MoodleAIAssistantPipeline:
                             node_name == "retrieve_runnable"
                             and "context" in node_output
                         ):
-                            logger.info(f"Initial retrieval: {len(node_output.get('context', []))} docs")
-                        
+                            logger.info(
+                                f"Initial retrieval: {len(node_output.get('context', []))} docs"
+                            )
+
                         # Query enhancement node
                         elif (
                             node_name == "enhance_query_runnable"
                             and "enhanced_query" in node_output
                         ):
-                            logger.info(f"Enhanced query: {node_output.get('enhanced_query', 'N/A')}")
-                        
+                            logger.info(
+                                f"Enhanced query: {node_output.get('enhanced_query', 'N/A')}"
+                            )
+
                         # Final retrieval node (with video metadata)
                         elif (
                             node_name == "retrieve_final_runnable"
                             and "context" in node_output
                         ):
-                            accumulated_context: List[Document] = node_output.get("context", [])
-                            accumulated_video_metadata = node_output.get("video_metadata", None)
-                            logger.info(f"Final retrieval: {len(accumulated_context)} docs, video_metadata: {accumulated_video_metadata is not None}")
+                            accumulated_context: List[Document] = node_output.get(
+                                "context", []
+                            )
+                            accumulated_video_metadata = node_output.get(
+                                "video_metadata", None
+                            )
+                            logger.info(
+                                f"Final retrieval: {len(accumulated_context)} docs, video_metadata: {accumulated_video_metadata is not None}"
+                            )
 
                         # Generation node
                         elif (
@@ -222,7 +234,11 @@ class MoodleAIAssistantPipeline:
                         ):
                             messages: List[AnyMessage] = node_output.get("messages", [])
                             if messages and accumulated_context:
-                                yield (messages, accumulated_context, accumulated_video_metadata)
+                                yield (
+                                    messages,
+                                    accumulated_context,
+                                    accumulated_video_metadata,
+                                )
 
             else:
                 logger.warning(
@@ -253,20 +269,16 @@ class MoodleAIAssistantPipeline:
     def sync_annotations(
         self,
         use_extended: bool = False,  # Changed default to False - use raw transcripts
-        clear_existing: bool = False
+        clear_existing: bool = False,
     ) -> int:
         """Manually trigger annotation sync."""
         return self.rag_service.sync_annotations_to_vector_store(
-            use_extended=use_extended,
-            clear_existing=clear_existing
+            use_extended=use_extended, clear_existing=clear_existing
         )
 
     def get_annotation_stats(self) -> Dict[str, Any]:
         """Get annotation statistics from both database and vector store."""
         db_stats = self.annotation_service.get_annotation_stats()
         vector_count = self.rag_service.get_annotation_documents_count()
-        
-        return {
-            **db_stats,
-            "vector_store_annotations": vector_count
-        }
+
+        return {**db_stats, "vector_store_annotations": vector_count}
