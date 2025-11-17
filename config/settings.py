@@ -3,7 +3,7 @@
 import os
 import logging
 
-from config.prompts import Prompts
+from prompts import Prompts
 from langchain.prompts import PromptTemplate
 from typing import List, Optional, Dict, Any
 from dotenv import load_dotenv, dotenv_values

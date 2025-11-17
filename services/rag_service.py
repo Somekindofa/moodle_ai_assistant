@@ -44,7 +44,7 @@ class RAGService:
             self.prompt_template = self.config_rag.dc_prompt.base_gbl_prompt
 
         logger.info(
-            f"RAG service initialized with collection '{self.config_rag.collection_name}'"
+            f"RAG service initialized."
         )
 
     def _load_prompt_template(self) -> Optional[PromptTemplate]:
@@ -101,7 +101,7 @@ class RAGService:
             return llm
         except Exception as e:
             logger.error(f"Failed to initialize LLM: {str(e)}")
-            return None
+            raise RuntimeError("Failed to initialize LLM. Application cannot proceed.") from e
 
     def vs_add_documents(self, documents: List[Document]) -> None:
         """Add documents to the vector store."""
@@ -175,12 +175,22 @@ class RAGService:
             logger.error(f"Error during similarity search: {str(e)}")
             return []
 
-    def hyde_generate(self, state: ConversationState):
+    def hyde_generate(self, state: ConversationState) -> Dict[str, Any]:
         """Generate a Hypothetical document using HyDE method for subsequent similarity search"""
         hyde_prompt: PromptTemplate = self.config_rag.dc_prompt.hyde_prompt
-        
+        user_query = state.get("messages", [])[-1].content
 
-    
+        hyde_prompt_filled = hyde_prompt.format(query=user_query)
+
+        response = self.llm.invoke(hyde_prompt_filled)
+        if hasattr(response, "content"):
+            hypothetical_text = str(response.content)
+        else:
+            hypothetical_text = str(response)
+
+        hyde_doc = Document(page_content=hypothetical_text)
+        return {"hyde_doc": hyde_doc}
+
     def retrieve(self, state: ConversationState) -> Dict[str, Any]:
         """Retrieve relevant documents for a given state (initial retrieval for query enhancement)."""
         # Check if we have any documents in the vector store
@@ -207,15 +217,12 @@ class RAGService:
             )
             return {"context": [], "video_metadata": None}
 
-
-
     def generate(self, state: ConversationState) -> Dict[str, List[BaseMessage]]:
         """Generate response using retrieved context or pure generation."""
         if not self.llm:
             raise ValueError("No LLM available. Please check LLM initialization.")
 
         try:
-            logger.info(f"DEBUG - State at node generate: {state}")
             context_docs = state.get("context", [])
             filled_prompt = None
 
