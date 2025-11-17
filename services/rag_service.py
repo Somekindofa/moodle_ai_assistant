@@ -32,7 +32,7 @@ class RAGService:
         annotation_service: Optional[Any] = None,
     ):
         self.config_manager = config_manager
-        self.config = self.config_manager.get_config().rag
+        self.config_rag = self.config_manager.get_config().rag
         self.embeddings = self._initialize_embeddings()
         self.vector_store = self._initialize_vector_store()
         self.llm = self._initialize_llm()
@@ -41,18 +41,18 @@ class RAGService:
         if use_hub_template:
             self.prompt_template = self._load_prompt_template()
         else:
-            self.prompt_template = self.config_manager.config.rag.dc_prompt.base_gbl_prompt
+            self.prompt_template = self.config_rag.dc_prompt.base_gbl_prompt
 
         logger.info(
-            f"RAG service initialized with collection '{self.config.collection_name}'"
+            f"RAG service initialized with collection '{self.config_rag.collection_name}'"
         )
 
     def _load_prompt_template(self) -> Optional[PromptTemplate]:
         """Load prompt template from LangChain Hub."""
         raise NotImplementedError
         try:
-            self.prompt_template = hub.pull(self.config.prompt_url, include_model=True)
-            logger.info(f"Prompt template loaded from {self.config.prompt_url}")
+            self.prompt_template = hub.pull(self.config_rag.prompt_url, include_model=True)
+            logger.info(f"Prompt template loaded from {self.config_rag.prompt_url}")
             return self.prompt_template
 
         except Exception as e:
@@ -66,9 +66,9 @@ class RAGService:
     def _initialize_embeddings(self) -> HuggingFaceEmbeddings:
         """Initialize HuggingFace embeddings."""
         try:
-            embeddings = HuggingFaceEmbeddings(model_name=self.config.embedding_model)
+            embeddings = HuggingFaceEmbeddings(model_name=self.config_rag.embedding_model)
             logger.info(
-                f"Embeddings initialized with model: {self.config.embedding_model}"
+                f"Embeddings initialized with model: {self.config_rag.embedding_model}"
             )
             return embeddings
         except Exception as e:
@@ -79,11 +79,11 @@ class RAGService:
         """Initialize Chroma vector store."""
         try:
             vector_store = Chroma(
-                collection_name=self.config.collection_name,
+                collection_name=self.config_rag.collection_name,
                 embedding_function=self.embeddings,
-                persist_directory=self.config.persist_directory,
+                persist_directory=self.config_rag.persist_directory,
             )
-            logger.info(f"Vector store initialized at: {self.config.persist_directory}")
+            logger.info(f"Vector store initialized at: {self.config_rag.persist_directory}")
             return vector_store
         except Exception as e:
             logger.error(f"Failed to initialize vector store: {str(e)}")
@@ -93,11 +93,11 @@ class RAGService:
         """Initialize chat model."""
         try:
             llm = init_chat_model(
-                self.config.llm_model_url,
-                model_provider=self.config.llm_provider,
+                self.config_rag.llm_model_url,
+                model_provider=self.config_rag.llm_provider,
                 streaming=True,
             )
-            logger.info(f"LLM initialized: {self.config.llm_model_url}")
+            logger.info(f"LLM initialized: {self.config_rag.llm_model_url}")
             return llm
         except Exception as e:
             logger.error(f"Failed to initialize LLM: {str(e)}")
@@ -158,7 +158,7 @@ class RAGService:
             - Original scores are returned, not decay scores
         """
         try:
-            k = k or self.config.similarity_search_k
+            k = k or self.config_rag.similarity_search_k
             seen_docs = set()
             unique_results = []
             results = self.vector_store.max_marginal_relevance_search(query, k=k)
@@ -177,7 +177,9 @@ class RAGService:
 
     def hyde_generate(self, state: ConversationState):
         """Generate a Hypothetical document using HyDE method for subsequent similarity search"""
-        hyde_prompt: str = """You create """
+        hyde_prompt: PromptTemplate = self.config_rag.dc_prompt.hyde_prompt
+        
+
     
     def retrieve(self, state: ConversationState) -> Dict[str, Any]:
         """Retrieve relevant documents for a given state (initial retrieval for query enhancement)."""
