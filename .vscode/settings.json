@@ -9,5 +9,17 @@
     "files.autoSave": "afterDelay",
     "files.autoSaveDelay": 500,
     "python.analysis.typeCheckingMode": "standard",
-    "python.analysis.autoImportCompletions": true
+    "python.analysis.autoImportCompletions": true,
+    "python.testing.unittestArgs": [
+        "-v",
+        "-s",
+        "./tests",
+        "-p",
+        "test*.py"
+    ],
+    "python.testing.pytestEnabled": true,
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestArgs": [
+        "tests"
+    ]
 }
