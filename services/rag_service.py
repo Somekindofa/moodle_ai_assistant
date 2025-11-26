@@ -3,6 +3,7 @@
 import os
 import logging
 from typing import List, Dict, Any, Union, Optional
+from annotated_types import doc
 from typing_extensions import Literal
 from datetime import datetime
 import json
@@ -37,7 +38,7 @@ class RAGService:
         self.vector_store = self._initialize_vector_store()
         self.llm = self._initialize_llm()
         self.annotation_service = annotation_service  # Optional dependency
-        
+
         if use_hub_template:
             self.prompt_template = self._load_prompt_template()
         else:
@@ -203,9 +204,9 @@ class RAGService:
                 return {"context": [], "video_metadata": None}
             else:
                 logger.info(f"Retrieved {len(retrieved_docs)} documents for initial retrieval")
-                
+
                 # Don't extract video metadata yet - that happens in final retrieval
-                
+
                 return {
                     "context": retrieved_docs,
                     "video_metadata": None
@@ -215,7 +216,7 @@ class RAGService:
                 "No documents in vector store - switching to pure generation mode"
             )
             return {"context": [], "video_metadata": None}
-    
+
     def enhance_query(self, state: ConversationState) -> Dict[str, Any]:
         """
         Enhance user query using LLM based on initially retrieved documents.
@@ -233,32 +234,32 @@ class RAGService:
         if not self.llm:
             logger.warning("No LLM available for query enhancement, using original query")
             return {"enhanced_query": str(state.get("messages")[-1].content)}
-        
+
         try:
             original_query = str(state.get("messages")[-1].content)
             context_docs = state.get("context", [])
-            
+
             # If no context was retrieved, skip enhancement
             if not context_docs:
                 logger.info("No context available, skipping query enhancement")
                 return {"enhanced_query": original_query}
-            
+
             # Prepare context snippets from retrieved documents
             context_snippets = []
             for i, doc in enumerate(context_docs[:3], 1):  # Use top 3 docs
                 # Extract key information from metadata
                 doc_type = doc.metadata.get("transcript_type", "text")
                 source = doc.metadata.get("source", "unknown")
-                
+
                 # Truncate content to avoid overwhelming the LLM
                 content_preview = doc.page_content[:300] + "..." if len(doc.page_content) > 300 else doc.page_content
-                
+
                 context_snippets.append(
                     f"Document {i} ({doc_type} from {source}):\n{content_preview}"
                 )
-            
+
             context_text = "\n\n".join(context_snippets)
-            
+
             # Create enhancement prompt
             enhancement_prompt = f"""You are a query enhancement assistant. Your task is to improve a user's query by incorporating relevant aspects from retrieved documents while preserving the original query's meaning and intent.
 
@@ -291,17 +292,17 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
                 enhanced_query = " ".join([str(item) for item in response.content]).strip()
             else:
                 enhanced_query = str(response.content).strip()
-            
+
             logger.info(f"Original query: '{original_query}'")
             logger.info(f"Enhanced query: '{enhanced_query}'")
-            
+
             return {"enhanced_query": enhanced_query}
-            
+
         except Exception as e:
             logger.error(f"Error during query enhancement: {str(e)}")
             # Fallback to original query on error
             return {"enhanced_query": str(state.get("messages")[-1].content)}
-    
+
     def retrieve_final(self, state: ConversationState) -> Dict[str, Any]:
         """
         Perform final retrieval using the enhanced query.
@@ -316,40 +317,40 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
         # Check if we have any documents in the vector store
         vector_data = self.get_vector_store_data()
         has_documents = bool(vector_data.get("ids"))
-        
+
         if not has_documents:
             logger.info("No documents in vector store - skipping final retrieval")
             return {"context": [], "video_metadata": None}
-        
+
         try:
             # Get enhanced query from state
             enhanced_query = state.get("enhanced_query")
-            
+
             # If no enhanced query, fall back to original
             if not enhanced_query:
                 enhanced_query = str(state.get("messages")[-1].content)
                 logger.warning("No enhanced query found, using original query")
-            
+
             # Perform retrieval with enhanced query
             # Use k=1 to get only the most relevant document
             retrieved_docs = self.similarity_search(enhanced_query, k=15)
-            
+
             if not retrieved_docs:
                 logger.info("No relevant documents found with enhanced query")
                 return {"context": [], "video_metadata": None}
-            
+
             # Take only the top result
             top_doc = [retrieved_docs[0]]
             logger.info(f"Final retrieval selected top document: {top_doc[0].metadata.get('source', 'unknown')}")
-            
+
             # Extract video metadata from the top document
             video_metadata = self._extract_video_metadata(top_doc)
-            
+
             return {
                 "context": top_doc,
                 "video_metadata": video_metadata
             }
-            
+
         except Exception as e:
             logger.error(f"Error during final retrieval: {str(e)}")
             return {"context": [], "video_metadata": None}
@@ -360,36 +361,34 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
             raise ValueError("No LLM available. Please check LLM initialization.")
 
         try:
-            logger.info(f"DEBUG - State at node generate: {state}")
+            logger.info(f"Generating response for state with {len(state.get("messages", []))} messages")
             context_docs = state.get("context", [])
-            filled_prompt = None
 
-            context_texts = (
+            context_data = (
                 "\n\n".join([doc.page_content for doc in context_docs])
                 if context_docs
-                else "No relevant documents found."
+                else "No relevant document found in the knowledge base."
             )
 
             if self.prompt_template:
                 filled_prompt = self.prompt_template.invoke(
-                    {   
+                    {
                         "history": [f"{msg.type}: {msg.content}" for msg in state.get("messages", [])[:-1]],
                         "query": str(state.get("messages")[-1].content),
-                        "context": context_texts,
+                        "context": context_docs
                     }
                 )
-
-            if filled_prompt:
-                response = self.llm.invoke(filled_prompt)
-                return {"messages": [response]}
             else:
-                # Fallback: direct LLM invocation without prompt template
-                logger.warning(
-                    "No prompt template available, using direct LLM invocation"
-                )
-                fallback_prompt = f"Question: {str(state.get('messages'))}\nContext: {context_texts}\nAnswer:"
-                response = self.llm.invoke(fallback_prompt)
-                return {"messages": [response]}
+                logger.warning("No prompt template available, using fallback.")
+                filled_prompt = f"""
+                Question: {str(state.get('messages'))}
+                \nContext: {context_texts}
+                \nAnswer:
+                """
+
+            response = self.llm.invoke(filled_prompt)
+
+            return {"messages": [response]}
 
         except Exception as e:
             logger.error(f"Failed to generate response: {str(e)}")
@@ -425,21 +424,21 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
         if not self.annotation_service:
             logger.error("No annotation service available for syncing")
             return 0
-        
+
         try:
             # Optionally clear existing annotation documents
             if clear_existing:
                 self._clear_annotation_documents()
-            
+
             # Fetch completed annotations
             annotations = self.annotation_service.get_completed_annotations(
                 include_extended=use_extended
             )
-            
+
             if not annotations:
                 logger.info("No completed annotations to sync")
                 return 0
-            
+
             # Convert to documents
             all_documents = []
             for annotation in annotations:
@@ -448,7 +447,7 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
                     use_extended=use_extended
                 )
                 all_documents.extend(docs)
-            
+
             # Add to vector store
             if all_documents:
                 self.add_documents(all_documents)
@@ -456,9 +455,9 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
                     f"Synced {len(all_documents)} annotation documents to vector store"
                 )
                 return len(all_documents)
-            
+
             return 0
-            
+
         except Exception as e:
             logger.error(f"Failed to sync annotations: {str(e)}")
             return 0
@@ -481,17 +480,17 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
         if not self.annotation_service:
             logger.error("No annotation service available for syncing")
             return 0
-        
+
         try:
             annotations = self.annotation_service.get_annotations_since(
                 since_timestamp,
                 include_extended=use_extended
             )
-            
+
             if not annotations:
                 logger.info(f"No new annotations since {since_timestamp}")
                 return 0
-            
+
             all_documents = []
             for annotation in annotations:
                 docs = self.annotation_service.annotation_to_documents(
@@ -499,16 +498,16 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
                     use_extended=use_extended
                 )
                 all_documents.extend(docs)
-            
+
             if all_documents:
                 self.add_documents(all_documents)
                 logger.info(
                     f"Synced {len(all_documents)} new annotation documents"
                 )
                 return len(all_documents)
-            
+
             return 0
-            
+
         except Exception as e:
             logger.error(f"Failed to sync new annotations: {str(e)}")
             return 0
@@ -539,7 +538,7 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
         except Exception as e:
             logger.error(f"Failed to count annotation documents: {str(e)}")
             return 0
-    
+
     def _extract_video_metadata(self, documents: List[Document]) -> Optional[Dict[str, Any]]:
         """
         Extract video metadata from retrieved documents.
@@ -554,21 +553,21 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
             Dictionary with video metadata or None if no video annotations found
         """
         import hashlib
-        
+
         for doc in documents:
             metadata = doc.metadata
-            
+
             # Check if this is a video annotation document
             if metadata.get("type") == "video_annotation":
                 video_filepath = metadata.get("video_filepath")
-                
+
                 if not video_filepath:
                     continue
-                
+
                 # Generate secure video_id from filepath and annotation_id
                 video_id_source = f"{video_filepath}_{metadata.get('annotation_id', '')}"
                 video_id = hashlib.md5(video_id_source.encode()).hexdigest()
-                
+
                 video_metadata = {
                     "video_id": video_id,
                     "filename": metadata.get("video_filename", "unknown.mp4"),
@@ -580,9 +579,9 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
                     "annotation_id": metadata.get("annotation_id"),
                     "project_name": metadata.get("project_name"),
                 }
-                
+
                 logger.info(f"Extracted video metadata for {video_metadata['filename']}")
                 return video_metadata
-        
+
         logger.info("No video annotations found in retrieved documents")
         return None
