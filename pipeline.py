@@ -178,10 +178,21 @@ class MoodleAIAssistantPipeline:
     async def generate_response(
         self,
         message: str,
-        conversation_thread_id: str,
-        stream_mode: StreamMode,
-    ) -> AsyncGenerator[tuple[List[AnyMessage], List[Document], Optional[Dict[str, Any]]], None]:
-        """Generate streaming response for user query with optional history and video metadata."""
+        conversation_thread_id: str
+    ) -> Dict[str, Any]
+        """
+        Generate complete response without streaming.
+        Waits for entire graph to finish, then returns everything at once.
+        
+        Returns:
+        ```
+            {
+                "message": "AI response text",
+                "documents": [...],  # List of retrieved document sources
+                "video_metadata": {...} or None
+            }
+        ```
+        """
         try:
             config = RunnableConfig({"configurable": {"thread_id": conversation_thread_id}})
             if stream_mode == "updates":
