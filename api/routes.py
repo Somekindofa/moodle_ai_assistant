@@ -10,12 +10,12 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse, FileResponse, Response
 from torch import Stream
 from api.models import (
-    ChatMessage,
-    ChatRequest,
-    SystemStatus,
+    ChatMessage, 
+    ChatRequest, 
+    SystemStatus, 
     HealthResponse,
     AnnotationSyncRequest,
-    AnnotationStats,
+    AnnotationStats
 )
 from pipeline import MoodleAIAssistantPipeline
 from config.settings import ConfigurationManager
@@ -47,21 +47,25 @@ async def generate_simplified_stream(
         accumulated_context = []
         if stream_mode == "updates":
             video_metadata_sent = False
-            serializable_documents = []
-            serializable_messages = []
+
             async for messages, context, video_metadata in pipeline.generate_response(
-                user_messages,
-                conversation_thread_id=conversation_thread_id,
-                stream_mode=stream_mode,
+                user_messages, conversation_thread_id=conversation_thread_id, stream_mode=stream_mode
             ):
                 # Send video metadata event FIRST if available and not yet sent
                 if video_metadata and not video_metadata_sent:
                     yield json.dumps(
-                        {"event": "video_metadata", "data": video_metadata}
+                        {
+                            "event": "video_metadata",
+                            "data": video_metadata
+                        }
                     ) + json_escape
                     video_metadata_sent = True
 
+                serializable_documents = []
+                serializable_messages = []
+
                 if context:
+                    serializable_documents = []
                     for doc in context:
                         serializable_documents.append(
                             {
@@ -70,6 +74,7 @@ async def generate_simplified_stream(
                                 "metadata": doc.metadata,
                             }
                         )
+                    accumulated_context = serializable_documents
 
                 if messages:
                     for msg in messages:
@@ -124,15 +129,13 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
     """Simplified chat endpoint with streaming response."""
     try:
         return StreamingResponse(
-            generate_simplified_stream(
-                request.message, request.conversation_thread_id, stream_mode="updates"
-            ),
+            generate_simplified_stream(request.message, request.conversation_thread_id, stream_mode="updates"),
             media_type="application/json",
             headers={
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
                 "X-Accel-Buffering": "no",  # Disable nginx buffering if present
-            },
+            }
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -144,15 +147,16 @@ async def sync_annotations(request: Optional[AnnotationSyncRequest] = None):
     try:
         use_extended = request.use_extended if request else True
         clear_existing = request.clear_existing if request else False
-
+        
         count = pipeline.sync_annotations(
-            use_extended=use_extended, clear_existing=clear_existing
+            use_extended=use_extended,
+            clear_existing=clear_existing
         )
-
+        
         return {
             "status": "success",
             "documents_synced": count,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -181,37 +185,33 @@ def _get_video_path(video_id: str) -> str:
     """Get filepath for a video_id, or search in vector store."""
     import hashlib
     from pathlib import Path
-
+    
     # Check cache first
     if video_id in _video_cache:
         return _video_cache[video_id]
-
+    
     # Search vector store for matching video_id
     try:
         vector_data = pipeline.rag_service.get_vector_store_data()
-
+        
         if not vector_data.get("metadatas"):
             raise HTTPException(status_code=404, detail="No videos in database")
-
+        
         for metadata in vector_data["metadatas"]:
             if metadata.get("type") == "video_annotation":
                 filepath = metadata.get("video_filepath")
                 annotation_id = metadata.get("annotation_id")
-
+                
                 if filepath and annotation_id:
                     # Regenerate video_id to match
-                    computed_id = hashlib.md5(
-                        f"{filepath}_{annotation_id}".encode()
-                    ).hexdigest()
-
+                    computed_id = hashlib.md5(f"{filepath}_{annotation_id}".encode()).hexdigest()
+                    
                     if computed_id == video_id:
                         _video_cache[video_id] = filepath
                         return filepath
-
-        raise HTTPException(
-            status_code=404, detail=f"Video not found for ID: {video_id}"
-        )
-
+        
+        raise HTTPException(status_code=404, detail=f"Video not found for ID: {video_id}")
+        
     except HTTPException:
         raise
     except Exception as e:
@@ -223,7 +223,7 @@ def _get_video_path(video_id: str) -> str:
 async def stream_video(video_id: str, request: Request):
     """
     Stream video with HTTP range request support for seeking.
-
+    
     Supports partial content requests (HTTP 206) which enables:
     - Video seeking in the browser
     - Efficient bandwidth usage
@@ -232,30 +232,30 @@ async def stream_video(video_id: str, request: Request):
     from pathlib import Path
     import os
     import re
-
+    
     # Security: Validate video_id format (MD5 hash)
-    if not re.match(r"^[a-f0-9]{32}$", video_id):
+    if not re.match(r'^[a-f0-9]{32}$', video_id):
         raise HTTPException(status_code=400, detail="Invalid video ID format")
-
+    
     # Get video filepath
     video_path = _get_video_path(video_id)
-
+    
     # Security: Ensure file exists and is readable
     if not os.path.exists(video_path):
         raise HTTPException(status_code=404, detail="Video file not found on disk")
-
+    
     # Security: Prevent path traversal
     try:
         video_path_resolved = Path(video_path).resolve()
         # Could add additional checks here for allowed directories
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid file path")
-
+    
     file_size = os.path.getsize(video_path)
-
+    
     # Parse Range header
     range_header = request.headers.get("range")
-
+    
     if not range_header:
         # No range requested - send entire file
         return FileResponse(
@@ -264,44 +264,44 @@ async def stream_video(video_id: str, request: Request):
             headers={
                 "Accept-Ranges": "bytes",
                 "Content-Length": str(file_size),
-            },
+            }
         )
-
+    
     # Parse range header (format: "bytes=start-end")
-    range_match = re.match(r"bytes=(\d+)-(\d*)", range_header)
-
+    range_match = re.match(r'bytes=(\d+)-(\d*)', range_header)
+    
     if not range_match:
         raise HTTPException(status_code=416, detail="Invalid range header")
-
+    
     start = int(range_match.group(1))
     end = int(range_match.group(2)) if range_match.group(2) else file_size - 1
-
+    
     # Validate range
     if start >= file_size or end >= file_size or start > end:
         raise HTTPException(
             status_code=416,
             detail="Range not satisfiable",
-            headers={"Content-Range": f"bytes */{file_size}"},
+            headers={"Content-Range": f"bytes */{file_size}"}
         )
-
+    
     chunk_size = end - start + 1
-
+    
     # Stream the requested byte range
     def iterfile():
-        with open(video_path, "rb") as f:
+        with open(video_path, 'rb') as f:
             f.seek(start)
             remaining = chunk_size
-
+            
             while remaining > 0:
                 read_size = min(8192, remaining)  # 8KB chunks
                 data = f.read(read_size)
-
+                
                 if not data:
                     break
-
+                
                 remaining -= len(data)
                 yield data
-
+    
     return StreamingResponse(
         iterfile(),
         status_code=206,  # Partial Content
@@ -310,5 +310,5 @@ async def stream_video(video_id: str, request: Request):
             "Content-Range": f"bytes {start}-{end}/{file_size}",
             "Accept-Ranges": "bytes",
             "Content-Length": str(chunk_size),
-        },
+        }
     )
