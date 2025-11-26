@@ -175,7 +175,7 @@ class RAGService:
             unique_results = []
             results = self.vector_store.max_marginal_relevance_search(query, k=k)
             for doc in results:
-                logger.info(f"Document {doc.metadata.get("source", "")}")
+                logger.info(f"Document {doc.metadata.get('source', "")}")
                 doc_content = str(doc.metadata.get("source"))
                 if doc_content not in seen_docs:
                     seen_docs.add(doc_content)
@@ -361,7 +361,7 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
             raise ValueError("No LLM available. Please check LLM initialization.")
 
         try:
-            logger.info(f"Generating response for state with {len(state.get("messages", []))} messages")
+            logger.info(f"Generating response for state with {len(state.get('messages', []))} messages")
             context_docs = state.get("context", [])
 
             context_data = (
@@ -373,7 +373,7 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
             if self.prompt_template:
                 filled_prompt = self.prompt_template.invoke(
                     {
-                        "history": [f"{msg.type}: {msg.content}" for msg in state.get("messages", [])[:-1]],
+                        "history": [f"{msg.type}: {msg.content}" for msg in state.get('messages', [])[:-1]],
                         "query": str(state.get("messages")[-1].content),
                         "context": context_docs
                     }
