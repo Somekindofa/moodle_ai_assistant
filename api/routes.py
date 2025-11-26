@@ -138,7 +138,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
 
         return {
             "status": "success",
-            "message": result["message"],  # AI response text
+            "messages": result["messages"],  # AI response text
             "documents": result["documents"],  # Retrieved docs metadata
             "video_metadata": result.get("video_metadata"),  # Video info if available
             "conversation_thread_id": request.conversation_thread_id,
