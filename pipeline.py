@@ -245,11 +245,11 @@ class MoodleAIAssistantPipeline:
                 "video_metadata": video_metadata
             }
         
-            except Exception as e:
-                import traceback
-                logger.error(f"Batch generation failed: {str(e)}")
-                logger.error(f"Traceback: {traceback.format_exc()}")
-                raise
+        except Exception as e:
+            import traceback
+            logger.error(f"Batch generation failed: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
 
     def get_current_directory(self) -> str:
         """Get current working directory."""
