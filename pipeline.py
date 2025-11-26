@@ -3,16 +3,10 @@
 import logging
 from langchain_core.documents.base import Document
 import pandas as pd
-from typing import List, Dict, Any, AsyncGenerator, Optional, Union, overload, Literal
+from typing import List, Dict, Any, Optional
 
-from langchain.schema import HumanMessage, AIMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.config import RunnableConfig
-from langchain_core.messages import AnyMessage
-
 from langgraph.graph.state import CompiledStateGraph
-from langgraph.types import StreamMode
-from streamlit import context
 
 from config.settings import ConfigurationManager
 from core.types import ConversationState
@@ -236,7 +230,7 @@ class MoodleAIAssistantPipeline:
 
             if video_metadata:
                 logger.info(
-                    f"Video metadata found: {video_metadata.get("filename", "unknown_video")}"
+                    f"Video metadata found: {video_metadata.get('filename', 'unknown_video')}"
                 )
 
             return {
