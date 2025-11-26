@@ -240,7 +240,7 @@ class MoodleAIAssistantPipeline:
                 )
             
             return {
-                "message": ai_message,
+                "messages": ai_message,
                 "documents": document_sources,
                 "video_metadata": video_metadata
             }
