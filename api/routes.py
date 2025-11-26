@@ -7,7 +7,7 @@ from typing import AsyncGenerator, List, Optional
 from venv import logger
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse, FileResponse, Response
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from torch import Stream
 from api.models import (
     ChatMessage, 
@@ -40,7 +40,7 @@ def check_documents_folder() -> bool:
 
 
 async def generate_simplified_stream(
-    user_messages: str, conversation_thread_id: str, stream_mode: StreamMode
+    user_messages: str, conversation_thread_id: str
 ) -> AsyncGenerator[str, None]:
     """Generate a simpler JSON stream with video metadata support."""
     try:
@@ -125,15 +125,14 @@ async def get_system_status():
 
 
 @router.post("/chat")
-async def chat_stream(request: ChatRequest) -> StreamingResponse:
+async def chat_stream(request: ChatRequest):
     """
     Non-streaming chat endpoint - waits for complete response.
     Returns everything at once: AI message, documents, and video metadata.
     """
     try:
         result = await pipeline.generate_response(
-            request.message,
-            request.conversation_thread_id
+            request.message, request.conversation_thread_id
         )
 
         return {
@@ -143,6 +142,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
             "video_metadata": result.get("video_metadata"),  # Video info if available
             "conversation_thread_id": request.conversation_thread_id,
         }
+
     except Exception as e:
         logger.error(f"Chat request failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
