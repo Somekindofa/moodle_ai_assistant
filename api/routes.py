@@ -62,6 +62,7 @@ async def generate_simplified_stream(
                     video_metadata_sent = True
                 
                 serializable_documents = []
+                serializable_messages = []
                 if context:
                     serializable_documents = []
                     for doc in context:
@@ -75,7 +76,6 @@ async def generate_simplified_stream(
                     accumulated_context = serializable_documents
 
                 if messages:
-                    serializable_messages = []
                     for msg in messages:
                         serializable_messages.append(
                             {
