@@ -195,11 +195,11 @@ class MoodleAIAssistantPipeline:
             logger.info(f"Starting generation for message: {message[:20]}...")
 
             # using ainvoke instead of astream - runs graph to completion
-            final_state: ConversationState = await self.conversation_graph.ainvoke(
+            final_state = await self.conversation_graph.ainvoke(
                 {"messages": [message]},
                 config=config
             )
-            logger.info(f"Graph execution complete. Finale state keys: \n{finale_state.keys()}")
+            logger.info(f"Graph execution complete. Finale state keys: \n{final_state.keys()}")
 
             # Extract AI message from final state
             messages = final_state.get("messages", [])
