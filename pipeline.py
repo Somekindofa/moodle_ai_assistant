@@ -238,13 +238,13 @@ class MoodleAIAssistantPipeline:
                 logger.info(
                     f"Video metadata found: {video_metadata.get("filename", "unknown_video")}"
                 )
-            
+
             return {
                 "messages": ai_message,
                 "documents": document_sources,
                 "video_metadata": video_metadata
             }
-        
+
         except Exception as e:
             import traceback
             logger.error(f"Batch generation failed: {str(e)}")
