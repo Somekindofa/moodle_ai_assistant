@@ -126,18 +126,25 @@ async def get_system_status():
 
 @router.post("/chat")
 async def chat_stream(request: ChatRequest) -> StreamingResponse:
-    """Simplified chat endpoint with streaming response."""
+    """
+    Non-streaming chat endpoint - waits for complete response.
+    Returns everything at once: AI message, documents, and video metadata.
+    """
     try:
-        return StreamingResponse(
-            generate_simplified_stream(request.message, request.conversation_thread_id, stream_mode="updates"),
-            media_type="application/json",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",  # Disable nginx buffering if present
-            }
+        result = await pipeline.generate_response(
+            request.message,
+            request.conversation_thread_id
         )
+
+        return {
+            "status": "success",
+            "message": result["message"],  # AI response text
+            "documents": result["documents"],  # Retrieved docs metadata
+            "video_metadata": result.get("video_metadata"),  # Video info if available
+            "conversation_thread_id": request.conversation_thread_id,
+        }
     except Exception as e:
+        logger.error(f"Chat request failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
