@@ -175,7 +175,7 @@ class RAGService:
             unique_results = []
             results = self.vector_store.max_marginal_relevance_search(query, k=k)
             for doc in results:
-                logger.info(f"Document {doc.metadata.get('source', "")}")
+                logger.info(f"Document {doc.metadata.get('source', '')}")
                 doc_content = str(doc.metadata.get("source"))
                 if doc_content not in seen_docs:
                     seen_docs.add(doc_content)
