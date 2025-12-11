@@ -43,7 +43,7 @@ class RAGService:
         else:
             self.prompt_template = PromptTemplate(
                 input_variables=["history", "context", "question"],
-                template="Vous aidez des apprentis dans les arts et l'artisanat à apprendre comment effectuer des techniques et acquérir des compétences et des connaissances dans le domaine de la soufflerie de verre. "\
+                template="Vous aidez des apprentis dans les arts et l'artisanat à apprendre comment effectuer des techniques et acquérir des compétences et des connaissances dans le domaine évoqué dans la requête utilisateur. "\
                 "\n\nVous utiliserez l'historique de discussion suivant avec votre apprenti ici " \
                 "\n\n<history>\n{history}\n</history>\n\n et ce contexte " \
                 "\n\n<context>\n{context}\n</context>\n\n pour répondre à la requête suivante " \
@@ -51,6 +51,7 @@ class RAGService:
                 "\n\nFournissez une réponse en français détaillée et instructive sur la manière de se positionner, les outils que l'on utilise, les erreurs communes." \
                 "\n\nSi le contexte ne contient pas d'informations pertinentes, répondez honnêtement que vous ne savez pas." \
                 "\n\nRépondez toujours en français." \
+                "\n\nSi vous ne savez pas de quel domaine il s'agit, demandez des clarifications au lieu de répondre." \
                 "\n\nUtilise le markdown pour formater ta réponse, en utilisant des listes à puces, des tableaux et des sections si nécessaire.",
             )
 
@@ -107,6 +108,12 @@ class RAGService:
                 self.config.llm_model_url,
                 model_provider=self.config.llm_provider,
                 streaming=True,
+                temperature=self.config.llm_temperature,
+                max_tokens=self.config.llm_max_tokens,
+                top_p=self.config.llm_top_p,
+                top_k=self.config.llm_top_k,
+                frequency_penalty=self.config.llm_frequency_penalty,
+                presence_penalty=self.config.llm_presence_penalty,
             )
             logger.info(f"LLM initialized: {self.config.llm_model_url}")
             return llm
