@@ -8,7 +8,6 @@ from venv import logger
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse, FileResponse, Response
-from torch import Stream
 from api.models import (
     ChatMessage, 
     ChatRequest, 

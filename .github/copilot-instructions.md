@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-A RAG-powered FastAPI backend that streams LLM responses to a Moodle JavaScript frontend. Architecture follows a **modular service-oriented pattern** with dependency injection, migrated from a monolithic `app_legacy.py` (see `MIGRATION_GUIDE.md`).
+A RAG-powered FastAPI backend that streams LLM responses to a Moodle JavaScript frontend. Architecture follows a **modular service-oriented pattern** with dependency injection.
 
 **Core Flow**: JavaScript Frontend → FastAPI (streaming SSE) → Pipeline → RAG Service → LangGraph → Fireworks.ai LLM
 
@@ -58,11 +58,18 @@ Falls back to simple template if hub pull fails. **Important**: Template expects
 
 ## Development Workflows
 
-### Running the Server
-```cmd
-python main.py
-REM Server starts on http://127.0.0.1:8000
-REM API docs at /docs
+### Quick Start
+```bash
+# Install dependencies
+pip install -r requirements.txt  # or conda env create -f environment.yml
+
+# Set environment variables
+export FIREWORKS_API_KEY=<your_key>
+export LANGCHAIN_API_KEY=<optional_for_tracing>
+
+# Run server
+python main.py  # Starts on http://127.0.0.1:8000
+# API docs: http://127.0.0.1:8000/docs
 ```
 
 ### Testing/Debugging
