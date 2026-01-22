@@ -43,7 +43,6 @@ async def generate_simplified_stream(
 ) -> AsyncGenerator[str, None]:
     """Generate a simpler JSON stream with video metadata support."""
     try:
-        accumulated_context = []
         if stream_mode == "updates":
             video_metadata_sent = False
             
@@ -71,7 +70,6 @@ async def generate_simplified_stream(
                                 "metadata": doc.metadata,
                             }
                         )
-                    accumulated_context = serializable_documents
 
                 if messages:
                     serializable_messages = []
