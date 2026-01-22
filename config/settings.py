@@ -36,8 +36,8 @@ class RAGConfig:
 
     collection_name: str = "moodle_assistant_collection"
     persist_directory: str = "./chroma_langchain_db"
-    embedding_model: str = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2" # changed this for multilingual purposes
-    llm_model_url: str = "accounts/fireworks/models/llama-v3p3-70b-instruct"
+    embedding_model: str = "sentence-transformers/all-mpnet-base-v2"
+    llm_model_url: str = "accounts/fireworks/models/qwen3-8b"
     llm_provider: str = "fireworks"
     prompt_url: str = "rlm/rag-prompt"
     llm_temperature: float = 1.0
