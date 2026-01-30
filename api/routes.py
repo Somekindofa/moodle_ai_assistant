@@ -1,15 +1,13 @@
 """API routes for the Moodle AI Assistant backend server."""
 
-import json
 import os
 from datetime import datetime
-from typing import AsyncGenerator, List, Optional
+from typing import Optional
 from venv import logger
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse, FileResponse, Response
 from api.models import (
-    ChatMessage, 
     ChatRequest, 
     SystemStatus, 
     HealthResponse,
@@ -19,24 +17,15 @@ from api.models import (
 from pipeline import MoodleAIAssistantPipeline
 from config.settings import ConfigurationManager
 
-from langchain_core.messages import HumanMessage, AIMessage, BaseMessage, AnyMessage
-from langgraph.types import StreamMode
-
-
 router = APIRouter()
 
 # Initialize pipeline
 config_manager = ConfigurationManager()
 pipeline = MoodleAIAssistantPipeline(config_manager)
 
-# Define Json escape
-json_escape = "\n"
-
-
 def check_documents_folder() -> bool:
     """Check if Documents folder exists in the workspace."""
     return os.path.exists("Documents") and os.path.isdir("Documents")
-
 
 async def generate_simplified_stream(
     user_messages: str, conversation_thread_id: str, stream_mode: StreamMode
@@ -122,19 +111,26 @@ async def get_system_status():
 
 
 @router.post("/chat")
-async def chat_stream(request: ChatRequest) -> StreamingResponse:
-    """Simplified chat endpoint with streaming response."""
+async def chat_stream(request: ChatRequest):
+    """
+    Non-streaming chat endpoint - waits for complete response.
+    Returns everything at once: AI message, documents, and video metadata.
+    """
     try:
-        return StreamingResponse(
-            generate_simplified_stream(request.message, request.conversation_thread_id, stream_mode="updates"),
-            media_type="application/json",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",  # Disable nginx buffering if present
-            }
+        result = await pipeline.generate_response(
+            request.message, request.conversation_thread_id
         )
+
+        return {
+            "status": "success",
+            "messages": result["messages"],  # AI response text
+            "documents": result["documents"],  # Retrieved docs metadata
+            "video_metadata": result.get("video_metadata"),  # Video info if available
+            "conversation_thread_id": request.conversation_thread_id,
+        }
+
     except Exception as e:
+        logger.error(f"Chat request failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
