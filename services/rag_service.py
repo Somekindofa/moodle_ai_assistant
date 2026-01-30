@@ -3,10 +3,8 @@
 import os
 import logging
 from typing import List, Dict, Any, Union, Optional
-from annotated_types import doc
 from typing_extensions import Literal
 from datetime import datetime
-import json
 
 from langchain.chat_models import init_chat_model
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -382,7 +380,7 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
                 logger.warning("No prompt template available, using fallback.")
                 filled_prompt = f"""
                 Question: {str(state.get('messages'))}
-                \nContext: {context_texts}
+                \nContext: {context_data}
                 \nAnswer:
                 """
 
