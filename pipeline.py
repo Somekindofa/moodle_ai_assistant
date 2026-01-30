@@ -2,8 +2,9 @@
 
 import logging
 from langchain_core.documents.base import Document
+from langchain_core.messages import AnyMessage
 import pandas as pd
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Literal, Optional
 
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
@@ -20,7 +21,7 @@ from services.annotation_service import AnnotationService
 logger = logging.getLogger(__name__)
 test_thread_id = "abc123"
 test_config = RunnableConfig({"configurable": {"thread_id": test_thread_id}})
-
+StreamMode = Literal["values", "updates"]
 
 class MoodleAIAssistantPipeline:
     """Main pipeline orchestrating the Moodle AI Assistant services."""
@@ -176,14 +177,15 @@ class MoodleAIAssistantPipeline:
         message: str,
         conversation_thread_id: str,
         stream_mode: StreamMode,
-    ) -> AsyncGenerator[tuple[List[AnyMessage], List[Document], Optional[Dict[str, Any]]], None]:
-        """Generate streaming response for user query with HyDE-based retrieval and video metadata."""
+    ) -> Dict[str, Any]:
+        """Generate response for user query with HyDE-based retrieval and video metadata."""
         try:
             config = RunnableConfig({"configurable": {"thread_id": conversation_thread_id}})
             if stream_mode == "updates":
                 accumulated_context = []  # Initialize to avoid unbound variable
                 accumulated_video_metadata = None  # Track video metadata
-                
+                latest_messages: Optional[List[AnyMessage]] = None
+
                 async for update in self.conversation_graph.astream(
                     {"messages": [message]}, stream_mode=stream_mode, config=config
                 ):
@@ -196,7 +198,7 @@ class MoodleAIAssistantPipeline:
                             hyde_doc = node_output.get("hypothetical_document", "")
                             preview = hyde_doc[:100] + "..." if hyde_doc and len(hyde_doc) > 100 else hyde_doc
                             logger.info(f"HyDE generated: {preview}")
-                        
+
                         # HyDE-based retrieval node (with video metadata)
                         elif (
                             node_name == "retrieve_with_hyde_runnable"
@@ -212,8 +214,9 @@ class MoodleAIAssistantPipeline:
                             and "messages" in node_output
                         ):
                             messages: List[AnyMessage] = node_output.get("messages", [])
-                            if messages and accumulated_context:
-                                yield (messages, accumulated_context, accumulated_video_metadata)
+                            if messages:
+                                latest_messages = messages
+                                # TODO: If you need client-side streaming, emit updates here.
 
             logger.info(f"Starting generation for message: {message[:20]}...")
 
