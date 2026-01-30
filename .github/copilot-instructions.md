@@ -1,37 +1,58 @@
 # Moodle AI Assistant – Copilot Instructions
 
 ## Big picture
-- FastAPI backend with modular services and LangGraph orchestration. Core flow: FastAPI → `MoodleAIAssistantPipeline` → LangGraph (`retrieve` → `enhance_query` → `retrieve_final` → `generate`) → Fireworks LLM via LangChain.
-- RAG uses ChromaDB + HuggingFace embeddings. `RAGService.similarity_search()` uses MMR, not cosine.
+- **Architecture**: FastAPI backend → `MoodleAIAssistantPipeline` → LangGraph with HyDE (Hypothetical Document Embeddings)
+- **Core flow**: User query → `generate_hypothetical_document` (LLM creates synthetic expert elicitation) → `retrieve_with_hyde` (search vector DB using synthetic text for better semantic matching) → `generate` (LLM response with context) → FastAPI returns messages + documents + optional video metadata
+- **Why HyDE**: Novice queries ("how do I hold my blowpipe?") don't match expert elicitation transcripts linguistically. HyDE generates matching-style synthetic text to bridge this gap.
+- **RAG stack**: ChromaDB vector store + HuggingFace multilingual embeddings (MMR search, k=5) + Fireworks LLM
 
-## Key components (files to read first)
-- Orchestration: `MoodleAIAssistantPipeline` in [pipeline.py](../pipeline.py)
-- HTTP API: routes and streaming video endpoint in [api/routes.py](../api/routes.py)
-- RAG + prompt template: [services/rag_service.py](../services/rag_service.py)
-- Graph assembly: [services/graph_service.py](../services/graph_service.py)
-- Shared state: `ConversationState` in [core/types.py](../core/types.py)
+## Key components (read first for understanding flows)
+1. **Orchestration**: `MoodleAIAssistantPipeline` in [pipeline.py](../pipeline.py) - initializes services, auto-loads documents, builds/runs LangGraph
+2. **LangGraph assembly**: `ConversationGraphService.build_conversation_graph()` in [services/graph_service.py](../services/graph_service.py) - dynamically wires nodes
+3. **HyDE generation**: `RAGService.generate_hypothetical_document()` in [services/rag_service.py](../services/rag_service.py) - creates expert-style text from vague queries
+4. **HyDE retrieval**: `RAGService.retrieve_with_hyde()` in [services/rag_service.py](../services/rag_service.py) - single-pass MMR search + video metadata extraction
+5. **HTTP API**: `ChatRequest → /api/chat` endpoint in [api/routes.py](../api/routes.py) - non-streaming, returns complete response with documents
+6. **State management**: `ConversationState` in [core/types.py](../core/types.py) - tracks messages, context (Documents), hypothetical_document, video_metadata
 
 ## Project-specific conventions
-- Document auto-load from lowercase `documents/` only; `check_documents_folder()` should match this.
-- Query enhancement is enabled (initial retrieval → enhanced query → final retrieval). Avoid reintroducing HyDE nodes unless explicitly requested.
-- Prompt template expects `{history}`, `{context}`, `{query}` and responds in French.
-- Vector store persists at `./chroma_langchain_db/`.
+- **Document loading**: Auto-loads from `documents/` (lowercase, hardcoded in pipeline.py line 39) on startup if folder exists
+- **HyDE prompts**: Must be French (project-specific). See example in `generate_hypothetical_document()` requesting "positionnement précis des mains", "angles d'outils", "sensations physiques"
+- **Prompt template**: Expects `{history}`, `{context}`, `{query}` variables (defined in RAGService.__init__ lines 50-62); responds in French
+- **Vector store location**: `./chroma_langchain_db/` (relative path, persists collection between runs)
+- **Retrieval k values**: `retrieve_with_hyde` uses k=5 (NOT k=15) for single-pass precision; legacy methods had k=15 for two-pass
+- **Video metadata**: Extracted in `retrieve_with_hyde` via `_extract_video_metadata()` using MD5 hash of filepath+annotation_id
 
-## API behavior and integration points
-- POST `/api/chat` is non-streaming; returns `messages`, `documents`, and optional `video_metadata`.
-- GET `/video/stream/{video_id}` supports HTTP range requests for video seeking.
-- `/api/status` indicates RAG vs generation mode based on vector store/documents state.
+## API behavior
+- **POST `/api/chat`**: Takes `ChatRequest(message, conversation_thread_id)`, returns complete JSON (non-streaming) with `messages` (AI response text), `documents` (list of source metadata), `video_metadata` (optional)
+- **GET `/video/stream/{video_id}`**: Supports HTTP `Range` headers for seeking; returns 206 Partial Content; validates video_id is MD5 hash format
+- **GET `/api/status`**: Returns `mode` ("rag" if docs exist OR vector_store has docs, else "generation")
+- **Streaming**: Currently disabled for chat (commented out in pipeline.py `generate_response`); video streaming is separate
 
 ## External dependencies
-- Fireworks.ai LLM (model URL in `RAGConfig`), HuggingFace embeddings, ChromaDB.
-- Required env vars: `FIREWORKS_API_KEY`; `LANGCHAIN_API_KEY` optional for tracing.
+- **LLM**: Fireworks.ai (model `accounts/fireworks/models/qwen3-8b` in RAGConfig)
+- **Embeddings**: HuggingFace `sentence-transformers/paraphrase-multilingual-mpnet-base-v2` (supports French)
+- **Vector DB**: Chroma with persistent SQLite backend at `./chroma_langchain_db/`
+- **Required env vars**: `FIREWORKS_API_KEY` (must set); `LANGCHAIN_API_KEY` optional for LangChain tracing
+- **Annotation service**: SQLite database (optional) for syncing video transcripts via `sync_annotations_to_vector_store()`
 
 ## Developer workflows
-- Install deps with `pip install -r requirements.txt` or conda env from `environment.yml`.
-- Run server via `python main.py` (FastAPI on `http://127.0.0.1:8000`).
-- Debug via `/docs`, `/api/health`, `/api/status`.
+- **Setup**: `pip install -r requirements.txt` OR `conda env create -f environment.yml`
+- **Run**: `python main.py` (starts FastAPI server on `http://127.0.0.1:8000`)
+- **Debug**: Visit `http://127.0.0.1:8000/docs` (auto-generated OpenAPI), check `/api/health`, `/api/status`
+- **Test HyDE**: Call `/api/chat` with message like "how do I position my hands?" — see HyDE preview in logs, verify context retrieved
+
+## Common patterns
+- **Service initialization order** (pipeline.py __init__): LangChainService → AnnotationService → RAGService → DocumentProcessingService → ConversationGraphService
+- **Error handling**: Log with `logger.error()` + traceback (see pipeline.py line 192), raise with meaningful context
+- **Document metadata**: `metadata` dict includes `source` (filename), `type` ("video_annotation" or "text"), `page_content` (text chunk)
+- **LangGraph nodes**: Add via `ConversationGraphService.build_conversation_graph(functions=[...])` with method names from RAGService
+
+## Legacy code to avoid
+- `retrieve()`, `enhance_query()`, `retrieve_final()` methods in RAGService (marked [LEGACY] in comments) — old two-pass retrieval approach replaced by HyDE
+- Do NOT use query enhancement for new features; use HyDE generation instead
 
 ## Pitfalls
-- Keep `documents/` lowercase consistent across services.
-- MMR retrieval default `k=15` lives in `RAGConfig`.
-- Some routes rely on `StreamingResponse` for video only; chat is non-streaming.
+- Document auto-load checks `documents/` (lowercase), not `Documents/` — inconsistent casing breaks loading
+- `RAGConfig.similarity_search_k=15` is NOT used by HyDE (uses k=5 hardcoded in `retrieve_with_hyde()` line 230)
+- LLM initialization fails silently if `FIREWORKS_API_KEY` not set — check logs carefully
+- Video streaming (range requests) only works if file exists on disk; metadata must have valid `video_filepath`
