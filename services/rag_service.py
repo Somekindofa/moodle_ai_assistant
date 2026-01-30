@@ -41,7 +41,7 @@ class RAGService:
             self.prompt_template = self._load_prompt_template()
         else:
             self.prompt_template = PromptTemplate(
-                input_variables=["history", "context", "question"],
+                input_variables=["history", "context", "query"],
                 template="Vous aidez des apprentis dans les arts et l'artisanat à apprendre comment effectuer des techniques et acquérir des compétences et des connaissances dans différents domaines. "\
                 "\n\nVous utiliserez l'historique de discussion suivant avec votre apprenti ici " \
                 "\n\n<history>\n{history}\n</history>\n\n et ce contexte " \
@@ -371,9 +371,9 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
             if self.prompt_template:
                 filled_prompt = self.prompt_template.invoke(
                     {
-                        "history": [f"{msg.type}: {msg.content}" for msg in state.get('messages', [])[:-1]],
+                        "history": [f"{msg.type}: {msg.content}" for msg in state.get("messages", [])[:-1]],
                         "query": str(state.get("messages")[-1].content),
-                        "context": context_docs
+                        "context": context_data,
                     }
                 )
             else:
