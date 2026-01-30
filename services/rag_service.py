@@ -41,12 +41,17 @@ class RAGService:
             self.prompt_template = self._load_prompt_template()
         else:
             self.prompt_template = PromptTemplate(
-                input_variables=["history", "context", "query"],
-                template="Vous aidez des apprentis dans les arts et l'artisanat à apprendre comment effectuer des techniques et acquérir des compétences et des connaissances dans différents domaines. "\
+                input_variables=["history", "context", "question"],
+                template="Vous aidez des apprentis dans les arts et l'artisanat à apprendre comment effectuer des techniques et acquérir des compétences et des connaissances dans le domaine évoqué dans la requête utilisateur. "\
                 "\n\nVous utiliserez l'historique de discussion suivant avec votre apprenti ici " \
                 "\n\n<history>\n{history}\n</history>\n\n et ce contexte " \
                 "\n\n<context>\n{context}\n</context>\n\n pour répondre à la requête suivante " \
-                "\n\n<query>\n{query}\n</query>.",
+                "\n\n<query>\n{query}\n</query>." \
+                "\n\nFournissez une réponse en français détaillée et instructive sur la manière de se positionner, les outils que l'on utilise, les erreurs communes." \
+                "\n\nSi le contexte ne contient pas d'informations pertinentes, répondez honnêtement que vous ne savez pas." \
+                "\n\nRépondez toujours en français." \
+                "\n\nSi vous ne savez pas de quel domaine il s'agit, demandez des clarifications au lieu de répondre." \
+                "\n\nUtilise le markdown pour formater ta réponse, en utilisant des listes à puces, des tableaux et des sections si nécessaire.",
             )
 
         logger.info(
@@ -102,12 +107,22 @@ class RAGService:
                 self.config.llm_model_url,
                 model_provider=self.config.llm_provider,
                 streaming=True,
+                temperature=self.config.llm_temperature,
+                max_tokens=self.config.llm_max_tokens,
+                top_p=self.config.llm_top_p,
+                top_k=self.config.llm_top_k,
+                frequency_penalty=self.config.llm_frequency_penalty,
+                presence_penalty=self.config.llm_presence_penalty,
             )
             logger.info(f"LLM initialized: {self.config.llm_model_url}")
             return llm
         except Exception as e:
             logger.error(f"Failed to initialize LLM: {str(e)}")
-            return None
+            logger.error("Check that FIREWORKS_API_KEY is set in your .env file")
+            raise RuntimeError(
+                f"LLM initialization failed: {str(e)}. "
+                "Please ensure FIREWORKS_API_KEY is properly configured in your .env file."
+            )
 
     def add_documents(self, documents: List[Document]) -> None:
         """Add documents to the vector store."""
@@ -186,8 +201,110 @@ class RAGService:
             logger.error(f"Error during similarity search: {str(e)}")
             return []
 
+    def generate_hypothetical_document(self, state: ConversationState) -> Dict[str, Any]:
+        """
+        Generate a hypothetical expert elicitation using HyDE approach.
+        
+        Takes vague user query like "how do I hold my blowpipe" and generates
+        a synthetic expert-style elicitation that would answer it. This synthetic
+        document is then used for embedding similarity search.
+        
+        Returns:
+        - hypothetical_document: Generated expert-style explanation
+        """
+        if not self.llm:
+            logger.warning("No LLM available for HyDE generation")
+            return {"hypothetical_document": None}
+        
+        try:
+            original_query = str(state.get("messages")[-1].content)
+            
+            # Create HyDE prompt tailored to expert elicitations in arts and crafts
+            hyde_prompt = f"""Tu es un expert artisan fournissant une élicitation verbale détaillée de ta technique pendant que tu la démontres. Un apprenti te demande : "{original_query}"
+
+Génère une explication détaillée à la première personne de la technique comme si tu verbalisais tes mouvements pendant une démonstration. Inclus :
+- Le positionnement précis des mains et la description de la prise
+- Les angles et orientations des outils
+- Le timing et le rythme des mouvements
+- Les sensations physiques et les retours que tu ressens
+- Les erreurs courantes et les corrections
+- La terminologie technique utilisée dans le métier
+
+Écris 2-3 paragraphes dans le style d'un expert qui pense à voix haute pendant une démonstration. Sois spécifique et technique.
+
+Élicitation d'expert :"""
+
+            # Generate hypothetical document
+            response = self.llm.invoke(hyde_prompt)
+            
+            if isinstance(response.content, str):
+                hypothetical_doc = response.content.strip()
+            elif isinstance(response.content, list):
+                hypothetical_doc = " ".join([str(item) for item in response.content]).strip()
+            else:
+                hypothetical_doc = str(response.content).strip()
+            
+            logger.info(f"HyDE generated document length: {len(hypothetical_doc)} chars")
+            logger.info(f"HyDE preview: {hypothetical_doc[:200]}...")
+            
+            return {"hypothetical_document": hypothetical_doc}
+            
+        except Exception as e:
+            logger.error(f"Error during HyDE generation: {str(e)}")
+            return {"hypothetical_document": None}
+
+    def retrieve_with_hyde(self, state: ConversationState) -> Dict[str, Any]:
+        """
+        Retrieve using HyDE-generated document instead of original query.
+        
+        Uses the synthetic expert elicitation for embedding similarity,
+        which should better match actual expert transcript language.
+        """
+        vector_data = self.get_vector_store_data()
+        has_documents = bool(vector_data.get("ids"))
+        
+        if not has_documents:
+            logger.info("No documents in vector store - switching to pure generation mode")
+            return {"context": [], "video_metadata": None}
+        
+        try:
+            # Use hypothetical document if available, else fall back to original query
+            hyde_doc = state.get("hypothetical_document")
+            
+            if hyde_doc:
+                search_query = hyde_doc
+                logger.info("Using HyDE-generated document for retrieval")
+            else:
+                search_query = str(state.get("messages")[-1].content)
+                logger.warning("No HyDE document available, using original query")
+            
+            # Single retrieval pass with appropriate k
+            retrieved_docs = self.similarity_search(search_query, k=5)
+            
+            if not retrieved_docs:
+                logger.info("No relevant documents found")
+                return {"context": [], "video_metadata": None}
+            
+            # Extract video metadata from top result
+            video_metadata = self._extract_video_metadata(retrieved_docs[:1])
+            
+            logger.info(f"Retrieved {len(retrieved_docs)} documents using HyDE")
+            
+            return {
+                "context": retrieved_docs,
+                "video_metadata": video_metadata
+            }
+            
+        except Exception as e:
+            logger.error(f"Error during HyDE retrieval: {str(e)}")
+            return {"context": [], "video_metadata": None}
+    
+    # ============================================================================
+    # LEGACY METHODS (kept for reference - can be removed after testing HyDE)
+    # ============================================================================
+    
     def retrieve(self, state: ConversationState) -> Dict[str, Any]:
-        """Retrieve relevant documents for a given state (initial retrieval for query enhancement)."""
+        """[LEGACY] Retrieve relevant documents for a given state (initial retrieval for query enhancement)."""
         # Check if we have any documents in the vector store
         vector_data = self.get_vector_store_data()
         has_documents = bool(vector_data.get("ids"))
@@ -217,7 +334,7 @@ class RAGService:
 
     def enhance_query(self, state: ConversationState) -> Dict[str, Any]:
         """
-        Enhance user query using LLM based on initially retrieved documents.
+        [LEGACY] Enhance user query using LLM based on initially retrieved documents.
         
         This node receives:
         - Original user query from messages[-1]
@@ -303,7 +420,7 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
 
     def retrieve_final(self, state: ConversationState) -> Dict[str, Any]:
         """
-        Perform final retrieval using the enhanced query.
+        [LEGACY] Perform final retrieval using the enhanced query.
         
         This retrieves the single most relevant document using the enhanced query
         and extracts video metadata if applicable.

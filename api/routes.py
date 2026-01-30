@@ -6,7 +6,7 @@ from typing import Optional
 from venv import logger
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse, Response
 from api.models import (
     ChatRequest, 
     SystemStatus, 
@@ -25,7 +25,69 @@ pipeline = MoodleAIAssistantPipeline(config_manager)
 
 def check_documents_folder() -> bool:
     """Check if Documents folder exists in the workspace."""
-    return os.path.exists("documents") and os.path.isdir("documents")
+    return os.path.exists("Documents") and os.path.isdir("Documents")
+
+async def generate_simplified_stream(
+    user_messages: str, conversation_thread_id: str, stream_mode: StreamMode
+) -> AsyncGenerator[str, None]:
+    """Generate a simpler JSON stream with video metadata support."""
+    try:
+        if stream_mode == "updates":
+            video_metadata_sent = False
+            serializable_documents = []
+            serializable_messages = []
+
+            async for messages, context, video_metadata in pipeline.generate_response(
+                user_messages, conversation_thread_id=conversation_thread_id, stream_mode=stream_mode
+            ):
+                # Send video metadata event FIRST if available and not yet sent
+                if video_metadata and not video_metadata_sent:
+                    yield json.dumps(
+                        {
+                            "event": "video_metadata",
+                            "data": video_metadata
+                        }
+                    ) + json_escape
+                    video_metadata_sent = True
+
+                if context:
+                    serializable_documents = []
+                    for doc in context:
+                        serializable_documents.append(
+                            {
+                                "id": getattr(doc, "id", None),
+                                "page_content": doc.page_content,
+                                "metadata": doc.metadata,
+                            }
+                        )
+
+                if messages:
+                    serializable_messages = []
+                    for msg in messages:
+                        serializable_messages.append(
+                            {
+                                "content": getattr(msg, "content", str(msg)),
+                                "type": getattr(msg, "type", "unknown"),
+                                "id": getattr(msg, "id", None),
+                            }
+                        )
+
+                yield json.dumps(
+                    {
+                        "event": "message",
+                        "content": serializable_messages,
+                        "documents": serializable_documents,
+                    }
+                ) + json_escape
+
+            yield json.dumps({"content": "[DONE]"}) + json_escape
+
+    except GeneratorExit:
+        logger.info("Client disconnected during streaming")
+        raise
+
+    except Exception as e:
+        yield json.dumps({"error": str(e)}) + json_escape
 
 
 @router.get("/health", response_model=HealthResponse)
