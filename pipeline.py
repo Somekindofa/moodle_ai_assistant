@@ -3,17 +3,13 @@
 import logging
 from langchain_core.documents.base import Document
 import pandas as pd
-from typing import List, Dict, Any, AsyncGenerator, Optional, Union, overload, Literal
+from typing import List, Dict, Any, Optional
 
-from langchain.schema import HumanMessage, AIMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.config import RunnableConfig
-from langchain_core.messages import AnyMessage
-
 from langgraph.graph.state import CompiledStateGraph
-from langgraph.types import StreamMode
 
 from config.settings import ConfigurationManager
+from core.types import ConversationState
 from services.langchain_service import LangChainService
 from services.rag_service import RAGService
 from services.document_service import DocumentProcessingService
@@ -44,7 +40,7 @@ class MoodleAIAssistantPipeline:
 
         # Auto-load documents from Documents folder if it exists
         self._auto_load_documents()
-        
+
         # Auto-sync annotations from database
         self._auto_sync_annotations()
 
@@ -87,7 +83,7 @@ class MoodleAIAssistantPipeline:
         try:
             stats = self.annotation_service.get_annotation_stats()
             logger.info(f"Annotation database stats: {stats}")
-            
+
             if stats.get("completed_extended", 0) > 0:
                 count = self.rag_service.sync_annotations_to_vector_store(
                     use_extended=False,  # Use raw transcripts only
@@ -96,7 +92,7 @@ class MoodleAIAssistantPipeline:
                 logger.info(f"Auto-synced {count} annotation documents on startup")
             else:
                 logger.info("No completed annotations found for auto-sync")
-                
+
         except Exception as e:
             logger.warning(f"Auto-sync of annotations failed: {str(e)}")
 
@@ -219,23 +215,58 @@ class MoodleAIAssistantPipeline:
                             if messages and accumulated_context:
                                 yield (messages, accumulated_context, accumulated_video_metadata)
 
-            else:
-                logger.warning(
-                    f"Unsupported stream_mode '{stream_mode}'. "
-                    f"Currently supported modes: 'messages', 'values'. "
-                    f"Please update the pipeline to handle this mode or use a supported one."
+            logger.info(f"Starting generation for message: {message[:20]}...")
+
+            # using ainvoke instead of astream - runs graph to completion
+            final_state = await self.conversation_graph.ainvoke(
+                {"messages": [message]},
+                config=config
+            )
+            logger.info(f"Graph execution complete. Finale state keys: \n{final_state.keys()}")
+
+            # Extract AI message from final state
+            messages = final_state.get("messages", [])
+            ai_message = None
+
+            for msg in reversed(messages):
+                if hasattr(msg, "type") and msg.type == "ai":
+                    ai_message = msg.content
+                    break
+
+            if not ai_message:
+                logger.warning("Could not generate a response.")
+                ai_message = "Could not generate a response."
+
+            context_docs: List[Document] = final_state.get("context", [])
+            document_sources = []
+
+            for doc in context_docs:
+                source_info = {
+                    "source": doc.metadata.get("source", "nan"),
+                    "type": doc.metadata.get("type", "nan"),
+                    "page_content_preview": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content
+                }
+                document_sources.append(source_info)
+            logger.info(f"Extracted {len(document_sources)} document sources")
+
+            video_metadata = final_state.get("video_metadata")
+
+            if video_metadata:
+                logger.info(
+                    f"Video metadata found: {video_metadata.get('filename', 'unknown_video')}"
                 )
-                raise ValueError(
-                    f"Pipeline configuration error: stream_mode '{stream_mode}' is not implemented. "
-                    f"Supported modes: ['messages', 'values']"
-                )
+
+            return {
+                "messages": ai_message,
+                "documents": document_sources,
+                "video_metadata": video_metadata
+            }
 
         except Exception as e:
             import traceback
-
-            logger.error(f"Full traceback: {traceback.format_exc()}")
-            error_message = AIMessage(content=f"Error generating response: {str(e)}")
-            yield ([error_message], [], None)
+            logger.error(f"Batch generation failed: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
 
     def get_current_directory(self) -> str:
         """Get current working directory."""
@@ -260,7 +291,7 @@ class MoodleAIAssistantPipeline:
         """Get annotation statistics from both database and vector store."""
         db_stats = self.annotation_service.get_annotation_stats()
         vector_count = self.rag_service.get_annotation_documents_count()
-        
+
         return {
             **db_stats,
             "vector_store_annotations": vector_count
