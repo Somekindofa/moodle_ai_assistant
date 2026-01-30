@@ -45,7 +45,9 @@ async def generate_simplified_stream(
     try:
         if stream_mode == "updates":
             video_metadata_sent = False
-            
+            serializable_documents = []
+            serializable_messages = []
+
             async for messages, context, video_metadata in pipeline.generate_response(
                 user_messages, conversation_thread_id=conversation_thread_id, stream_mode=stream_mode
             ):
@@ -58,8 +60,7 @@ async def generate_simplified_stream(
                         }
                     ) + json_escape
                     video_metadata_sent = True
-                
-                serializable_documents = []
+
                 if context:
                     serializable_documents = []
                     for doc in context:
