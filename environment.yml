@@ -15,6 +15,7 @@ dependencies:
   - langchain-experimental
   - langgraph
   - pandas
+  - pytest
   - numpy
   - uvicorn
   - fastapi
