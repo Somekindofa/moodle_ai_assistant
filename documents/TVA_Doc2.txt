@@ -1,7 +1,0 @@
-8. TV Assembly - Document 2: Testing and Quality Assurance
-
-Once assembled, the TV goes through multiple testing phases. First is the power-on test, ensuring that the backlight and mainboard communicate properly. Then, signal integrity tests verify HDMI ports, USB connections, and Wi-Fi functionality.
-
-Color calibration is performed to adjust brightness, contrast, and color balance to meet factory standards. Automated optical inspection systems may be used to detect pixel defects or screen uniformity issues.
-
-Finally, the unit undergoes a burn-in test where it operates continuously for several hours to confirm reliability before packaging.
