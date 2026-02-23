@@ -11,3 +11,4 @@ client_example.py
 .code-workspace
 .vscode/
 *test*
+*.md
