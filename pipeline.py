@@ -3,10 +3,13 @@
 import logging
 from langchain_core.documents.base import Document
 import pandas as pd
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple, AsyncGenerator
 
+from langchain_core.messages import AnyMessage
 from langchain_core.runnables.config import RunnableConfig
-from langgraph.graph.state import CompiledStateGraph
+from langgraph.graph import StateGraph
+from langgraph.types import StreamMode
+from langchain.schema import HumanMessage
 
 from config.settings import ConfigurationManager
 from core.types import ConversationState
@@ -32,8 +35,7 @@ class MoodleAIAssistantPipeline:
         self.langchain_service = LangChainService(self.config_manager)
         self.annotation_service = AnnotationService(self.config_manager)
         self.rag_service = RAGService(
-            self.config_manager,
-            annotation_service=self.annotation_service
+            self.config_manager, annotation_service=self.annotation_service
         )
         self.document_service = DocumentProcessingService(self.config_manager)
         self.graph_service = ConversationGraphService(self.rag_service)
@@ -86,8 +88,7 @@ class MoodleAIAssistantPipeline:
 
             if stats.get("completed_extended", 0) > 0:
                 count = self.rag_service.sync_annotations_to_vector_store(
-                    use_extended=False,  # Use raw transcripts only
-                    clear_existing=False
+                    use_extended=False, clear_existing=False  # Use raw transcripts only
                 )
                 logger.info(f"Auto-synced {count} annotation documents on startup")
             else:
@@ -96,12 +97,12 @@ class MoodleAIAssistantPipeline:
         except Exception as e:
             logger.warning(f"Auto-sync of annotations failed: {str(e)}")
 
-    def _build_conversation_graph(self) -> CompiledStateGraph:
+    def _build_conversation_graph(self) -> Any:
         """Build and compile the conversation graph with query enhancement."""
         try:
-            # Updated sequence: retrieve -> enhance_query -> retrieve_final -> generate
+            # Updated sequence: multi_query -> retrieve_combined -> rerank -> generate
             return self.graph_service.build_conversation_graph(
-                functions=["retrieve", "enhance_query", "retrieve_final", "generate"]
+                functions=["multi_query", "retrieve_combined", "rerank", "generate"]
             ).compile_graph()
         except Exception as e:
             logger.error(f"Failed to build conversation graph: {str(e)}")
@@ -172,78 +173,88 @@ class MoodleAIAssistantPipeline:
             return pd.DataFrame(columns=["ID", "Title", "Source"])
 
     async def generate_response(
-        self, message: str, conversation_thread_id: str
-    ) -> Dict[str, Any]:
-        """
-        Generate complete response without streaming.
-        Waits for entire graph to finish, then returns everything at once.
-        
-        Returns:
-        ```
-            {
-                "message": "AI response text",
-                "documents": [...],  # List of retrieved document sources
-                "video_metadata": {...} or None
-            }
-        ```
-        """
+        self,
+        message: str,
+        conversation_thread_id: str,
+        stream_mode: StreamMode,
+    ) -> AsyncGenerator[
+        Tuple[List[AnyMessage], List[Document], Optional[Dict[str, Any]]], None
+    ]:
+        """Generate streaming response for user query with optional history and video metadata."""
         try:
             config = RunnableConfig(
                 {"configurable": {"thread_id": conversation_thread_id}}
             )
+            if stream_mode == "updates":
+                accumulated_context = []  # Initialize to avoid unbound variable
+                accumulated_video_metadata = None  # Track video metadata
 
-            logger.info(f"Starting generation for message: {message[:20]}...")
+                async for update in self.conversation_graph.astream(
+                    {"messages": [message]}, stream_mode=stream_mode, config=config
+                ):
+                    for node_name, node_output in update.items():
+                        # Multi-query node
+                        if (
+                            node_name == "multi_query"
+                            and "query_variants" in node_output
+                        ):
+                            logger.info(
+                                f"Generated query variants: {node_output.get('query_variants', [])}"
+                            )
 
-            # using ainvoke instead of astream - runs graph to completion
-            final_state = await self.conversation_graph.ainvoke(
-                {"messages": [message]},
-                config=config
-            )
-            logger.info(f"Graph execution complete. Finale state keys: \n{final_state.keys()}")
+                        # Combined retrieval node
+                        elif (
+                            node_name == "retrieve_combined"
+                            and "context" in node_output
+                        ):
+                            logger.info(
+                                f"Combined retrieval: {len(node_output.get('context', []))} docs"
+                            )
 
-            # Extract AI message from final state
-            messages = final_state.get("messages", [])
-            ai_message = None
+                        # Re-rank node (with video metadata)
+                        elif (
+                            node_name == "rerank" and "context" in node_output
+                        ):
+                            accumulated_context: List[Document] = node_output.get(
+                                "context", []
+                            )
+                            accumulated_video_metadata = node_output.get(
+                                "video_metadata", None
+                            )
+                            logger.info(
+                                f"Re-ranked to top {len(accumulated_context)} docs, video_metadata: {accumulated_video_metadata is not None}"
+                            )
 
-            for msg in reversed(messages):
-                if hasattr(msg, "type") and msg.type == "ai":
-                    ai_message = msg.content
-                    break
+                        # Generation node
+                        elif (
+                            node_name == "generate"
+                            and "messages" in node_output
+                        ):
+                            messages: List[AnyMessage] = node_output.get("messages", [])
+                            if messages and accumulated_context:
+                                yield (
+                                    messages,
+                                    accumulated_context,
+                                    accumulated_video_metadata,
+                                )
 
-            if not ai_message:
-                logger.warning("Could not generate a response.")
-                ai_message = "Could not generate a response."
-
-            context_docs: List[Document] = final_state.get("context", [])
-            document_sources = []
-
-            for doc in context_docs:
-                source_info = {
-                    "source": doc.metadata.get("source", "nan"),
-                    "type": doc.metadata.get("type", "nan"),
-                    "page_content_preview": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content
-                }
-                document_sources.append(source_info)
-            logger.info(f"Extracted {len(document_sources)} document sources")
-
-            video_metadata = final_state.get("video_metadata")
-
-            if video_metadata:
-                logger.info(
-                    f"Video metadata found: {video_metadata.get('filename', 'unknown_video')}"
+            else:
+                logger.warning(
+                    f"Unsupported stream_mode '{stream_mode}'. "
+                    f"Currently supported modes: 'messages', 'values'. "
+                    f"Please update the pipeline to handle this mode or use a supported one."
                 )
-
-            return {
-                "messages": ai_message,
-                "documents": document_sources,
-                "video_metadata": video_metadata
-            }
+                raise ValueError(
+                    f"Pipeline configuration error: stream_mode '{stream_mode}' is not implemented. "
+                    f"Supported modes: ['messages', 'values']"
+                )
 
         except Exception as e:
             import traceback
-            logger.error(f"Batch generation failed: {str(e)}")
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            raise
+
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            error_message = AIMessage(content=f"Error generating response: {str(e)}")
+            yield ([error_message], [], None)
 
     def get_current_directory(self) -> str:
         """Get current working directory."""
@@ -256,12 +267,11 @@ class MoodleAIAssistantPipeline:
     def sync_annotations(
         self,
         use_extended: bool = False,  # Changed default to False - use raw transcripts
-        clear_existing: bool = False
+        clear_existing: bool = False,
     ) -> int:
         """Manually trigger annotation sync."""
         return self.rag_service.sync_annotations_to_vector_store(
-            use_extended=use_extended,
-            clear_existing=clear_existing
+            use_extended=use_extended, clear_existing=clear_existing
         )
 
     def get_annotation_stats(self) -> Dict[str, Any]:
@@ -269,7 +279,4 @@ class MoodleAIAssistantPipeline:
         db_stats = self.annotation_service.get_annotation_stats()
         vector_count = self.rag_service.get_annotation_documents_count()
 
-        return {
-            **db_stats,
-            "vector_store_annotations": vector_count
-        }
+        return {**db_stats, "vector_store_annotations": vector_count}
