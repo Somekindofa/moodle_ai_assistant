@@ -47,7 +47,7 @@ app = FastAPI(
 # Configure CORS for JavaScript frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080"],  # Configure this based on your Moodle domain
+    allow_origins=["*"],  # Allow all origins for development
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
@@ -73,5 +73,5 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(
-        "server:app", host="127.0.0.1", port=8000, reload=True, log_level="info"
+        "server:app", host="0.0.0.0", port=8000, reload=True, log_level="info"
     )

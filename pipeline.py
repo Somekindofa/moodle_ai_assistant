@@ -23,6 +23,7 @@ test_thread_id = "abc123"
 test_config = RunnableConfig({"configurable": {"thread_id": test_thread_id}})
 StreamMode = Literal["values", "updates"]
 
+
 class MoodleAIAssistantPipeline:
     """Main pipeline orchestrating the Moodle AI Assistant services."""
 
@@ -177,55 +178,20 @@ class MoodleAIAssistantPipeline:
         message: str,
         conversation_thread_id: str,
         stream_mode: StreamMode,
+        selected_domain: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Generate response for user query with HyDE-based retrieval and video metadata."""
         try:
             config = RunnableConfig({"configurable": {"thread_id": conversation_thread_id}})
-            if stream_mode == "updates":
-                accumulated_context = []  # Initialize to avoid unbound variable
-                accumulated_video_metadata = None  # Track video metadata
-                latest_messages: Optional[List[AnyMessage]] = None
-
-                async for update in self.conversation_graph.astream(
-                    {"messages": [message]}, stream_mode=stream_mode, config=config
-                ):
-                    for node_name, node_output in update.items():
-                        # HyDE generation node
-                        if (
-                            node_name == "generate_hypothetical_document_runnable"
-                            and "hypothetical_document" in node_output
-                        ):
-                            hyde_doc = node_output.get("hypothetical_document", "")
-                            preview = hyde_doc[:100] + "..." if hyde_doc and len(hyde_doc) > 100 else hyde_doc
-                            logger.info(f"HyDE generated: {preview}")
-
-                        # HyDE-based retrieval node (with video metadata)
-                        elif (
-                            node_name == "retrieve_with_hyde_runnable"
-                            and "context" in node_output
-                        ):
-                            accumulated_context: List[Document] = node_output.get("context", [])
-                            accumulated_video_metadata = node_output.get("video_metadata", None)
-                            logger.info(f"HyDE retrieval: {len(accumulated_context)} docs, video_metadata: {accumulated_video_metadata is not None}")
-
-                        # Generation node
-                        elif (
-                            node_name == "generate_runnable"
-                            and "messages" in node_output
-                        ):
-                            messages: List[AnyMessage] = node_output.get("messages", [])
-                            if messages:
-                                latest_messages = messages
-                                # TODO: If you need client-side streaming, emit updates here.
 
             logger.info(f"Starting generation for message: {message[:20]}...")
 
             # using ainvoke instead of astream - runs graph to completion
             final_state = await self.conversation_graph.ainvoke(
-                {"messages": [message]},
+                {"messages": [message], "selected_domain": selected_domain},
                 config=config
             )
-            logger.info(f"Graph execution complete. Finale state keys: \n{final_state.keys()}")
+            logger.info(f"Graph execution complete. Final state keys: \n{final_state.keys()}")
 
             # Extract AI message from final state
             messages = final_state.get("messages", [])

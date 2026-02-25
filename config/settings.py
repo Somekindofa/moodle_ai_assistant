@@ -12,7 +12,7 @@ def setup_logging() -> logging.Logger:
     """Setup application logging configuration."""
     # Configure the root logger instead of just the current module's logger
     root_logger = logging.getLogger()
-    
+
     if not root_logger.handlers:  # Avoid duplicate handlers
         console_handler = logging.StreamHandler()
         formatter = logging.Formatter(

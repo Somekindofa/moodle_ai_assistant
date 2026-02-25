@@ -1,31 +1,33 @@
 """API routes for the Moodle AI Assistant backend server."""
 
+import json
 import os
 from datetime import datetime
-from typing import Optional, AsyncGenerator, Literal
+from typing import AsyncGenerator, List, Optional
 from venv import logger
-import json
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse, FileResponse, Response
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from api.models import (
     ChatRequest,
     SystemStatus,
     HealthResponse,
     AnnotationSyncRequest,
     AnnotationStats,
+    AnnotationIngestRequest,
 )
 from pipeline import MoodleAIAssistantPipeline
 from config.settings import ConfigurationManager
 
-# Type alias for stream modes
-StreamMode = Literal["updates", "values"]
 
 router = APIRouter()
-json_escape = "\n\n"
+
 # Initialize pipeline
 config_manager = ConfigurationManager()
 pipeline = MoodleAIAssistantPipeline(config_manager)
+
+# Define Json escape
+json_escape = "\n"
 
 
 def check_documents_folder() -> bool:
@@ -34,14 +36,15 @@ def check_documents_folder() -> bool:
 
 
 async def generate_simplified_stream(
-    user_messages: str, conversation_thread_id: str, stream_mode: StreamMode
+    user_messages: str, conversation_thread_id: str, selected_domain: Optional[str] = None
 ) -> AsyncGenerator[str, None]:
     """Generate a simpler JSON stream with video metadata support."""
     try:
         result = await pipeline.generate_response(
             user_messages,
             conversation_thread_id=conversation_thread_id,
-            stream_mode=stream_mode,
+            stream_mode="updates",
+            selected_domain=selected_domain,
         )
 
         video_metadata = result.get("video_metadata")
@@ -100,26 +103,58 @@ async def get_system_status():
 @router.post("/chat")
 async def chat_stream(request: ChatRequest):
     """
-    Non-streaming chat endpoint - waits for complete response.
-    Returns everything at once: AI message, documents, and video metadata.
+    Streaming chat endpoint - streams JSON lines as the RAG pipeline produces them.
+    Each line is a JSON object: video_metadata event, message event, or [DONE].
+    """
+    return StreamingResponse(
+        generate_simplified_stream(request.message, request.conversation_thread_id, request.selected_domain),
+        media_type="text/plain",
+        headers={"X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/ingest-annotation")
+async def ingest_annotation(request: AnnotationIngestRequest):
+    """Ingest a single completed annotation directly into the vector store.
+
+    Called by the videoelicit backend immediately after a transcription is marked
+    'completed', so that new elicitations are searchable in real time without
+    waiting for a manual /sync-annotations call.
     """
     try:
-        result = await pipeline.generate_response(
-            request.message,
-            request.conversation_thread_id,
-            stream_mode="updates",
+        from langchain_core.documents.base import Document
+
+        annotation_dict = {
+            "annotation_id":    request.annotation_id,
+            "video_id":         request.video_id,
+            "transcription":    request.transcription,
+            "start_time":       request.start_time,
+            "end_time":         request.end_time,
+            "video_filename":   request.video_filename,
+            "video_filepath":   request.video_filepath,
+            "source_type":      request.source_type,
+            "project_name":     request.project_name,
+            "audio_filepath":   request.audio_filepath,
+            # extended_transcript not available yet at transcription time
+            "extended_transcript": None,
+        }
+
+        docs = pipeline.annotation_service.annotation_to_documents(
+            annotation_dict, use_extended=False
         )
 
+        if not docs:
+            return {"status": "skipped", "reason": "no documents produced", "annotation_id": request.annotation_id}
+
+        pipeline.rag_service.add_documents(docs)
+
         return {
-            "status": "success",
-            "messages": result["messages"],  # AI response text
-            "documents": result["documents"],  # Retrieved docs metadata
-            "video_metadata": result.get("video_metadata"),  # Video info if available
-            "conversation_thread_id": request.conversation_thread_id,
+            "status": "ok",
+            "documents_added": len(docs),
+            "annotation_id": request.annotation_id,
         }
 
     except Exception as e:
-        logger.error(f"Chat request failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
