@@ -15,6 +15,7 @@ class ChatRequest(BaseModel):
 
     message: str
     conversation_thread_id: str
+    selected_domain: Optional[str] = None  # Domain focus chosen by the user
 
 
 class SystemStatus(BaseModel):
@@ -48,6 +49,21 @@ class AnnotationStats(BaseModel):
     total_videos: int
     videos_with_annotations: int
     vector_store_annotations: int
+
+
+class AnnotationIngestRequest(BaseModel):
+    """Payload for pushing a single completed annotation into the vector store."""
+
+    annotation_id: int
+    video_id: int
+    transcription: str
+    start_time: float
+    end_time: float
+    video_filename: str
+    video_filepath: str
+    source_type: str = "local"
+    project_name: str = "unknown"
+    audio_filepath: str = ""
 
 
 class VideoMetadata(BaseModel):
