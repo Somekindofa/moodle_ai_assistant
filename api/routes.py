@@ -16,6 +16,7 @@ from api.models import (
     HealthResponse,
     AnnotationSyncRequest,
     AnnotationStats,
+    AnnotationIngestRequest,
 )
 from pipeline import MoodleAIAssistantPipeline
 from config.settings import ConfigurationManager
@@ -40,7 +41,7 @@ def check_documents_folder() -> bool:
 
 
 async def generate_simplified_stream(
-    user_messages: str, conversation_thread_id: str
+    user_messages: str, conversation_thread_id: str, selected_domain: Optional[str] = None
 ) -> AsyncGenerator[str, None]:
     """Generate a simpler JSON stream with video metadata support."""
     try:
@@ -52,6 +53,7 @@ async def generate_simplified_stream(
                 user_messages,
                 conversation_thread_id=conversation_thread_id,
                 stream_mode=stream_mode,
+                selected_domain=selected_domain,
             ):
                 # Send video metadata event FIRST if available and not yet sent
                 if video_metadata and not video_metadata_sent:
@@ -130,10 +132,55 @@ async def chat_stream(request: ChatRequest):
     Each line is a JSON object: video_metadata event, message event, or [DONE].
     """
     return StreamingResponse(
-        generate_simplified_stream(request.message, request.conversation_thread_id),
+        generate_simplified_stream(request.message, request.conversation_thread_id, request.selected_domain),
         media_type="text/plain",
         headers={"X-Accel-Buffering": "no"},
     )
+
+
+@router.post("/ingest-annotation")
+async def ingest_annotation(request: AnnotationIngestRequest):
+    """Ingest a single completed annotation directly into the vector store.
+
+    Called by the videoelicit backend immediately after a transcription is marked
+    'completed', so that new elicitations are searchable in real time without
+    waiting for a manual /sync-annotations call.
+    """
+    try:
+        from langchain_core.documents.base import Document
+
+        annotation_dict = {
+            "annotation_id":    request.annotation_id,
+            "video_id":         request.video_id,
+            "transcription":    request.transcription,
+            "start_time":       request.start_time,
+            "end_time":         request.end_time,
+            "video_filename":   request.video_filename,
+            "video_filepath":   request.video_filepath,
+            "source_type":      request.source_type,
+            "project_name":     request.project_name,
+            "audio_filepath":   request.audio_filepath,
+            # extended_transcript not available yet at transcription time
+            "extended_transcript": None,
+        }
+
+        docs = pipeline.annotation_service.annotation_to_documents(
+            annotation_dict, use_extended=False
+        )
+
+        if not docs:
+            return {"status": "skipped", "reason": "no documents produced", "annotation_id": request.annotation_id}
+
+        pipeline.rag_service.add_documents(docs)
+
+        return {
+            "status": "ok",
+            "documents_added": len(docs),
+            "annotation_id": request.annotation_id,
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/sync-annotations")

@@ -54,6 +54,44 @@ class ConversationGraphService:
         logger.info(f"Conversation graph built with functions: {functions}")
         return self
 
+    def build_routed_graph(self) -> "ConversationGraphService":
+        """Build the production graph with an upfront router node.
+
+        Topology:
+            START → route_query ──┬─(rag)──→ multi_query → retrieve_combined → rerank → generate → END
+                                  └─(llm_only)──────────────────────────────→ direct_generate → END
+        """
+        rs = self.rag_service
+
+        self.state_graph.add_node("route_query",      rs.route_query)
+        self.state_graph.add_node("multi_query",       rs.multi_query)
+        self.state_graph.add_node("retrieve_combined", rs.retrieve_combined)
+        self.state_graph.add_node("rerank",            rs.rerank)
+        self.state_graph.add_node("generate",          rs.generate)
+        self.state_graph.add_node("direct_generate",   rs.direct_generate)
+
+        # Entry point
+        self.state_graph.add_edge(START, "route_query")
+        self.edges.add((START, "route_query"))
+
+        # Conditional branch on state["route"]
+        self.state_graph.add_conditional_edges(
+            "route_query",
+            lambda state: state.get("route", "rag"),
+            {
+                "rag":      "multi_query",
+                "llm_only": "direct_generate",
+            },
+        )
+
+        # RAG path
+        self.state_graph.add_edge("multi_query",       "retrieve_combined")
+        self.state_graph.add_edge("retrieve_combined", "rerank")
+        self.state_graph.add_edge("rerank",            "generate")
+
+        logger.info("Routed graph built: route_query → {rag: multi_query→…→generate | llm_only: direct_generate}")
+        return self
+
     def compile_graph(self, checkpointer=None) -> CompiledStateGraph:
         """Compile the state graph."""
         if not checkpointer:
