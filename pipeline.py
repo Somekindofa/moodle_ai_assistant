@@ -98,12 +98,14 @@ class MoodleAIAssistantPipeline:
             logger.warning(f"Auto-sync of annotations failed: {str(e)}")
 
     def _build_conversation_graph(self) -> Any:
-        """Build and compile the conversation graph with query enhancement."""
+        """Build and compile the routed conversation graph.
+
+        Topology:
+            START → route_query → (rag path: multi_query→retrieve_combined→rerank→generate)
+                                  (llm_only path: direct_generate)
+        """
         try:
-            # Updated sequence: multi_query -> retrieve_combined -> rerank -> generate
-            return self.graph_service.build_conversation_graph(
-                functions=["multi_query", "retrieve_combined", "rerank", "generate"]
-            ).compile_graph()
+            return self.graph_service.build_routed_graph().compile_graph()
         except Exception as e:
             logger.error(f"Failed to build conversation graph: {str(e)}")
             raise
@@ -177,6 +179,7 @@ class MoodleAIAssistantPipeline:
         message: str,
         conversation_thread_id: str,
         stream_mode: StreamMode,
+        selected_domain: Optional[str] = None,
     ) -> AsyncGenerator[
         Tuple[List[AnyMessage], List[Document], Optional[Dict[str, Any]]], None
     ]:
@@ -190,14 +193,22 @@ class MoodleAIAssistantPipeline:
                 accumulated_video_metadata = None  # Track video metadata
 
                 async for update in self.conversation_graph.astream(
-                    {"messages": [message]}, stream_mode=stream_mode, config=config
+                    {"messages": [message], "selected_domain": selected_domain},
+                    stream_mode=stream_mode,
+                    config=config,
                 ):
                     for node_name, node_output in update.items():
                         if not node_output:
                             continue
 
+                        # Router node — log decision, no output to stream
+                        if node_name == "route_query":
+                            logger.info(
+                                f"Router decision: {node_output.get('route', 'unknown')}"
+                            )
+
                         # Multi-query node
-                        if (
+                        elif (
                             node_name == "multi_query"
                             and "query_variants" in node_output
                         ):
@@ -215,9 +226,7 @@ class MoodleAIAssistantPipeline:
                             )
 
                         # Re-rank node (with video metadata)
-                        elif (
-                            node_name == "rerank" and "context" in node_output
-                        ):
+                        elif node_name == "rerank" and "context" in node_output:
                             accumulated_context: List[Document] = node_output.get(
                                 "context", []
                             )
@@ -225,14 +234,12 @@ class MoodleAIAssistantPipeline:
                                 "video_metadata", None
                             )
                             logger.info(
-                                f"Re-ranked to top {len(accumulated_context)} docs, video_metadata: {accumulated_video_metadata is not None}"
+                                f"Re-ranked to top {len(accumulated_context)} docs, "
+                                f"video_metadata: {accumulated_video_metadata is not None}"
                             )
 
-                        # Generation node
-                        elif (
-                            node_name == "generate"
-                            and "messages" in node_output
-                        ):
+                        # RAG generation node
+                        elif node_name == "generate" and "messages" in node_output:
                             messages: List[AnyMessage] = node_output.get("messages", [])
                             if messages:
                                 yield (
@@ -240,6 +247,15 @@ class MoodleAIAssistantPipeline:
                                     accumulated_context,
                                     accumulated_video_metadata,
                                 )
+
+                        # Direct (no-retrieval) generation node
+                        elif (
+                            node_name == "direct_generate"
+                            and "messages" in node_output
+                        ):
+                            messages = node_output.get("messages", [])
+                            if messages:
+                                yield (messages, [], None)
 
             else:
                 logger.warning(

@@ -43,8 +43,9 @@ class RAGService:
             self.prompt_template = self._load_prompt_template()
         else:
             self.prompt_template = PromptTemplate(
-                input_variables=["history", "context", "question"],
-                template="Vous aidez des apprentis dans les arts et l'artisanat à apprendre comment effectuer des techniques et acquérir des compétences et des connaissances dans différents domaines. "
+                input_variables=["history", "context", "query", "specific_domain"],
+                template="Vous aidez des apprentis dans les arts et l'artisanat à apprendre comment effectuer des techniques et acquérir des compétences et des connaissances dans différents domaines."
+                "{specific_domain}"
                 "\n\nVous utiliserez l'historique de discussion suivant avec votre apprenti ici "
                 "\n\n<history>\n{history}\n</history>\n\n et ce contexte "
                 "\n\n<context>\n{context}\n</context>\n\n pour répondre à la requête suivante "
@@ -375,6 +376,11 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
             )
 
             if self.prompt_template:
+                domain = state.get("selected_domain")
+                domain_line = (
+                    f"\n\nVous vous concentrez particulièrement sur le domaine : {domain}."
+                    if domain else ""
+                )
                 filled_prompt = self.prompt_template.invoke(
                     {
                         "history": [
@@ -383,6 +389,7 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
                         ],
                         "query": str(state.get("messages")[-1].content),
                         "context": context_docs,
+                        "specific_domain": domain_line,
                     }
                 )
             else:
@@ -589,6 +596,98 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
 
         logger.info("No video annotations found in retrieved documents")
         return None
+
+    def route_query(self, state: ConversationState) -> Dict[str, Any]:
+        """Decide whether to retrieve from the knowledge base or answer directly.
+
+        Routing rules (checked in order):
+        1. Vector store empty → llm_only  (no content to retrieve)
+        2. No LLM available  → rag        (fallback: let retrieval try anyway)
+        3. LLM classifies the message     → rag | llm_only
+        """
+        # Rule 1 — empty store: skip retrieval entirely
+        vector_data = self.get_vector_store_data()
+        if not vector_data.get("ids"):
+            logger.info("Vector store is empty — routing to direct LLM")
+            return {"route": "llm_only"}
+
+        if not self.llm:
+            logger.warning("No LLM available for routing — defaulting to rag")
+            return {"route": "rag"}
+
+        query = str(state.get("messages")[-1].content)
+        domain = state.get("selected_domain")
+        domain_context = (
+            f'  The user is currently focused on the craft domain: "{domain}".\n'
+            if domain else ""
+        )
+
+        prompt = (
+            "You are a routing classifier for a vocational-training assistant.\n"
+            "Classify the following message as EXACTLY one of:\n"
+            '  "rag"      — the question is about craft techniques, gestures, tools, materials,\n'
+            "               training procedures, videos, or any domain-specific knowledge that\n"
+            "               may be found in the knowledge base.\n"
+            '  "llm_only" — the message is a greeting, chitchat, a general-knowledge question,\n'
+            "               or anything that does NOT require retrieved training content.\n"
+            + domain_context + "\n"
+            f'Message: "{query}"\n\n'
+            "Reply with exactly one word: rag or llm_only"
+        )
+
+        try:
+            response = self.llm.invoke(prompt)
+            raw = response.content.strip().lower()
+
+            if "llm_only" in raw:
+                route = "llm_only"
+            elif "rag" in raw:
+                route = "rag"
+            else:
+                logger.warning(f"Ambiguous routing response '{raw}' — defaulting to rag")
+                route = "rag"
+
+            logger.info(f"Router: '{query[:80]}' → {route}")
+            return {"route": route}
+
+        except Exception as e:
+            logger.error(f"Routing failed ({e}) — defaulting to rag")
+            return {"route": "rag"}
+
+    def direct_generate(self, state: ConversationState) -> Dict[str, List[BaseMessage]]:
+        """Generate a response directly from LLM weights, without retrieval."""
+        if not self.llm:
+            raise ValueError("No LLM available. Please check LLM initialization.")
+
+        try:
+            history_lines = [
+                f"{msg.type}: {msg.content}"
+                for msg in state.get("messages", [])[:-1]
+            ]
+            history_text = "\n".join(history_lines) if history_lines else "(début de conversation)"
+            query = str(state.get("messages")[-1].content)
+
+            domain = state.get("selected_domain")
+            domain_line = (
+                f"\nVous vous concentrez particulièrement sur le domaine : {domain}."
+                if domain else ""
+            )
+            direct_prompt = (
+                "Vous êtes un assistant pédagogique pour des apprentis dans les arts et l'artisanat "
+                "(soufflage de verre, menuiserie, travail du cuir, assemblage, etc.)."
+                + domain_line + "\n\n"
+                f"Historique de conversation :\n{history_text}\n\n"
+                f"Message de l'apprenti : {query}\n\n"
+                "Répondez de manière concise et bienveillante."
+            )
+
+            response = self.llm.invoke(direct_prompt)
+            logger.info("Direct generation complete (no retrieval)")
+            return {"messages": [response]}
+
+        except Exception as e:
+            logger.error(f"Direct generation failed: {e}")
+            raise
 
     def multi_query(self, state: ConversationState) -> Dict[str, Any]:
         """Generate multiple query variants for broader retrieval."""
