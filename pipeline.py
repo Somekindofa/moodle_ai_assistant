@@ -5,7 +5,7 @@ from langchain_core.documents.base import Document
 import pandas as pd
 from typing import List, Dict, Any, Optional, Tuple, AsyncGenerator
 
-from langchain_core.messages import AnyMessage
+from langchain_core.messages import AnyMessage, AIMessage
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.graph import StateGraph
 from langgraph.types import StreamMode
@@ -193,6 +193,9 @@ class MoodleAIAssistantPipeline:
                     {"messages": [message]}, stream_mode=stream_mode, config=config
                 ):
                     for node_name, node_output in update.items():
+                        if not node_output:
+                            continue
+
                         # Multi-query node
                         if (
                             node_name == "multi_query"
@@ -231,7 +234,7 @@ class MoodleAIAssistantPipeline:
                             and "messages" in node_output
                         ):
                             messages: List[AnyMessage] = node_output.get("messages", [])
-                            if messages and accumulated_context:
+                            if messages:
                                 yield (
                                     messages,
                                     accumulated_context,
