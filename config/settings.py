@@ -37,7 +37,7 @@ class RAGConfig:
     collection_name: str = "moodle_assistant_collection"
     persist_directory: str = "./chroma_langchain_db"
     embedding_model: str = "sentence-transformers/all-mpnet-base-v2"
-    llm_model_url: str = "accounts/fireworks/models/llama-v3p1-70b-instruct"
+    llm_model_url: str = "accounts/fireworks/models/mixtral-8x22b-instruct"
     llm_provider: str = "fireworks"
     prompt_url: str = "rlm/rag-prompt"
     similarity_search_k: int = 15
