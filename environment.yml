@@ -15,6 +15,7 @@ dependencies:
   - langchain-experimental
   - langgraph
   - pandas
+  - pytest
   - numpy
   - uvicorn
   - fastapi
@@ -22,3 +23,5 @@ dependencies:
   - requests
   - python-dotenv
   - typing_extensions
+
+prefix: /home/takbas/miniconda3/envs/moodle_backend

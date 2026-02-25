@@ -12,7 +12,7 @@ def setup_logging() -> logging.Logger:
     """Setup application logging configuration."""
     # Configure the root logger instead of just the current module's logger
     root_logger = logging.getLogger()
-    
+
     if not root_logger.handlers:  # Avoid duplicate handlers
         console_handler = logging.StreamHandler()
         formatter = logging.Formatter(
@@ -36,10 +36,16 @@ class RAGConfig:
 
     collection_name: str = "moodle_assistant_collection"
     persist_directory: str = "./chroma_langchain_db"
-    embedding_model: str = "sentence-transformers/all-mpnet-base-v2"
-    llm_model_url: str = "accounts/fireworks/models/mixtral-8x22b-instruct"
+    embedding_model: str = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+    llm_model_url: str = "accounts/fireworks/models/qwen3-8b"
     llm_provider: str = "fireworks"
     prompt_url: str = "rlm/rag-prompt"
+    llm_temperature: float = 1.0
+    llm_max_tokens: int = 1024
+    llm_top_p: float = 0.9
+    llm_top_k: int = 40
+    llm_frequency_penalty: float = 0.8
+    llm_presence_penalty: float = 0.5
     similarity_search_k: int = 15
 
 
