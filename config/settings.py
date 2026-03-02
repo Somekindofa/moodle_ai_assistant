@@ -36,16 +36,16 @@ class RAGConfig:
 
     collection_name: str = "moodle_assistant_collection"
     persist_directory: str = "./chroma_langchain_db"
-    embedding_model: str = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
-    llm_model_url: str = "accounts/fireworks/models/qwen3-8b"
-    llm_provider: str = "fireworks"
+    # Infomaniak embedding model (bge_multilingual_gemma2, 3584-dim, SOTA FR-MTEB)
+    embedding_model: str = "bge_multilingual_gemma2"
+    # Infomaniak LLM — OpenAI-compatible endpoint
+    llm_model: str = "swiss-ai/Apertus-70B-Instruct-2509"
     prompt_url: str = "rlm/rag-prompt"
-    llm_temperature: float = 1.0
-    llm_max_tokens: int = 1024
+    llm_temperature: float = 0.4
+    llm_max_tokens: int = 1200
     llm_top_p: float = 0.9
-    llm_top_k: int = 40
-    llm_frequency_penalty: float = 0.8
-    llm_presence_penalty: float = 0.5
+    llm_frequency_penalty: float = 0.2
+    llm_presence_penalty: float = 0.1
     similarity_search_k: int = 15
 
 
@@ -55,7 +55,7 @@ class AppConfig:
 
     rag: RAGConfig = field(default_factory=RAGConfig)
     required_env_keys: List[str] = field(
-        default_factory=lambda: ["FIREWORKS_API_KEY", "LANGCHAIN_API_KEY"]
+        default_factory=lambda: ["INFOMANIAK_API_KEY", "INFOMANIAK_PRODUCT_ID", "LANGCHAIN_API_KEY"]
     )
     css_path: str = "css/custom.css"
     supported_file_types: List[str] = field(

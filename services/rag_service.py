@@ -6,11 +6,10 @@ from typing import List, Dict, Any, Union, Optional
 from typing_extensions import Literal
 from datetime import datetime
 
-from langchain.chat_models import init_chat_model
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents.base import Document
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage
 from langchain_core.prompts import PromptTemplate
 from langchain import hub
 
@@ -29,6 +28,7 @@ class RAGService:
         config_manager: ConfigurationManager,
         use_hub_template: bool = False,
         annotation_service: Optional[Any] = None,
+        course_rag_service: Optional[Any] = None,
     ):
         self.config_manager = config_manager
         self.config = self.config_manager.get_config().rag
@@ -36,22 +36,47 @@ class RAGService:
         self.vector_store = self._initialize_vector_store()
         self.llm = self._initialize_llm()
         self.annotation_service = annotation_service  # Optional dependency
+        self.course_rag_service = course_rag_service  # Optional — per-course collections
 
         if use_hub_template:
             self.prompt_template = self._load_prompt_template()
+            self.system_prompt = None
+            self.user_template = None
         else:
-            self.prompt_template = PromptTemplate(
-                input_variables=["history", "context", "query"],
-                template="Vous aidez des apprentis dans les arts et l'artisanat à apprendre comment effectuer des techniques et acquérir des compétences et des connaissances dans le domaine évoqué dans la requête utilisateur. "
-                "\n\nVous utiliserez l'historique de discussion suivant avec votre apprenti ici "
-                "\n\n<history>\n{history}\n</history>\n\n et ce contexte "
-                "\n\n<context>\n{context}\n</context>\n\n pour répondre à la requête suivante "
-                "\n\n<query>\n{query}\n</query>."
-                "\n\nFournissez une réponse en français détaillée et instructive sur la manière de se positionner, les outils que l'on utilise, les erreurs communes."
-                "\n\nSi le contexte ne contient pas d'informations pertinentes, répondez honnêtement que vous ne savez pas."
-                "\n\nRépondez toujours en français."
-                "\n\nSi vous ne savez pas de quel domaine il s'agit, demandez des clarifications au lieu de répondre."
-                "\n\nUtilise le markdown pour formater ta réponse, en utilisant des listes à puces, des tableaux et des sections si nécessaire.",
+            self.prompt_template = None  # unused — replaced by system_prompt + user_template
+            self.system_prompt = (
+                "Vous êtes un assistant pédagogique expert qui aide des apprentis dans les arts et métiers "
+                "(soufflage de verre, ganterie, menuiserie, sellerie, etc.) à maîtriser les techniques et les "
+                "connaissances de leur domaine.\n\n"
+                "RÈGLES ABSOLUES — respectez-les impérativement :\n"
+                "- Répondez TOUJOURS en français correct et soigné, sans fautes d'orthographe ni de grammaire.\n"
+                "- N'utilisez JAMAIS d'emojis.\n"
+                "- Ne produisez JAMAIS de balises <think> ni de raisonnement interne visible.\n"
+                "- N'inventez JAMAIS d'URLs, de liens, de références bibliographiques ou de citations.\n"
+                "- Basez-vous EXCLUSIVEMENT sur le contexte documentaire fourni. "
+                "Si le contexte est insuffisant, indiquez-le honnêtement sans compléter par des suppositions.\n\n"
+                "STRUCTURE DE LA RÉPONSE — adaptez-la à la nature de la question :\n"
+                "- Pour une question factuelle simple (température, durée, proportion, définition…), "
+                "répondez directement et précisément sans imposer de sections superflues.\n"
+                "- Pour une question procédurale ou gestuelle (comment réaliser une action), "
+                "structurez la réponse avec des sections pertinentes : étapes clés, erreurs fréquentes et corrections.\n"
+                "- Dans tous les cas, utilisez le markdown (titres, listes à puces ou numérotées, tableaux) "
+                "uniquement lorsqu'il améliore la lisibilité.\n\n"
+                "SECTION OBLIGATOIRE EN FIN DE RÉPONSE :\n"
+                "Ajoutez toujours une section \"**Pour aller plus loin**\" avec exactement trois questions de suivi "
+                "nommées A, B et C. "
+                "A et B approfondissent le sujet de la réponse. "
+                "C explore un aspect connexe différent pour élargir la culture de l'apprenti.\n"
+                "Format :\n"
+                "**A.** [question A]\n"
+                "**B.** [question B]\n"
+                "**C.** [question C — sujet connexe]\n\n"
+                "L'apprenti peut répondre avec une seule lettre (A, B ou C) pour développer la question correspondante."
+            )
+            self.user_template = (
+                "Historique de la conversation :\n<history>\n{history}\n</history>\n\n"
+                "Contexte documentaire récupéré :\n<context>\n{context}\n</context>\n\n"
+                "Requête de l'apprenti :\n<query>\n{query}\n</query>"
             )
 
         logger.info(
@@ -74,12 +99,59 @@ class RAGService:
             logger.info("Using fallback prompt template")
             return self.prompt_template
 
-    def _initialize_embeddings(self) -> HuggingFaceEmbeddings:
-        """Initialize HuggingFace embeddings."""
+    def _build_messages(
+        self,
+        state: ConversationState,
+        context_data: str,
+    ) -> List:
+        """Build a [SystemMessage, HumanMessage] list for the LLM.
+
+        Uses the split system_prompt / user_template when available (Infomaniak
+        path), falling back to the legacy PromptTemplate for hub-loaded templates.
+        """
+        domain = state.get("selected_domain")
+        domain_suffix = (
+            f"\n\nVous vous concentrez particulièrement sur le domaine : {domain}."
+            if domain else ""
+        )
+        query = str(state.get("messages")[-1].content) + domain_suffix
+        history_lines = [
+            f"{msg.type}: {msg.content}"
+            for msg in state.get("messages", [])[:-1]
+        ]
+        history_text = "\n".join(history_lines) if history_lines else "(début de conversation)"
+
+        if self.system_prompt and self.user_template:
+            user_text = self.user_template.format(
+                history=history_text,
+                context=context_data,
+                query=query,
+            )
+            return [SystemMessage(content=self.system_prompt), HumanMessage(content=user_text)]
+
+        # Fallback: legacy hub template returns a StringPromptValue
+        if self.prompt_template:
+            filled = self.prompt_template.invoke(
+                {"history": history_lines, "context": context_data, "query": query}
+            )
+            return [HumanMessage(content=filled.text if hasattr(filled, "text") else str(filled))]
+
+        return [HumanMessage(content=f"Context: {context_data}\n\nQuestion: {query}\n\nAnswer:")]
+
+    def _initialize_embeddings(self) -> OpenAIEmbeddings:
+        """Initialize Infomaniak embeddings (OpenAI-compatible endpoint)."""
         try:
-            embeddings = HuggingFaceEmbeddings(model_name=self.config.embedding_model)
+            api_key = self.config_manager.get_env_var("INFOMANIAK_API_KEY")
+            product_id = self.config_manager.get_env_var("INFOMANIAK_PRODUCT_ID")
+            base_url = f"https://api.infomaniak.com/2/ai/{product_id}/openai/v1"
+            embeddings = OpenAIEmbeddings(
+                model=self.config.embedding_model,
+                openai_api_key=api_key,
+                openai_api_base=base_url,
+            )
             logger.info(
-                f"Embeddings initialized with model: {self.config.embedding_model}"
+                f"Embeddings initialized with model: {self.config.embedding_model} "
+                f"via Infomaniak (product_id={product_id})"
             )
             return embeddings
         except Exception as e:
@@ -101,27 +173,35 @@ class RAGService:
             raise
 
     def _initialize_llm(self):
-        """Initialize chat model."""
+        """Initialize Infomaniak chat model (OpenAI-compatible endpoint)."""
         try:
-            llm = init_chat_model(
-                self.config.llm_model_url,
-                model_provider=self.config.llm_provider,
+            api_key = self.config_manager.get_env_var("INFOMANIAK_API_KEY")
+            product_id = self.config_manager.get_env_var("INFOMANIAK_PRODUCT_ID")
+            base_url = f"https://api.infomaniak.com/2/ai/{product_id}/openai/v1"
+            llm = ChatOpenAI(
+                model=self.config.llm_model,
+                openai_api_key=api_key,
+                openai_api_base=base_url,
                 streaming=True,
                 temperature=self.config.llm_temperature,
                 max_tokens=self.config.llm_max_tokens,
                 top_p=self.config.llm_top_p,
-                top_k=self.config.llm_top_k,
                 frequency_penalty=self.config.llm_frequency_penalty,
                 presence_penalty=self.config.llm_presence_penalty,
+                # Prevent the model from calling web search or other tools
+                model_kwargs={"tool_choice": "none"},
             )
-            logger.info(f"LLM initialized: {self.config.llm_model_url}")
+            logger.info(
+                f"LLM initialized: {self.config.llm_model} "
+                f"via Infomaniak (product_id={product_id})"
+            )
             return llm
         except Exception as e:
             logger.error(f"Failed to initialize LLM: {str(e)}")
-            logger.error("Check that FIREWORKS_API_KEY is set in your .env file")
+            logger.error("Check that INFOMANIAK_API_KEY and INFOMANIAK_PRODUCT_ID are set in your .env file")
             raise RuntimeError(
                 f"LLM initialization failed: {str(e)}. "
-                "Please ensure FIREWORKS_API_KEY is properly configured in your .env file."
+                "Please ensure INFOMANIAK_API_KEY and INFOMANIAK_PRODUCT_ID are properly configured in your .env file."
             )
 
     def add_documents(self, documents: List[Document]) -> None:
@@ -367,45 +447,54 @@ Génère une explication détaillée à la première personne de la technique co
                 f"Generating response for state with {len(state.get('messages', []))} messages"
             )
             context_docs = state.get("context", [])
-
             context_data = (
                 "\n\n".join([doc.page_content for doc in context_docs])
                 if context_docs
-                else "No relevant document found in the knowledge base."
+                else "Aucun document pertinent trouvé dans la base de connaissances."
             )
 
-            if self.prompt_template:
-                domain = state.get("selected_domain")
-                domain_suffix = (
-                    f"\n\nVous vous concentrez particulièrement sur le domaine : {domain}."
-                    if domain else ""
-                )
-                query_with_domain = str(state.get("messages")[-1].content) + domain_suffix
-                filled_prompt = self.prompt_template.invoke(
-                    {
-                        "history": [
-                            f"{msg.type}: {msg.content}"
-                            for msg in state.get("messages", [])[:-1]
-                        ],
-                        "query": query_with_domain,
-                        "context": context_data,
-                    }
-                )
-            else:
-                logger.warning("No prompt template available, using fallback.")
-                filled_prompt = f"""
-                Question: {str(state.get('messages'))}
-                \nContext: {context_data}
-                \nAnswer:
-                """
-
-            response = self.llm.invoke(filled_prompt)
-
+            messages = self._build_messages(state, context_data)
+            response = self.llm.invoke(messages)
             return {"messages": [response]}
 
         except Exception as e:
             logger.error(f"Failed to generate response: {str(e)}")
             raise
+
+    async def stream_generate(self, state: ConversationState):
+        """Async generator that streams LLM tokens for the generate step.
+
+        Builds a [SystemMessage, HumanMessage] list via _build_messages() and
+        streams the response token-by-token using astream().
+        """
+        if not self.llm:
+            raise ValueError("No LLM available. Please check LLM initialization.")
+
+        context_docs = state.get("context", [])
+        context_data = (
+            "\n\n".join([doc.page_content for doc in context_docs])
+            if context_docs
+            else "Aucun document pertinent trouvé dans la base de connaissances."
+        )
+
+        messages = self._build_messages(state, context_data)
+
+        in_think_block = False
+        async for chunk in self.llm.astream(messages):
+            token = chunk.content if hasattr(chunk, "content") else str(chunk)
+            if not token:
+                continue
+            # Strip <think>...</think> reasoning blocks that some models emit
+            if "<think>" in token:
+                in_think_block = True
+            if in_think_block:
+                if "</think>" in token:
+                    in_think_block = False
+                    token = token.split("</think>", 1)[-1]
+                else:
+                    continue
+            if token:
+                yield token
 
     def direct_generate(self, state: ConversationState) -> Dict[str, List[BaseMessage]]:
         """Generate a response directly from LLM weights, without retrieval."""
@@ -689,6 +778,154 @@ Génère une explication détaillée à la première personne de la technique co
 
         logger.info("No video annotations found in retrieved documents")
         return None
+
+    # ============================================================================
+    # PRF PIPELINE — corpus-grounded query refinement
+    # Replaces HyDE as the active retrieval strategy.
+    # Graph: retrieve_initial → refine_query_prf → retrieve_final_dual → generate
+    # ============================================================================
+
+    def _merge_dedup(
+        self, a: List[Document], b: List[Document]
+    ) -> List[Document]:
+        """Merge two document lists, deduplicating by metadata.source."""
+        seen: set = set()
+        merged: List[Document] = []
+        for doc in a + b:
+            src = doc.metadata.get("source", "")
+            if src not in seen:
+                seen.add(src)
+                merged.append(doc)
+        return merged
+
+    def retrieve_initial(self, state: ConversationState) -> Dict[str, Any]:
+        """PRF step 1 — first-pass retrieval with the raw user query.
+
+        Queries both the video annotation collection and the per-course collection
+        (if course_id is present in state).  Results are stored in state["context"]
+        for the subsequent PRF reformulation step.
+        """
+        vector_data = self.get_vector_store_data()
+        has_annotation_docs = bool(vector_data.get("ids"))
+
+        query = str(state.get("messages")[-1].content)
+        course_id = state.get("course_id")
+
+        results: List[Document] = []
+
+        # 1. Video annotations collection
+        if has_annotation_docs:
+            annotation_results = self.similarity_search(query, k=5)
+            results.extend(annotation_results)
+        else:
+            logger.info("Annotation collection empty — skipping annotation retrieval")
+
+        # 2. Per-course collection (if available)
+        if course_id and self.course_rag_service:
+            course_results = self.course_rag_service.similarity_search(
+                query, course_id=course_id, k=5
+            )
+            results = self._merge_dedup(results, course_results)
+        elif course_id:
+            logger.warning("course_id provided but course_rag_service not injected")
+
+        if not results:
+            logger.info("retrieve_initial: no documents found")
+            return {"context": [], "video_metadata": None}
+
+        video_metadata = self._extract_video_metadata(results)
+        logger.info(f"retrieve_initial: {len(results)} docs retrieved")
+        return {"context": results, "video_metadata": video_metadata}
+
+    def refine_query_prf(self, state: ConversationState) -> Dict[str, Any]:
+        """PRF step 2 — corpus-grounded query reformulation.
+
+        Uses the top-3 retrieved documents from the first pass to reformulate
+        the original query using vocabulary from the actual corpus, not LLM
+        parametric knowledge.  Falls back to original query if no context or
+        no LLM is available.
+        """
+        original_query = str(state.get("messages")[-1].content)
+        context_docs = state.get("context", [])
+
+        if not context_docs or not self.llm:
+            logger.info("refine_query_prf: no context or LLM — using original query")
+            return {"refined_query": original_query}
+
+        # Take up to top-3 docs for the reformulation prompt
+        snippets = []
+        for i, doc in enumerate(context_docs[:3], 1):
+            doc_type = doc.metadata.get("module_type") or doc.metadata.get("transcript_type", "text")
+            preview = doc.page_content[:300] + "..." if len(doc.page_content) > 300 else doc.page_content
+            snippets.append(f"[Document {i} — {doc_type}]\n{preview}")
+
+        context_text = "\n\n".join(snippets)
+
+        # Key distinction from plain enhance_query: we explicitly instruct the LLM
+        # to use vocabulary FROM the corpus, not invent expert-sounding terms.
+        prf_prompt = (
+            "Tu es un assistant de reformulation de requête pour un système de recherche documentaire.\n\n"
+            "Requête originale de l'apprenti :\n"
+            f'"{original_query}"\n\n'
+            "Documents récupérés (utilise leur vocabulaire technique, ne l'invente pas) :\n"
+            f"{context_text}\n\n"
+            "Instructions :\n"
+            "1. Identifie les termes techniques et le vocabulaire du domaine présents dans les documents ci-dessus.\n"
+            "2. Reformule la requête de l'apprenti en incorporant ces termes techniques issus du corpus.\n"
+            "3. Préserve l'intention originale de la question.\n"
+            "4. Réponds avec UNIQUEMENT la requête reformulée, sans explication (1-2 phrases maximum).\n\n"
+            "Requête reformulée :"
+        )
+
+        try:
+            response = self.llm.invoke(prf_prompt)
+            if isinstance(response.content, str):
+                refined = response.content.strip()
+            elif isinstance(response.content, list):
+                refined = " ".join(str(item) for item in response.content).strip()
+            else:
+                refined = str(response.content).strip()
+
+            logger.info(f"PRF: '{original_query}' → '{refined}'")
+            return {"refined_query": refined}
+
+        except Exception as e:
+            logger.error(f"refine_query_prf failed: {e} — using original query")
+            return {"refined_query": original_query}
+
+    def retrieve_final_dual(self, state: ConversationState) -> Dict[str, Any]:
+        """PRF step 3 — second-pass retrieval using the refined query.
+
+        Queries both collections again with the PRF-improved query and replaces
+        state["context"] with the final result set.
+        """
+        refined_query = state.get("refined_query") or str(state.get("messages")[-1].content)
+        course_id = state.get("course_id")
+
+        vector_data = self.get_vector_store_data()
+        has_annotation_docs = bool(vector_data.get("ids"))
+
+        results: List[Document] = []
+
+        # 1. Video annotations
+        if has_annotation_docs:
+            annotation_results = self.similarity_search(refined_query, k=5)
+            results.extend(annotation_results)
+
+        # 2. Per-course collection
+        if course_id and self.course_rag_service:
+            course_results = self.course_rag_service.similarity_search(
+                refined_query, course_id=course_id, k=5
+            )
+            results = self._merge_dedup(results, course_results)
+
+        if not results:
+            logger.info("retrieve_final_dual: no documents found with refined query")
+            return {"context": [], "video_metadata": None}
+
+        video_metadata = self._extract_video_metadata(results)
+        logger.info(f"retrieve_final_dual: {len(results)} docs with refined query")
+        return {"context": results, "video_metadata": video_metadata}
 
     # ============================================================================
     # LEGACY METHODS (kept for reference - can be removed after testing HyDE)

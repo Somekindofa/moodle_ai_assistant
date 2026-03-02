@@ -16,6 +16,7 @@ class ChatRequest(BaseModel):
     message: str
     conversation_thread_id: str
     selected_domain: Optional[str] = None  # Domain focus chosen by the user
+    course_id: Optional[str] = None        # Moodle course ID for per-course retrieval
 
 
 class SystemStatus(BaseModel):
@@ -64,6 +65,32 @@ class AnnotationIngestRequest(BaseModel):
     source_type: str = "local"
     project_name: str = "unknown"
     audio_filepath: str = ""
+
+
+class CourseModuleIngestRequest(BaseModel):
+    """Payload for ingesting a Moodle course module into ChromaDB."""
+
+    course_id: str
+    module_id: str
+    module_type: str                        # 'page', 'label', 'resource'
+    module_name: str
+    section_name: str = ""
+    content_html: Optional[str] = None     # HTML string for page/label
+    content_raw_b64: Optional[str] = None  # base64-encoded file bytes for resource
+    file_extension: Optional[str] = None   # 'pdf' or 'docx'
+
+
+class CourseModuleDeleteRequest(BaseModel):
+    """Payload for removing a module's chunks from ChromaDB."""
+
+    course_id: str
+    module_id: str
+
+
+class CourseDeleteRequest(BaseModel):
+    """Payload for dropping an entire course collection from ChromaDB."""
+
+    course_id: str
 
 
 class VideoMetadata(BaseModel):

@@ -13,6 +13,7 @@ from config.settings import ConfigurationManager
 from core.types import ConversationState
 from services.langchain_service import LangChainService
 from services.rag_service import RAGService
+from services.course_rag_service import CourseRAGService
 from services.document_service import DocumentProcessingService
 from services.graph_service import ConversationGraphService
 from services.annotation_service import AnnotationService
@@ -33,10 +34,19 @@ class MoodleAIAssistantPipeline:
         # Initialize services in dependency order
         self.langchain_service = LangChainService(self.config_manager)
         self.annotation_service = AnnotationService(self.config_manager)
+        # RAGService is initialised first so we can share its embeddings model
         self.rag_service = RAGService(
             self.config_manager,
-            annotation_service=self.annotation_service
+            annotation_service=self.annotation_service,
         )
+        # CourseRAGService reuses the same HuggingFace embeddings instance
+        self.course_rag_service = CourseRAGService(
+            embeddings=self.rag_service.embeddings,
+            persist_directory=self.rag_service.config.persist_directory,
+        )
+        # Inject course_rag_service into rag_service for PRF dual-collection retrieval
+        self.rag_service.course_rag_service = self.course_rag_service
+
         self.document_service = DocumentProcessingService(self.config_manager)
         self.graph_service = ConversationGraphService(self.rag_service)
 
@@ -99,11 +109,22 @@ class MoodleAIAssistantPipeline:
             logger.warning(f"Auto-sync of annotations failed: {str(e)}")
 
     def _build_conversation_graph(self) -> CompiledStateGraph:
-        """Build and compile the conversation graph with HyDE (Hypothetical Document Embeddings)."""
+        """Build and compile the PRF (Pseudo-Relevance Feedback) conversation graph.
+
+        Pipeline: retrieve_initial → refine_query_prf → retrieve_final_dual → generate
+
+        First pass retrieves from both video annotation and per-course collections.
+        The LLM then reformulates the query using corpus vocabulary (PRF).
+        Second pass retrieves again with the refined query.
+        """
         try:
-            # New HyDE sequence: generate_hypothetical_document -> retrieve_with_hyde -> generate
             return self.graph_service.build_conversation_graph(
-                functions=["generate_hypothetical_document", "retrieve_with_hyde", "generate"]
+                functions=[
+                    "retrieve_initial",
+                    "refine_query_prf",
+                    "retrieve_final_dual",
+                    "generate",
+                ]
             ).compile_graph()
         except Exception as e:
             logger.error(f"Failed to build conversation graph: {str(e)}")
@@ -179,8 +200,13 @@ class MoodleAIAssistantPipeline:
         conversation_thread_id: str,
         stream_mode: StreamMode,
         selected_domain: Optional[str] = None,
+        course_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Generate response for user query with HyDE-based retrieval and video metadata."""
+        """Generate response using the PRF retrieval pipeline.
+
+        Retrieves from video annotation collection and (when course_id is given)
+        from the per-course ChromaDB collection.
+        """
         try:
             config = RunnableConfig({"configurable": {"thread_id": conversation_thread_id}})
 
@@ -188,7 +214,11 @@ class MoodleAIAssistantPipeline:
 
             # using ainvoke instead of astream - runs graph to completion
             final_state = await self.conversation_graph.ainvoke(
-                {"messages": [message], "selected_domain": selected_domain},
+                {
+                    "messages": [message],
+                    "selected_domain": selected_domain,
+                    "course_id": course_id,
+                },
                 config=config
             )
             logger.info(f"Graph execution complete. Final state keys: \n{final_state.keys()}")
@@ -236,6 +266,96 @@ class MoodleAIAssistantPipeline:
             logger.error(f"Batch generation failed: {str(e)}")
             logger.error(f"Traceback: {traceback.format_exc()}")
             raise
+
+    async def stream_response(
+        self,
+        message: str,
+        conversation_thread_id: str,
+        selected_domain: Optional[str] = None,
+        course_id: Optional[str] = None,
+    ):
+        """Async generator that streams the full response as JSON-lines events.
+
+        Runs the three PRF retrieval nodes synchronously (they are CPU-bound
+        vector-search + one LLM call each), then streams the final generation
+        token-by-token so the client sees output immediately.
+
+        Yields JSON-line strings:
+          {"event": "video_metadata", "data": {...}}   — optional, before tokens
+          {"event": "token", "data": "<text>"}          — one per LLM token
+          {"event": "documents", "data": [...]}         — after all tokens
+          {"content": "[DONE]"}                         — terminal marker
+        """
+        import json
+
+        try:
+            from langchain_core.messages import HumanMessage
+
+            # Build the initial state dict (MessagesState expects message objects)
+            state: Dict[str, Any] = {
+                "messages": [HumanMessage(content=message)],
+                "selected_domain": selected_domain,
+                "course_id": course_id,
+                "context": [],
+                "video_metadata": None,
+                "refined_query": None,
+                "hypothetical_document": None,
+                "enhanced_query": None,
+                "query_variants": [],
+                "route": None,
+            }
+
+            # --- PRF step 1: initial retrieval ---
+            result = self.rag_service.retrieve_initial(state)
+            state.update(result)
+
+            # Emit video metadata early so the client can show the source card
+            # while generation is still in progress.
+            if state.get("video_metadata"):
+                yield json.dumps({"event": "video_metadata", "data": state["video_metadata"]}) + "\n"
+
+            # --- PRF step 2: corpus-grounded query refinement ---
+            result = self.rag_service.refine_query_prf(state)
+            state.update(result)
+
+            # --- PRF step 3: final retrieval with refined query ---
+            result = self.rag_service.retrieve_final_dual(state)
+            state.update(result)
+
+            # Re-emit video metadata if it changed after the final retrieval.
+            if state.get("video_metadata"):
+                yield json.dumps({"event": "video_metadata", "data": state["video_metadata"]}) + "\n"
+
+            # --- Stream the generate step token by token ---
+            async for token in self.rag_service.stream_generate(state):
+                yield json.dumps({"event": "token", "data": token}) + "\n"
+
+            # --- Emit document sources after generation completes ---
+            context_docs: List[Document] = state.get("context", [])
+            document_sources = [
+                {
+                    "source": doc.metadata.get("source", "nan"),
+                    "type": doc.metadata.get("type", "nan"),
+                    "page_content_preview": (
+                        doc.page_content[:200] + "..."
+                        if len(doc.page_content) > 200
+                        else doc.page_content
+                    ),
+                }
+                for doc in context_docs
+            ]
+            yield json.dumps({"event": "documents", "data": document_sources}) + "\n"
+
+            yield json.dumps({"content": "[DONE]"}) + "\n"
+
+        except GeneratorExit:
+            logger.info("Client disconnected during streaming")
+            raise
+        except Exception as e:
+            import traceback
+            logger.error(f"stream_response failed: {e}")
+            logger.error(traceback.format_exc())
+            yield json.dumps({"event": "error", "message": str(e)}) + "\n"
 
     def get_current_directory(self) -> str:
         """Get current working directory."""

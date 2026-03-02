@@ -15,6 +15,9 @@ from api.models import (
     AnnotationSyncRequest,
     AnnotationStats,
     AnnotationIngestRequest,
+    CourseModuleIngestRequest,
+    CourseModuleDeleteRequest,
+    CourseDeleteRequest,
 )
 from pipeline import MoodleAIAssistantPipeline
 from config.settings import ConfigurationManager
@@ -36,48 +39,27 @@ def check_documents_folder() -> bool:
 
 
 async def generate_simplified_stream(
-    user_messages: str, conversation_thread_id: str, selected_domain: Optional[str] = None
+    user_messages: str,
+    conversation_thread_id: str,
+    selected_domain: Optional[str] = None,
+    course_id: Optional[str] = None,
 ) -> AsyncGenerator[str, None]:
-    """Generate a simpler JSON stream with video metadata support."""
-    try:
-        result = await pipeline.generate_response(
-            user_messages,
-            conversation_thread_id=conversation_thread_id,
-            stream_mode="updates",
-            selected_domain=selected_domain,
-        )
+    """Stream the RAG pipeline response as JSON-lines.
 
-        video_metadata = result.get("video_metadata")
-        if video_metadata:
-            yield json.dumps(
-                {"event": "video_metadata", "data": video_metadata}
-            ) + json_escape
-
-        serializable_messages = [
-            {
-                "content": result.get("messages", ""),
-                "type": "ai",
-                "id": None,
-            }
-        ]
-        serializable_documents = result.get("documents", [])
-
-        yield json.dumps(
-            {
-                "event": "message",
-                "content": serializable_messages,
-                "documents": serializable_documents,
-            }
-        ) + json_escape
-
-        yield json.dumps({"content": "[DONE]"}) + json_escape
-
-    except GeneratorExit:
-        logger.info("Client disconnected during streaming")
-        raise
-
-    except Exception as e:
-        yield json.dumps({"error": str(e)}) + json_escape
+    Delegates to pipeline.stream_response() which runs the PRF retrieval
+    nodes then streams LLM tokens individually.  The client receives:
+      {"event": "video_metadata", "data": {...}}  — optional source card
+      {"event": "token", "data": "<text>"}         — one per token
+      {"event": "documents", "data": [...]}        — document sources
+      {"content": "[DONE]"}                        — terminal marker
+    """
+    async for line in pipeline.stream_response(
+        user_messages,
+        conversation_thread_id=conversation_thread_id,
+        selected_domain=selected_domain,
+        course_id=course_id,
+    ):
+        yield line
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -107,7 +89,12 @@ async def chat_stream(request: ChatRequest):
     Each line is a JSON object: video_metadata event, message event, or [DONE].
     """
     return StreamingResponse(
-        generate_simplified_stream(request.message, request.conversation_thread_id, request.selected_domain),
+        generate_simplified_stream(
+            request.message,
+            request.conversation_thread_id,
+            request.selected_domain,
+            request.course_id,
+        ),
         media_type="text/plain",
         headers={"X-Accel-Buffering": "no"},
     )
@@ -332,3 +319,66 @@ async def stream_video(video_id: str, request: Request):
             "Content-Length": str(chunk_size),
         },
     )
+
+
+# ─────────────────────────────────────────────────────────────────
+# Course content ingestion endpoints
+# ─────────────────────────────────────────────────────────────────
+
+@router.post("/ingest-course-module")
+async def ingest_course_module(request: CourseModuleIngestRequest):
+    """Ingest a Moodle course module (page/label/resource) into its per-course ChromaDB collection.
+
+    Called by the Moodle plugin's event observer immediately after a teacher
+    creates or updates a course module.  Chunking and embedding happen here.
+    """
+    try:
+        count = pipeline.course_rag_service.ingest_module(
+            course_id=request.course_id,
+            module_id=request.module_id,
+            module_type=request.module_type,
+            module_name=request.module_name,
+            section_name=request.section_name,
+            content_html=request.content_html,
+            content_raw_b64=request.content_raw_b64,
+            file_extension=request.file_extension,
+        )
+        return {
+            "status": "ok",
+            "chunks_indexed": count,
+            "collection": f"course_{request.course_id}",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/delete-course-module")
+async def delete_course_module(request: CourseModuleDeleteRequest):
+    """Remove all chunks belonging to a course module from ChromaDB."""
+    try:
+        deleted = pipeline.course_rag_service.delete_module(
+            course_id=request.course_id,
+            module_id=request.module_id,
+        )
+        return {"status": "ok", "chunks_deleted": deleted}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/delete-course")
+async def delete_course(request: CourseDeleteRequest):
+    """Drop the entire ChromaDB collection for a course."""
+    try:
+        pipeline.course_rag_service.delete_collection(course_id=request.course_id)
+        return {"status": "ok", "collection_deleted": f"course_{request.course_id}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/course-status/{course_id}")
+async def get_course_status(course_id: str):
+    """Return indexing statistics for a course collection."""
+    try:
+        return pipeline.course_rag_service.get_course_status(course_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
