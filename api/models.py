@@ -17,6 +17,7 @@ class ChatRequest(BaseModel):
     conversation_thread_id: str
     selected_domain: Optional[str] = None  # Domain focus chosen by the user
     course_id: Optional[str] = None        # Moodle course ID for per-course retrieval
+    is_first_message: bool = False         # True on first message — triggers title generation
 
 
 class SystemStatus(BaseModel):

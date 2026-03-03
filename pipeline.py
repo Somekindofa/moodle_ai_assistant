@@ -239,11 +239,23 @@ class MoodleAIAssistantPipeline:
             context_docs: List[Document] = final_state.get("context", [])
             document_sources = []
 
+            _seen_module_ids: set = set()
             for doc in context_docs:
+                mid = doc.metadata.get("module_id", "")
+                if mid:
+                    if mid in _seen_module_ids:
+                        continue
+                    _seen_module_ids.add(mid)
                 source_info = {
                     "source": doc.metadata.get("source", "nan"),
                     "type": doc.metadata.get("type", "nan"),
-                    "page_content_preview": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content
+                    "page_content_preview": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
+                    "module_id":   mid,
+                    "module_type": doc.metadata.get("module_type", ""),
+                    "module_name": doc.metadata.get("module_name", ""),
+                    "course_id":   doc.metadata.get("course_id", ""),
+                    "heading_path": doc.metadata.get("heading_path", ""),
+                    "section_name": doc.metadata.get("section_name", ""),
                 }
                 document_sources.append(source_info)
             logger.info(f"Extracted {len(document_sources)} document sources")
@@ -267,12 +279,33 @@ class MoodleAIAssistantPipeline:
             logger.error(f"Traceback: {traceback.format_exc()}")
             raise
 
+    async def _generate_conversation_title(self, message: str) -> str:
+        """Call the LLM with max_tokens=120 to produce a short conversation title.
+
+        Uses .bind() to override max_tokens without mutating the shared LLM instance.
+        Falls back to a truncated version of the message if the LLM call fails.
+        """
+        try:
+            prompt = (
+                "Génère un titre court (5 à 8 mots) qui résume la question suivante "
+                "d'un apprenti. Réponds UNIQUEMENT avec le titre, sans guillemets ni "
+                f"ponctuation finale.\n\nQuestion : {message}"
+            )
+            title_llm = self.rag_service.llm.bind(max_tokens=120)
+            response = await title_llm.ainvoke(prompt)
+            title = response.content.strip().strip('"').strip("'")
+            return title if title else message[:60]
+        except Exception as e:
+            logger.warning(f"Title generation failed: {e}")
+            return message[:60]
+
     async def stream_response(
         self,
         message: str,
         conversation_thread_id: str,
         selected_domain: Optional[str] = None,
         course_id: Optional[str] = None,
+        is_first_message: bool = False,
     ):
         """Async generator that streams the full response as JSON-lines events.
 
@@ -281,15 +314,22 @@ class MoodleAIAssistantPipeline:
         token-by-token so the client sees output immediately.
 
         Yields JSON-line strings:
-          {"event": "video_metadata", "data": {...}}   — optional, before tokens
-          {"event": "token", "data": "<text>"}          — one per LLM token
-          {"event": "documents", "data": [...]}         — after all tokens
-          {"content": "[DONE]"}                         — terminal marker
+          {"event": "conversation_title", "data": "..."}  — only when is_first_message=True
+          {"event": "video_metadata", "data": {...}}       — optional, before tokens
+          {"event": "token", "data": "<text>"}             — one per LLM token
+          {"event": "documents", "data": [...]}            — after all tokens
+          {"content": "[DONE]"}                            — terminal marker
         """
         import json
 
         try:
             from langchain_core.messages import HumanMessage
+
+            # Generate and emit the conversation title before the PRF pipeline
+            # so the client can update the sidebar title immediately.
+            if is_first_message:
+                title = await self._generate_conversation_title(message)
+                yield json.dumps({"event": "conversation_title", "data": title}) + "\n"
 
             # Build the initial state dict (MessagesState expects message objects)
             state: Dict[str, Any] = {
@@ -332,8 +372,18 @@ class MoodleAIAssistantPipeline:
 
             # --- Emit document sources after generation completes ---
             context_docs: List[Document] = state.get("context", [])
-            document_sources = [
-                {
+            _seen_module_ids: set = set()
+            document_sources = []
+            for doc in context_docs:
+                mid = doc.metadata.get("module_id", "")
+                # Deduplicate course-content docs by module_id: multiple chunks
+                # from the same Moodle module all resolve to the same URL on
+                # click, so only the first chunk is needed as a representative.
+                if mid:
+                    if mid in _seen_module_ids:
+                        continue
+                    _seen_module_ids.add(mid)
+                document_sources.append({
                     "source": doc.metadata.get("source", "nan"),
                     "type": doc.metadata.get("type", "nan"),
                     "page_content_preview": (
@@ -341,9 +391,13 @@ class MoodleAIAssistantPipeline:
                         if len(doc.page_content) > 200
                         else doc.page_content
                     ),
-                }
-                for doc in context_docs
-            ]
+                    "module_id":    mid,
+                    "module_type":  doc.metadata.get("module_type", ""),
+                    "module_name":  doc.metadata.get("module_name", ""),
+                    "course_id":    doc.metadata.get("course_id", ""),
+                    "heading_path": doc.metadata.get("heading_path", ""),
+                    "section_name": doc.metadata.get("section_name", ""),
+                })
             yield json.dumps({"event": "documents", "data": document_sources}) + "\n"
 
             yield json.dumps({"content": "[DONE]"}) + "\n"

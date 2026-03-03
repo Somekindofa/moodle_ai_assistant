@@ -428,18 +428,15 @@ class CourseRAGService:
     def similarity_search(
         self, query: str, course_id: str, k: int = 5
     ) -> List[Document]:
-        """MMR search within a single course's collection."""
+        """MMR search within a single course's collection (embeds query internally)."""
         try:
             collection = self._get_collection(course_id)
-            # Check if collection has any documents
             data = collection.get()
             if not data.get("ids"):
                 logger.info(f"Course collection '{course_id}' is empty")
                 return []
 
             results = collection.max_marginal_relevance_search(query, k=k)
-
-            # Deduplicate by source
             seen: set = set()
             unique: List[Document] = []
             for doc in results:
@@ -448,14 +445,131 @@ class CourseRAGService:
                     seen.add(src)
                     unique.append(doc)
 
-            logger.info(
-                f"Course search for '{course_id}' returned {len(unique)} results"
-            )
+            logger.info(f"Course search for '{course_id}' returned {len(unique)} results")
             return unique
 
         except Exception as e:
             logger.error(f"Course similarity search failed for course {course_id}: {e}")
             return []
+
+    def _search_with_embedding(
+        self, embedding: List[float], course_id: str, k: int = 5
+    ) -> List[Document]:
+        """Cosine-similarity search using a pre-computed query embedding.
+
+        Avoids re-calling the embeddings API for each course by using the raw
+        ChromaDB collection.query() which accepts ``query_embeddings`` directly.
+        """
+        try:
+            collection = self._get_collection(course_id)
+            raw = collection._collection.query(
+                query_embeddings=[embedding],
+                n_results=k,
+                include=["documents", "metadatas"],
+            )
+            docs: List[Document] = []
+            if raw.get("documents") and raw["documents"][0]:
+                for text, meta in zip(raw["documents"][0], raw["metadatas"][0]):
+                    docs.append(Document(page_content=text or "", metadata=meta or {}))
+            return docs
+        except Exception as e:
+            logger.error(f"_search_with_embedding failed for course {course_id}: {e}")
+            return []
+
+    # ── Cross-course retrieval ────────────────────────────────────
+
+    def _enumerate_populated_courses(self) -> List[str]:
+        """Return course IDs of all non-empty ChromaDB course_* collections.
+
+        Compatible with ChromaDB ≥0.6.0 where list_collections() returns
+        List[str] (collection names) rather than List[Collection] objects.
+        """
+        try:
+            # Access the underlying chromadb client via any open collection,
+            # or open a temporary dummy collection to get the client reference.
+            if self._collections:
+                client = next(iter(self._collections.values()))._client
+            else:
+                dummy = self._get_collection("_probe")
+                client = dummy._client
+
+            raw = client.list_collections()
+            # Chroma ≥0.6: returns List[str]; older versions: List[Collection]
+            if raw and not isinstance(raw[0], str):
+                names = [c.name for c in raw]
+            else:
+                names = list(raw)
+
+            ids: List[str] = []
+            for name in names:
+                if not name.startswith("course_") or name == "course__probe":
+                    continue
+                cid = name[len("course_"):]
+                col = self._get_collection(cid)
+                if col.get().get("ids"):   # only include non-empty collections
+                    ids.append(cid)
+
+            # Clean up the probe collection if we created it
+            if "_probe" in self._collections:
+                try:
+                    client.delete_collection("course__probe")
+                except Exception:
+                    pass
+                self._collections.pop("_probe", None)
+
+            return ids
+        except Exception as e:
+            logger.error(f"_enumerate_populated_courses failed: {e}")
+            return []
+
+    def similarity_search_all_courses(
+        self,
+        query: str,
+        k_per_course: int = 1,
+        priority_course_id: Optional[str] = None,
+    ) -> List[Document]:
+        """Query all populated course collections with a single embedding API call.
+
+        Embeds the query once, then searches every course collection using the
+        pre-computed vector via the raw ChromaDB API.  This replaces N sequential
+        embedding API calls (one per course) with a single call, cutting latency
+        from O(N × embed_time) to O(embed_time + N × vector_search_time).
+
+        The priority course gets k=6 results; all others get k_per_course results.
+        """
+        all_docs: List[Document] = []
+        course_ids = self._enumerate_populated_courses()
+        if not course_ids:
+            logger.info("similarity_search_all_courses: no populated courses found")
+            return all_docs
+
+        # Embed once and reuse across all collections
+        try:
+            embedding = self.embeddings.embed_query(query)
+        except Exception as e:
+            logger.error(f"similarity_search_all_courses: embedding failed: {e}")
+            return all_docs
+
+        # Always collect priority course results first so they are not pushed
+        # out of the top-N cap by non-priority courses processed earlier.
+        priority_docs: List[Document] = []
+        other_docs: List[Document] = []
+
+        for cid in course_ids:
+            if cid == priority_course_id:
+                docs = self._search_with_embedding(embedding, cid, k=6)
+                priority_docs.extend(docs)
+            else:
+                docs = self._search_with_embedding(embedding, cid, k=k_per_course)
+                other_docs.extend(docs)
+
+        all_docs = priority_docs + other_docs
+        logger.info(
+            f"similarity_search_all_courses: {len(all_docs)} docs across "
+            f"{len(course_ids)} courses (priority={priority_course_id}, "
+            f"priority_docs={len(priority_docs)}, other_docs={len(other_docs)})"
+        )
+        return all_docs
 
     # ── Status ────────────────────────────────────────────────────
 

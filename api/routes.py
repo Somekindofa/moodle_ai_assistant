@@ -43,21 +43,24 @@ async def generate_simplified_stream(
     conversation_thread_id: str,
     selected_domain: Optional[str] = None,
     course_id: Optional[str] = None,
+    is_first_message: bool = False,
 ) -> AsyncGenerator[str, None]:
     """Stream the RAG pipeline response as JSON-lines.
 
     Delegates to pipeline.stream_response() which runs the PRF retrieval
     nodes then streams LLM tokens individually.  The client receives:
-      {"event": "video_metadata", "data": {...}}  — optional source card
-      {"event": "token", "data": "<text>"}         — one per token
-      {"event": "documents", "data": [...]}        — document sources
-      {"content": "[DONE]"}                        — terminal marker
+      {"event": "conversation_title", "data": "..."}  — only on first message
+      {"event": "video_metadata", "data": {...}}       — optional source card
+      {"event": "token", "data": "<text>"}             — one per token
+      {"event": "documents", "data": [...]}            — document sources
+      {"content": "[DONE]"}                            — terminal marker
     """
     async for line in pipeline.stream_response(
         user_messages,
         conversation_thread_id=conversation_thread_id,
         selected_domain=selected_domain,
         course_id=course_id,
+        is_first_message=is_first_message,
     ):
         yield line
 
@@ -94,6 +97,7 @@ async def chat_stream(request: ChatRequest):
             request.conversation_thread_id,
             request.selected_domain,
             request.course_id,
+            request.is_first_message,
         ),
         media_type="text/plain",
         headers={"X-Accel-Buffering": "no"},

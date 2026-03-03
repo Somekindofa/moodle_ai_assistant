@@ -464,19 +464,27 @@ Génère une explication détaillée à la première personne de la technique co
     async def stream_generate(self, state: ConversationState):
         """Async generator that streams LLM tokens for the generate step.
 
-        Builds a [SystemMessage, HumanMessage] list via _build_messages() and
-        streams the response token-by-token using astream().
+        When no documents were retrieved, emits a hard-coded refusal instead of
+        calling the LLM — this prevents the model from hallucinating answers
+        from its parametric weights.  The LLM is only invoked when there is
+        actual corpus context to ground the response.
         """
         if not self.llm:
             raise ValueError("No LLM available. Please check LLM initialization.")
 
         context_docs = state.get("context", [])
-        context_data = (
-            "\n\n".join([doc.page_content for doc in context_docs])
-            if context_docs
-            else "Aucun document pertinent trouvé dans la base de connaissances."
-        )
 
+        if not context_docs:
+            logger.info("stream_generate: no context — returning deterministic refusal")
+            yield (
+                "Je ne dispose pas de ressources suffisantes dans la base documentaire "
+                "pour répondre à cette question de manière fiable. "
+                "Veuillez consulter votre formateur ou vérifier que les contenus du cours "
+                "ont bien été intégrés dans le système."
+            )
+            return
+
+        context_data = "\n\n".join([doc.page_content for doc in context_docs])
         messages = self._build_messages(state, context_data)
 
         in_think_block = False
@@ -798,6 +806,12 @@ Génère une explication détaillée à la première personne de la technique co
                 merged.append(doc)
         return merged
 
+    # Maximum number of docs fed into the LLM context across all sources.
+    # Keeps the total prompt well within the Apertus-70B 16 384-token window
+    # (system prompt ≈ 450 tok + 8 chunks × 400 tok = 3 650 tok + 1 200 tok output
+    # = 4 850 tok, leaving a comfortable margin).
+    MAX_CONTEXT_DOCS = 8
+
     def retrieve_initial(self, state: ConversationState) -> Dict[str, Any]:
         """PRF step 1 — first-pass retrieval with the raw user query.
 
@@ -820,10 +834,13 @@ Génère une explication détaillée à la première personne de la technique co
         else:
             logger.info("Annotation collection empty — skipping annotation retrieval")
 
-        # 2. Per-course collection (if available)
-        if course_id and self.course_rag_service:
-            course_results = self.course_rag_service.similarity_search(
-                query, course_id=course_id, k=5
+        # 2. Course collections — priority course gets k=6, others k=1 (cross-course
+        #    retrieval is a weak signal; non-priority results are capped to reduce noise).
+        if self.course_rag_service:
+            course_results = self.course_rag_service.similarity_search_all_courses(
+                query,
+                k_per_course=1,
+                priority_course_id=course_id,
             )
             results = self._merge_dedup(results, course_results)
         elif course_id:
@@ -833,6 +850,7 @@ Génère une explication détaillée à la première personne de la technique co
             logger.info("retrieve_initial: no documents found")
             return {"context": [], "video_metadata": None}
 
+        results = results[: self.MAX_CONTEXT_DOCS]
         video_metadata = self._extract_video_metadata(results)
         logger.info(f"retrieve_initial: {len(results)} docs retrieved")
         return {"context": results, "video_metadata": video_metadata}
@@ -912,10 +930,12 @@ Génère une explication détaillée à la première personne de la technique co
             annotation_results = self.similarity_search(refined_query, k=5)
             results.extend(annotation_results)
 
-        # 2. Per-course collection
-        if course_id and self.course_rag_service:
-            course_results = self.course_rag_service.similarity_search(
-                refined_query, course_id=course_id, k=5
+        # 2. Course collections — same all-courses strategy as retrieve_initial.
+        if self.course_rag_service:
+            course_results = self.course_rag_service.similarity_search_all_courses(
+                refined_query,
+                k_per_course=1,
+                priority_course_id=course_id,
             )
             results = self._merge_dedup(results, course_results)
 
@@ -923,6 +943,7 @@ Génère une explication détaillée à la première personne de la technique co
             logger.info("retrieve_final_dual: no documents found with refined query")
             return {"context": [], "video_metadata": None}
 
+        results = results[: self.MAX_CONTEXT_DOCS]
         video_metadata = self._extract_video_metadata(results)
         logger.info(f"retrieve_final_dual: {len(results)} docs with refined query")
         return {"context": results, "video_metadata": video_metadata}
