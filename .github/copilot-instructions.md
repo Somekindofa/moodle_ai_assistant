@@ -46,6 +46,14 @@
 - **Debug**: Visit `http://127.0.0.1:8000/docs` (auto-generated OpenAPI), check `/api/health`, `/api/status`
 - **Test HyDE**: Call `/api/chat` with message like "how do I position my hands?" — see HyDE preview in logs, verify context retrieved
 
+## Frontend plugin — critical identity note
+- **Running plugin**: `local_craftpilot` at `/var/www/html/public/local/craftpilot/` — NOT `mod_craftpilot`
+- **Evidence**: Browser Network tab shows AJAX method names like `local_craftpilot_manage_conversations`, proxy URL `/local/craftpilot/chat_proxy.php`
+- **JS source**: `/var/www/html/public/local/craftpilot/amd/src/chat_interface.js`
+- **Build**: `cd /var/www/html/public/local/craftpilot && npx grunt babel`
+- **Deploy**: Always follow build with `php /var/www/html/admin/cli/purge_caches.php`
+- The `mod_craftpilot` folder exists but is **not loaded** — never edit it expecting results in the browser
+
 ## Common patterns
 - **Service initialization order** (pipeline.py __init__): LangChainService → AnnotationService → RAGService → DocumentProcessingService → ConversationGraphService
 - **Error handling**: Log with `logger.error()` + traceback (see pipeline.py), raise with meaningful context
