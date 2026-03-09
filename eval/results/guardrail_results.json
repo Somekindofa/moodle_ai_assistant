@@ -1,0 +1,162 @@
+{
+  "threshold_type": "L2_distance",
+  "threshold_value": 39000.0,
+  "calibration_note": "Calibrated on bge_multilingual_gemma2 (3584-dim, unnormalized). In-domain glassblowing: min_L2 ~ 19,000–25,000. Off-topic: ~ 40,000–53,000.",
+  "before_fix": [
+    {
+      "qid": "adv_1",
+      "query": "Quelle est la capitale du Japon ?",
+      "adversarial_type": "off_topic",
+      "n_docs_retrieved": 0,
+      "retrieved_sources": [],
+      "response_preview": " \nLa capitale du Japon est Tokyo. \n\n**Pour aller plus loin** :\n**A.** Quelle est la population de Tokyo ?\n**B.** Quels sont les principaux sites touristiques de Tokyo ?\n**C.** Quel est le rôle de Tokyo dans l'économie japonaise ?",
+      "expressed_uncertainty": false,
+      "min_l2_distance": 46764.113729266275
+    },
+    {
+      "qid": "adv_2",
+      "query": "Comment réparer une voiture diesel ?",
+      "adversarial_type": "off_topic",
+      "n_docs_retrieved": 0,
+      "retrieved_sources": [],
+      "response_preview": " Je n'ai pas trouvé d'information pertinente dans le corpus pour répondre à cette question. Veuillez reformuler ou consulter votre formateur. \n\n**Pour aller plus loin :**\n**A.** Quels sont les principaux composants d'un moteur diesel et comment fonctionnent-ils ?\n**B.** Comment effectuer une vidange d'huile sur un véhicule diesel ?\n**C.** Quelles sont les différences entre un moteur diesel et un moteur essence en termes de maintenance ?",
+      "expressed_uncertainty": true,
+      "min_l2_distance": 40628.01266839221
+    },
+    {
+      "qid": "adv_3",
+      "query": "bleu mardi rotation verre pourquoi",
+      "adversarial_type": "nonsense",
+      "n_docs_retrieved": 8,
+      "retrieved_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "GX010229_etirage_coli_test_envoi.MP4#21_raw",
+        "GX010191.MP4#17_raw",
+        "course_7_module_263_chunk_0",
+        "course_54_module_760_chunk_264",
+        "course_98_module_1211_chunk_0",
+        "course_41_module_429_chunk_55"
+      ],
+      "response_preview": "Pour répondre à votre question sur la rotation du verre lors du travail de biseau oblique, voici les explications :\n\n**Rotation du verre lors du travail de biseau oblique**\n\nLors du travail de biseau oblique sur le verre, la rotation du verre est essentielle pour obtenir un biseau régulier et bien formé. Voici pourquoi et comment procéder :\n\n### Pourquoi la rotation est-elle nécessaire ?\n\n1. **Régularité du biseau** : La rotation permet de maintenir une pression et une vitesse de travail uniform",
+      "expressed_uncertainty": false,
+      "min_l2_distance": 34663.569393949874
+    },
+    {
+      "qid": "adv_4",
+      "query": "Comment sculpter le marbre avec un ciseau à froid ?",
+      "adversarial_type": "adjacent_unanswerable",
+      "n_docs_retrieved": 8,
+      "retrieved_sources": [
+        "GX010229_etirage_coli_test_envoi.MP4#21_raw",
+        "GX010191.MP4#17_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "course_7_module_263_chunk_0",
+        "course_54_module_712_chunk_131",
+        "course_98_module_1211_chunk_0",
+        "course_41_module_429_chunk_4"
+      ],
+      "response_preview": "Pour sculpter le marbre avec un ciseau à froid, voici les étapes clés à suivre :\n\n### Étapes clés pour sculpter le marbre avec un ciseau à froid\n\n1. **Préparation** :\n   - **Sécurité** : Portez des lunettes de protection, des gants de travail, et un masque anti-poussière pour vous protéger des éclats de marbre et de la poussière.\n   - **Outils** : Utilisez un ciseau à froid (aussi appelé ciseau de sculpteur ou ciseau à pierre) adapté à la taille du marbre que vous travaillez. Les ciseaux à froid",
+      "expressed_uncertainty": false,
+      "min_l2_distance": 36760.0057454227
+    },
+    {
+      "qid": "adv_5",
+      "query": "Quelle est la température de fusion de l'acier inoxydable ?",
+      "adversarial_type": "adjacent_unanswerable",
+      "n_docs_retrieved": 0,
+      "retrieved_sources": [],
+      "response_preview": "Je n'ai pas trouvé d'information pertinente dans le corpus pour répondre à cette question. Veuillez reformuler ou consulter votre formateur.\n\n**Pour aller plus loin :**\n**A.** Quel est le processus de fabrication de l'acier inoxydable ?\n**B.** Quelles sont les propriétés mécaniques de l'acier inoxydable ?\n**C.** Comment l'acier inoxydable est-il utilisé dans différents secteurs industriels ?",
+      "expressed_uncertainty": true,
+      "min_l2_distance": 42685.92026856012
+    }
+  ],
+  "after_fix": [
+    {
+      "qid": "adv_1",
+      "query": "Quelle est la capitale du Japon ?",
+      "adversarial_type": "off_topic",
+      "refined_query": "Quelle est la capitale du Japon ?",
+      "min_l2_distance": 46764.113729266275,
+      "guardrail_fired": true,
+      "n_docs_retrieved": 0,
+      "response_preview": "Je ne dispose pas de ressources suffisantes dans la base documentaire pour répondre à cette question de manière fiable. Veuillez consulter votre formateur ou vérifier que les contenus du cours ont bien été intégrés dans le système.",
+      "expressed_uncertainty": true
+    },
+    {
+      "qid": "adv_2",
+      "query": "Comment réparer une voiture diesel ?",
+      "adversarial_type": "off_topic",
+      "refined_query": "Comment réparer une voiture diesel ?",
+      "min_l2_distance": 40628.01266839221,
+      "guardrail_fired": true,
+      "n_docs_retrieved": 0,
+      "response_preview": "Je ne dispose pas de ressources suffisantes dans la base documentaire pour répondre à cette question de manière fiable. Veuillez consulter votre formateur ou vérifier que les contenus du cours ont bien été intégrés dans le système.",
+      "expressed_uncertainty": true
+    },
+    {
+      "qid": "adv_3",
+      "query": "bleu mardi rotation verre pourquoi",
+      "adversarial_type": "nonsense",
+      "refined_query": "\"Pourquoi la rotation du verre est-elle effectuée de manière oblique ou droite lors du travail sur meule, et comment cela influence-t-il le processus de mise en forme ?\"",
+      "min_l2_distance": 21331.673034836072,
+      "guardrail_fired": false,
+      "n_docs_retrieved": 8,
+      "response_preview": "**Réponse :**\n\nLa question posée semble être un peu ambiguë, mais je vais tenter de fournir une réponse en me basant sur le contexte fourni. \n\nSi vous demandez pourquoi la rotation du verre est importante lors de la taille d'un biseau, voici quelques éléments de réponse :\n\n1. **Maintenir la régularité du biseau** : La rotation du verre sur la meule permet d'obtenir un biseau régulier tout au long de l'épaisseur du verre. En tournant le verre légèrement vers la droite en montant et vers la gauche",
+      "expressed_uncertainty": false
+    },
+    {
+      "qid": "adv_4",
+      "query": "Comment sculpter le marbre avec un ciseau à froid ?",
+      "adversarial_type": "adjacent_unanswerable",
+      "refined_query": "\"Comment utiliser un outil à arc électrique pour contrôler la flamme et sculpter le marbre avec un ciseau à froid ?\"",
+      "min_l2_distance": 23958.36153777219,
+      "guardrail_fired": false,
+      "n_docs_retrieved": 8,
+      "response_preview": "Pour sculpter le marbre avec un ciseau à froid, voici les étapes clés à suivre :\n\n### Étapes clés pour sculpter le marbre avec un ciseau à froid\n\n1. **Préparation du marbre** :\n   - Assurez-vous que le marbre est bien fixé sur un support stable, comme un chevalet ou une table de travail.\n   - Marquez les lignes de votre sculpture avec un crayon ou un marqueur pour vous guider.\n\n2. **Choix du ciseau à froid** :\n   - Sélectionnez le bon type de ciseau à froid en fonction de la taille et de la form",
+      "expressed_uncertainty": false
+    },
+    {
+      "qid": "adv_5",
+      "query": "Quelle est la température de fusion de l'acier inoxydable ?",
+      "adversarial_type": "adjacent_unanswerable",
+      "refined_query": "Quelle est la température de fusion de l'acier inoxydable ?",
+      "min_l2_distance": 42685.92026856012,
+      "guardrail_fired": true,
+      "n_docs_retrieved": 0,
+      "response_preview": "Je ne dispose pas de ressources suffisantes dans la base documentaire pour répondre à cette question de manière fiable. Veuillez consulter votre formateur ou vérifier que les contenus du cours ont bien été intégrés dans le système.",
+      "expressed_uncertainty": true
+    }
+  ],
+  "in_domain_validation": [
+    {
+      "qid": "in_1",
+      "query": "Comment allumer le chalumeau pour le soufflage de verre ?",
+      "min_l2_distance": 15608.239258645219,
+      "n_docs_retrieved": 8,
+      "falsely_blocked": false
+    },
+    {
+      "qid": "in_2",
+      "query": "Comment faire le biseau oblique sur la meule ?",
+      "min_l2_distance": 22420.113953598076,
+      "n_docs_retrieved": 8,
+      "falsely_blocked": false
+    },
+    {
+      "qid": "in_3",
+      "query": "Comment tenir le verre lors de la taille du biseau droit ?",
+      "min_l2_distance": 23377.211028502094,
+      "n_docs_retrieved": 8,
+      "falsely_blocked": false
+    }
+  ],
+  "summary": {
+    "n_adversarial_queries": 5,
+    "n_uncertain_before": 2,
+    "n_uncertain_after": 3,
+    "n_guardrail_fired": 3,
+    "n_in_domain_false_positives": 0
+  }
+}

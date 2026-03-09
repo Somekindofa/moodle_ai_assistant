@@ -1,0 +1,208 @@
+{
+  "n_queries": 10,
+  "hallucination_rate": 0.0,
+  "n_hallucinations": 0,
+  "methodology_note": "LLM-as-judge using swiss-ai/Apertus-70B-Instruct-2509. French domain-specific craft vocabulary may be incorrectly flagged as hallucinated. Treat as indicative, not definitive.",
+  "per_query": [
+    {
+      "qid": "ann17_expert_1",
+      "query": "Comment puis-je déterminer l'intensité optimale de la flamme pour le soufflage de verre ?",
+      "register": "expert",
+      "n_context_docs": 8,
+      "context_sources": [
+        "GX010191.MP4#17_raw",
+        "GX010229_etirage_coli_test_envoi.MP4#21_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "course_7_module_263_chunk_0",
+        "course_54_module_760_chunk_427",
+        "course_98_module_1207_chunk_0",
+        "course_41_module_429_chunk_32"
+      ],
+      "response": "Pour déterminer l'intensité optimale de la flamme pour le soufflage de verre, il est important de suivre ces étapes :\n\n### Étapes pour déterminer l'intensité optimale de la flamme\n\n1. **Allumer le chalumeau** : \n   - Utilisez l'outil à arc électrique pour allumer le chalumeau. \n   - Ouvrez le robinet du chalumeau avec votre main gauche en tournant légèrement la molette vers la gauche pour faire passer un peu de gaz. \n   - Allumez avec un briquet. Vous devriez entendre un petit pop et la flamme s'allume d'un coup.\n\n2. **Observer la couleur de la flamme** :\n   - Une flamme jaune ou orangée est trop intense et non contrôlée. \n   - Une flamme bleue est idéale car elle est plus contrôlée et plus chaude (mais pas trop chaude).\n\n3. **Régler l'intensité** :\n   - Utilisez la molette du chalumeau (souvent située sur le dessus) pour ajuster l'intensité du gaz.\n   - Tournez doucement la molette vers la droite (dans le sens des aiguilles d'une montre) pour diminuer l'intensité du gaz.\n   - Observez la flamme : elle doit devenir bleue et plus courte.\n   - La flamme bleue doit être suffisamment intense pour chauffer le verre sans être trop puissante au point de le faire fondre rapidement ou de créer des bulles d'air indésirables.\n\n4. **Tester et ajuster** :\n   - Commencez avec une intensité faible et augmentez progressivement jusqu'à obtenir une flamme bleue bien contrôlée.\n   - Testez sur un morceau de verre pour voir comment il réagit à différentes intensités.\n   - L'objectif est d'obtenir une flamme qui permet un chauffage uniforme et contrôlé du verre, sans surchauffer certaines zones.\n\n### Erreurs fréquentes et corrections\n\n- **Erreur :** Allumer avec une flamme trop intense (jaune/orangée) qui peut brûler ou déformer le verre.\n  - **Correction :** Baisser immédiatement l'intensité en tournant la molette vers la droite jusqu'à obtenir une flamme bleue.\n\n- **Erreur :** Ne pas ajuster correctement l'intensité, ce qui peut entraîner un chauffage inégal ou une surchauffe.\n  - **Correction :** Continuer à ajuster doucement la molette jusqu'à ce que la flamme soit bleue et bien contrôlée.\n\n### Conseils supplémentaires\n\n- **Stabilité de la flamme :** Une fois que vous avez trouvé l'intensité optimale, vérifiez que la flamme reste stable pendant tout le processus de soufflage.\n- **Sécurité :** Toujours travailler dans un environnement bien ventilé, porter des équipements de protection (lunettes, gants, etc.) et ne pas laisser le chalumeau allumé sans surveillance.\n\n### Pour aller plus loin\n\n**A.** Comment puis-je ajuster l'intensité de la flamme si je travaille avec différents types de verre (par exemple, verre borosilicate vs verre sodocalcique) ?\n**B.** Quels sont les signes visuels et sonores qui indiquent que ma flamme n'est pas optimale (par exemple, si elle devient trop rougeâtre ou si elle fait un bruit inhabituel) ?\n**C.** Comment puis-je intégrer les principes d'ajustement de l'intensité de la flamme dans une séquence de soufflage complète, notamment lors des étapes comme le soufflage initial, le centrage, et le façonnage final ?",
+      "judge_output": "AUCUNE\n\nToutes les affirmations de la réponse évaluée sont soutenues par le contexte documentaire fourni.",
+      "has_hallucination": false,
+      "judge_reliability_note": "Likely reliable negative."
+    },
+    {
+      "qid": "ann17_novice_1",
+      "query": "Pourquoi la flamme est-elle jaune et orangée au début et comment la rendre bleue ?",
+      "register": "novice",
+      "n_context_docs": 8,
+      "context_sources": [
+        "GX010191.MP4#17_raw",
+        "GX010229_etirage_coli_test_envoi.MP4#21_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "course_7_module_263_chunk_2",
+        "course_54_module_713_chunk_3",
+        "course_98_module_1211_chunk_0",
+        "course_41_module_429_chunk_2"
+      ],
+      "response": "La flamme est jaune et orangée au début car elle contient des particules de carbone non brûlées. Lorsque la flamme est bleue, cela signifie que la combustion est complète et qu'il n'y a pas de particules de carbone en suspension. \n\nPour rendre la flamme bleue, il faut augmenter le débit d'oxygène (O2) dans le mélange gaz/air. Cela se fait en ouvrant davantage le robinet d'air sur le chalumeau. La flamme bleue est plus chaude et plus contrôlable pour le travail du verre, car elle ne dégage pas autant de chaleur latérale et est moins susceptible de brûler ou de déformer le verre.\n\n**Pour aller plus loin:**\n\n**A.** Comment ajuster précisément le débit d'air sur un chalumeau à gaz pour obtenir une flamme bleue ?\n**B.** Quels sont les autres facteurs qui influencent la couleur de la flamme (température, pression, type de gaz) ?\n**C.** Comment contrôler la température de la flamme pour différents types de travaux sur verre (soufflage, fusion, taille) ?",
+      "judge_output": "AUCUNE\n\nToutes les affirmations énumérées sont soutenues par le contexte fourni. \n\n- La première affirmation est correcte : la flamme jaune et orangée contient des particules de carbone non brûlées, tandis qu'une flamme bleue indique une combustion complète sans particules de carbone en suspension.\n- La deuxième affirmation est également correcte : pour obtenir une flamme bleue, il faut augmenter le débit d'oxygène (O2) dans le mélange gaz/air, ce qui se fait en ouvrant davantage le robinet d'air sur le chalumeau. \n- La troisième affirmation est également correcte : une flamme bleue est plus chaude et plus contrôlable pour le travail du verre, car elle ne dégage pas autant de chaleur latérale et est moins susceptible de brûler ou de déformer le verre.\n- Les questions supplémentaires (A, B, C) sont pertinentes et peuvent être abordées en se basant sur les informations fournies dans le contexte. \n\n**A.** Pour ajuster précisément le débit d'air sur un chalumeau à gaz pour obtenir une flamme bleue, il faut ouvrir progressivement le robinet d'air jusqu'à ce que la flamme devienne bleue. Il est important de le faire doucement pour éviter un excès d'oxygène qui pourrait éteindre la flamme.\n**B.** Les autres facteurs qui influencent la couleur de la flamme incluent la température, la pression du gaz, et le type de gaz utilisé. Par exemple, une flamme peut être plus jaune si le gaz contient des impuretés ou si la pression est trop basse.\n**C.** Pour contrôler la température de la flamme pour différents types de travaux sur verre, on peut ajuster le débit d'air (plus d'air pour une flamme plus chaude et bleue, moins d'air pour une flamme plus douce et jaune/orangée), la distance entre la flamme et",
+      "has_hallucination": false,
+      "judge_reliability_note": "Likely reliable negative."
+    },
+    {
+      "qid": "ann17_expert_2",
+      "query": "Comment fonctionne l'allumage par arc électrique et quel est son rôle dans le contrôle de la flamme ?",
+      "register": "expert",
+      "n_context_docs": 8,
+      "context_sources": [
+        "GX010191.MP4#17_raw",
+        "GX010229_etirage_coli_test_envoi.MP4#21_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "course_7_module_176_chunk_2",
+        "course_54_module_712_chunk_53",
+        "course_98_module_1211_chunk_0",
+        "course_41_module_429_chunk_46"
+      ],
+      "response": "**Allumage par arc électrique et contrôle de la flamme**\n\nL'allumage par arc électrique est une méthode utilisée pour allumer le chalumeau utilisé dans le soufflage de verre. Voici comment cela fonctionne et son rôle dans le contrôle de la flamme :\n\n### **Comment fonctionne l'allumage par arc électrique ?**\n1. **Préparation du chalumeau** : Avant d'allumer le chalumeau, assurez-vous que le robinet de gaz est légèrement ouvert (mais pas complètement) pour permettre un flux contrôlé de gaz.\n2. **Utilisation de l'outil à arc électrique** : Tenez l'outil à arc électrique dans votre main dominante (généralement la main droite). Ce dispositif génère un arc électrique en rapprochant deux électrodes, créant ainsi une étincelle.\n3. **Allumage** : Approchez l'outil à arc électrique du bec du chalumeau, en visant l'ouverture où le gaz sort. Appuyez sur le bouton de l'outil pour générer l'étincelle. Le \"petit pop\" mentionné dans le contexte documentaire indique que le gaz a pris feu et que la flamme s'est allumée.\n4. **Contrôle initial de la flamme** : Au début, la flamme est souvent jaune ou orangée, ce qui signifie qu'elle est \"chaude\" et non contrôlée. Pour la ramener à une couleur bleue (flamme contrôlée), ajustez la molette située sur le chalumeau pour diminuer progressivement le flux de gaz. La flamme bleue indique un mélange optimal d'oxygène et de gaz, ce qui permet un meilleur contrôle lors du travail avec le verre.\n\n### **Rôle dans le contrôle de la flamme**\n- **Température et intensité** : La flamme jaune/orangée est plus chaude et moins contrôlable, tandis que la flamme bleue est plus froide et plus stable. Le contrôle de l'intensité via la molette permet d'ajuster la température pour des tâches précises comme le chauffage ou la fusion du verre.\n- **Précision du travail** : Une flamme contrôlée (bleue) est essentielle pour des opérations délicates comme la mise en forme ou la taille du verre, car elle permet une application précise et régulière de la chaleur.\n- **Sécurité** : Une flamme bien contrôlée réduit les risques d'accidents liés à une chaleur excessive ou à des réactions imprévues avec le verre.\n\n### **Erreurs fréquentes et corrections**\n- **Erreur :** Allumer directement avec un briquet sans utiliser l'arc électrique (ce qui peut être dangereux ou inefficace).\n  - **Correction :** Utilisez toujours l'outil à arc électrique pour un allumage sûr et contrôlé.\n- **Erreur :** Ne pas ajuster correctement la molette après l'allumage, laissant une flamme trop chaude ou trop froide.\n  - **Correction :** Après avoir allumé, ajustez doucement la molette pour obtenir une flamme bleue stable.\n\n### **Pour aller plus loin**\n**A.** Comment ajuster précisément la molette pour obtenir une flamme bleue optimale ?\n  - Réponse : Commencez par ouvrir légèrement le robinet de gaz, puis ajustez progressivement la molette vers la gauche (diminution du flux de gaz) jusqu'à obtenir une flamme bleue stable. La régularité du son et l'aspect visuel (couleur) sont des indicateurs clés.\n\n**B.** Quels sont les avantages d'une flamme bleue par rapport à une flamme jaune/orangée dans le soufflage de verre ?\n  - Réponse : La flamme bleue offre un meilleur contrôle thermique, une application plus précise de la chaleur, et réduit les risques d'endommager ou de déformer le verre.\n\n**C.** Comment améliorer sa maîtrise des gestes lors de l'utilisation du chalumeau ?\n  - Réponse : Pratiquez régulièrement avec différents types de verre et sous différentes conditions (température ambiante, humidité). Concentrez-vous sur la régularité des mouvements (aller-retours sur la meule) et sur le maintien d'une pression constante sur le verre. Utilisez également des repères visuels (comme les marques au feutre) pour guider vos gestes.",
+      "judge_output": "**AUCUNE** \n\nToutes les affirmations énoncées dans la réponse sont soutenues par le contexte documentaire fourni. \n\n- L'allumage par arc électrique est bien décrit comme une méthode pour allumer le chalumeau.\n- Le contrôle de la flamme en ajustant la molette pour diminuer le flux de gaz et obtenir une flamme bleue est également correctement expliqué.\n- La description de la tenue du verre, de la respiration, et de l'utilisation de la vue pour vérifier la régularité du biseau est également conforme au contexte. \n\nIl n'y a donc aucune affirmation non soutenue par le contexte.",
+      "has_hallucination": false,
+      "judge_reliability_note": "Likely reliable negative."
+    },
+    {
+      "qid": "ann17_expert_3",
+      "query": "Pourquoi est-il nécessaire de faire passer du gaz dans le chalumeau après avoir allumé la flamme ?",
+      "register": "expert",
+      "n_context_docs": 8,
+      "context_sources": [
+        "GX010191.MP4#17_raw",
+        "GX010229_etirage_coli_test_envoi.MP4#21_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "course_7_module_263_chunk_2",
+        "course_54_module_712_chunk_131",
+        "course_98_module_1211_chunk_0",
+        "course_41_module_429_chunk_2"
+      ],
+      "response": "La raison pour laquelle il est nécessaire de faire passer du gaz dans le chalumeau après avoir allumé la flamme est de contrôler l'intensité et la couleur de la flamme. \n\n**Étapes clés :**\n1. **Allumage initial** : La flamme initiale est souvent jaune, orangée et non contrôlée.\n2. **Régulation de l'intensité** : En faisant passer du gaz (comme l'oxygène ou le propane) à travers le chalumeau, on peut ajuster l'intensité de la flamme. \n3. **Obtention d'une flamme bleue** : Une flamme bleue indique une combustion complète et une température plus stable, idéale pour travailler avec précision sur le verre.\n4. **Contrôle de la longueur de la flamme** : Le flux de gaz permet également de réduire la longueur de la flamme, rendant celle-ci plus maniable et plus précise pour les opérations de soufflage ou de taille.\n\n**Erreurs fréquentes et corrections :**\n- **Erreur :** Ne pas ajuster le flux de gaz après l'allumage, laissant une flamme trop intense ou trop longue.\n- **Correction :** Ouvrir progressivement le robinet du chalumeau pour réguler l'intensité et obtenir une flamme bleue et contrôlée.\n\n**Pour aller plus loin :**\n**A.** Comment ajuster précisément l'intensité de la flamme en fonction des différentes étapes du travail sur verre ?\n**B.** Quels sont les risques liés à une flamme non contrôlée (jaune/orangée) lors du travail sur verre ?\n**C.** Comment adapter les réglages du chalumeau pour différentes techniques (soufflage, taille, fusion) ?",
+      "judge_output": "**AUCUNE** \n\nToutes les affirmations énoncées dans la réponse sont soutenues par le contexte documentaire fourni. \n\n- La raison pour laquelle il est nécessaire de faire passer du gaz dans le chalumeau après avoir allumé la flamme est de contrôler l'intensité et la couleur de la flamme. \n- Les étapes clés de l'allumage, de la régulation de l'intensité, de l'obtention d'une flamme bleue, et du contrôle de la longueur de la flamme sont toutes décrites dans le contexte.\n- Les erreurs fréquentes et les corrections mentionnées sont également cohérentes avec le texte.\n- Les questions pour aller plus loin (A, B, C) sont pertinentes et peuvent être abordées en se basant sur le contexte fourni. \n\nIl n'y a donc aucune affirmation non soutenue par le contexte.",
+      "has_hallucination": false,
+      "judge_reliability_note": "Likely reliable negative."
+    },
+    {
+      "qid": "ann17_novice_2",
+      "query": "Pourquoi est-il important de baisser l'intensité de la flamme pour la contrôler ?",
+      "register": "novice",
+      "n_context_docs": 8,
+      "context_sources": [
+        "GX010229_etirage_coli_test_envoi.MP4#21_raw",
+        "GX010191.MP4#17_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "course_7_module_263_chunk_2",
+        "course_54_module_756_chunk_29",
+        "course_98_module_1211_chunk_0",
+        "course_41_module_429_chunk_32"
+      ],
+      "response": "Pourquoi est-il important de baisser l'intensité de la flamme pour la contrôler ?\n\n**Étapes clés pour contrôler la flamme :**\n\n1. **Réduction de la température :** En baissant l'intensité de la flamme, on réduit sa température. Une flamme moins intense est plus froide, ce qui permet un meilleur contrôle sur le matériau (le verre dans ce cas) et réduit le risque de surchauffe ou de brûlure excessive.\n\n2. **Contrôle de la couleur :** Une flamme moins intense passe généralement d'une couleur jaune orangée (plus chaude) à une couleur bleue (plus froide). La flamme bleue est plus contrôlable et convient mieux pour le travail précis, comme le soufflage ou la taille du verre.\n\n3. **Précision du travail :** Une flamme contrôlée permet une application plus précise et uniforme de la chaleur, essentielle pour des techniques comme le biseau (comme décrit dans le contexte fourni). Une flamme trop intense peut causer des dommages irréguliers ou inutiles au matériau.\n\n4. **Sécurité :** Une flamme moins intense réduit les risques de brûlures, d'explosions ou d'autres accidents liés à une chaleur excessive.\n\n**Erreurs fréquentes et corrections :**\n\n- **Erreur :** Augmenter trop fortement l'intensité pour accélérer le travail.\n  - **Correction :** Commencer avec une faible intensité et ajuster progressivement.\n- **Erreur :** Ne pas ajuster l'intensité en fonction du matériau ou de l'étape du travail.\n  - **Correction :** Adapter l'intensité en fonction de ce que l'on souhaite réaliser (par exemple, plus intense pour chauffer rapidement, moins intense pour travailler précisément).\n\n**Pour aller plus loin :**\n\n**A.** Comment ajuster précisément l'intensité de la flamme en fonction du type de verre utilisé ?\n**B.** Quels sont les signes visuels et auditifs qui indiquent que la flamme est bien contrôlée (couleur, forme, son) ?\n**C.** Comment adapter les techniques de manipulation du verre (tenue, mouvement) en fonction de l'intensité de la flamme ?",
+      "judge_output": "AUCUNE\n\nToutes les affirmations sont soutenues par le contexte fourni. \n\n1. La réduction de la température est mentionnée dans le contexte comme un moyen de contrôler la flamme.\n2. La couleur de la flamme est mentionnée comme un indicateur de l'intensité et de la température, avec la flamme bleue étant plus contrôlable.\n3. La précision du travail est mentionnée comme un avantage d'une flamme contrôlée.\n4. La sécurité est mentionnée comme un avantage d'une flamme moins intense.\n\nLes erreurs fréquentes et leurs corrections sont également mentionnées dans le contexte, bien que de manière indirecte, en décrivant la nécessité d'ajuster l'intensité et de commencer avec une faible intensité. \n\nDonc, AUCUNE affirmation n'est non soutenue par le contexte.",
+      "has_hallucination": false,
+      "judge_reliability_note": "Likely reliable negative."
+    },
+    {
+      "qid": "ann17_novice_3",
+      "query": "Pourquoi entend-on un petit pop quand on allume le chalumeau avec un briquet ?",
+      "register": "novice",
+      "n_context_docs": 8,
+      "context_sources": [
+        "GX010191.MP4#17_raw",
+        "GX010229_etirage_coli_test_envoi.MP4#21_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "course_7_module_263_chunk_0",
+        "course_54_module_712_chunk_131",
+        "course_98_module_1211_chunk_0",
+        "course_41_module_429_chunk_2"
+      ],
+      "response": "**Pourquoi entend-on un petit pop quand on allume le chalumeau avec un briquet ?**\n\nLorsqu'on allume un chalumeau avec un briquet, on entend souvent un petit \"pop\" caractéristique. Ce son est dû à la combustion rapide du mélange de gaz (généralement de l'oxygène et du gaz combustible comme le propane ou l'acétylène) qui s'enflamme soudainement lorsque le briquet est utilisé pour initier la flamme. Voici les étapes et les explications détaillées :\n\n1. **Préparation du chalumeau** : Avant d'allumer le chalumeau, il est important d'ouvrir légèrement le robinet de gaz pour permettre une petite quantité de gaz à s'échapper. Cela crée une atmosphère propice à l'allumage.\n\n2. **Allumage avec le briquet** : En approchant la flamme du briquet au bec du chalumeau, le gaz qui s'échappe rencontre la chaleur de la flamme. \n\n3. **Combustion rapide** : Le gaz s'enflamme rapidement, provoquant une combustion explosive (mais contrôlée) qui génère une petite explosion locale. C'est cette combustion rapide qui produit le \"pop\" audible.\n\n4. **Contrôle de la flamme** : Une fois allumé, il est crucial de réguler l'intensité de la flamme en ajustant le robinet pour obtenir une flamme bleue, plus contrôlée et stable pour les travaux ultérieurs (comme le soufflage du verre).\n\n**Pour aller plus loin :**\n\n**A.** Comment ajuster correctement l'intensité de la flamme après l'allumage ?\n   - Ajustez la molette du chalumeau pour contrôler le débit de gaz. Une flamme bleue indique une combustion complète et optimale.\n\n**B.** Quels sont les risques associés à une mauvaise manipulation du chalumeau ?\n   - Une mauvaise manipulation peut entraîner des brûlures, des explosions ou une combustion incomplète (flamme jaune). Il est crucial de maîtriser l'ouverture des robinets et la régulation de la flamme.\n\n**C.** Comment se protéger lors de l'utilisation d'un chalumeau ?\n   - Utilisez toujours des gants résistants à la chaleur, des lunettes de protection et des vêtements adéquats. Assurez-vous que l'environnement est bien ventilé pour éviter l'accumulation de gaz inflammables.\n\n---\n\nNote : Les détails techniques spécifiques sur les réponses A et B peuvent être trouvés dans les instructions fournies par votre formateur ou dans des manuels techniques sur le soufflage du verre ou l'utilisation des outils à gaz. La réponse C concerne plus généralement la sécurité dans l'utilisation des outils à feu, un aspect crucial dans tout atelier d'artisanat utilisant des sources de chaleur ou des outils à gaz.",
+      "judge_output": "**AUCUNE** \n\nToutes les affirmations de la réponse évaluée sont soutenues par le contexte documentaire fourni. \n\n- Le \"petit pop\" lors de l'allumage du chalumeau avec un briquet est bien expliqué par la combustion rapide du mélange de gaz.\n- L'ajustement de la molette pour contrôler l'intensité de la flamme est également mentionné dans le contexte, avec l'objectif d'obtenir une flamme bleue et contrôlée. \n\nLe contexte ne fournit pas d'informations sur la manière spécifique d'ajuster la molette pour obtenir une flamme bleue, mais il mentionne l'utilisation de la molette pour contrôler l'intensité de la flamme, ce qui est cohérent avec l'affirmation évaluée. \n\nDonc, aucune affirmation n'est non soutenue par le contexte.",
+      "has_hallucination": false,
+      "judge_reliability_note": "Likely reliable negative."
+    },
+    {
+      "qid": "ann21_expert_1",
+      "query": "Quel est le type de gaz utilisé pour adoucir la flamme du chalumeau et la rendre bleue ?",
+      "register": "expert",
+      "n_context_docs": 8,
+      "context_sources": [
+        "GX010191.MP4#17_raw",
+        "GX010229_etirage_coli_test_envoi.MP4#21_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "course_7_module_263_chunk_0",
+        "course_54_module_740_chunk_0",
+        "course_98_module_1211_chunk_0",
+        "course_41_module_429_chunk_2"
+      ],
+      "response": "Le type de gaz utilisé pour adoucir la flamme du chalumeau et la rendre bleue est le **gaz oxygène**. \n\n**Pour aller plus loin :**\n\n**A.** Comment puis-je ajuster le débit d'oxygène pour obtenir une flamme bleue optimale ?\n**B.** Quels sont les risques liés à l'utilisation excessive d'oxygène dans un chalumeau ?\n**C.** Comment puis-je vérifier si la flamme est bien réglée (couleur, forme, température) ?",
+      "judge_output": "**AUCUNE**\n\nToutes les affirmations sont soutenues par le contexte fourni. \n\n- **A.** Le contexte indique que le débit de gaz (sans préciser le type de gaz) est ajusté pour adoucir la flamme et la rendre bleue. Il est donc raisonnable de supposer que le gaz utilisé est de l'oxygène, car c'est un gaz couramment utilisé pour adoucir la flamme et la rendre bleue dans un chalumeau. \n- **B.** Le contexte ne mentionne pas explicitement les risques liés à l'utilisation excessive d'oxygène, mais il est connu que l'utilisation excessive d'oxygène peut augmenter la température de la flamme, ce qui peut être dangereux si le matériau chauffé n'est pas adapté. \n- **C.** Le contexte décrit comment vérifier la régularité de la flamme (couleur, forme, température) en se basant sur la couleur (bleue), la forme (contrôlée, pas trop longue), et la température (moins incandescente, plus contrôlée). \n\nDonc, aucune affirmation n'est non soutenue par le contexte.",
+      "has_hallucination": false,
+      "judge_reliability_note": "Likely reliable negative."
+    },
+    {
+      "qid": "ann21_expert_2",
+      "query": "Comment puis-je contrôler la flamme de manière précise pour éviter des coups brusques lors de l'utilisation de la molette ?",
+      "register": "expert",
+      "n_context_docs": 8,
+      "context_sources": [
+        "GX010191.MP4#17_raw",
+        "GX010229_etirage_coli_test_envoi.MP4#21_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "course_7_module_263_chunk_0",
+        "course_54_module_760_chunk_90",
+        "course_98_module_1211_chunk_0",
+        "course_41_module_429_chunk_2"
+      ],
+      "response": "Pour contrôler la flamme de manière précise et éviter des coups brusques lors de l'utilisation de la molette, suivez ces étapes :\n\n**Étapes clés pour contrôler la flamme du chalumeau :**\n\n1. **Préparation initiale :**\n   - Assurez-vous que le chalumeau est bien allumé et que la flamme est initialement jaune orangée.\n   - Utilisez l'outil à arc électrique pour allumer le chalumeau en suivant les instructions fournies.\n\n2. **Régulation de l'intensité de la flamme :**\n   - Utilisez la molette située sur le chalumeau pour réguler le débit de gaz. \n   - Tournez doucement et progressivement la molette vers la gauche (dans le sens inverse des aiguilles d’une montre) pour augmenter le débit de gaz et ainsi augmenter l’intensité de la flamme.\n   - Observez attentivement la couleur de la flamme : elle doit passer d’une couleur jaune orangée à une couleur bleue.\n   - La flamme bleue est plus contrôlable et moins intense, ce qui est idéal pour travailler avec précision.\n\n3. **Gestion du mouvement de la molette :**\n   - Manipulez la molette avec délicatesse pour éviter des mouvements brusques qui pourraient provoquer des variations soudaines dans l’intensité de la flamme.\n   - Effectuez des ajustements progressifs pour atteindre l’intensité souhaitée sans excès.\n\n4. **Observation et ajustement continu :**\n   - Une fois que la flamme est bleue, observez-la régulièrement pour vous assurer qu’elle reste stable et contrôlée.\n   - Si nécessaire, effectuez des ajustements mineurs sur la molette pour maintenir une flamme constante.\n\n**Erreurs fréquentes et corrections :**\n\n- **Erreur :** Tourner brusquement ou trop rapidement la molette, ce qui peut provoquer une augmentation soudaine de l’intensité de la flamme.\n  - **Correction :** Effectuez des mouvements doux et progressifs sur la molette pour ajuster le débit de gaz.\n\n- **Erreur :** Ne pas observer régulièrement la couleur et l’intensité de la flamme.\n  - **Correction :** Vérifiez constamment l’état de la flamme (couleur, intensité) et ajustez si nécessaire.\n\n- **Erreur :** Ne pas utiliser une pression régulière lors du réglage de la molette.\n  - **Correction :** Appliquez une pression constante et douce sur la molette pour des ajustements précis.\n\n**Conseils pratiques :**\n\n- Pratiquez régulièrement pour développer une sensation intuitive du mouvement nécessaire pour réguler correctement la flamme.\n- Utilisez un miroir ou un réflecteur pour observer plus facilement les détails de votre travail avec le verre, mais assurez-vous qu’il ne perturbe pas votre manipulation du chalumeau ou du verre.\n- Si vous rencontrez des difficultés, demandez à un formateur ou un collègue expérimenté de vous observer et vous guider.\n\n**Pour aller plus loin :**\n\n**A.** Comment puis-je ajuster précisément le débit d'air dans mon chalumeau pour obtenir une meilleure qualité de combustion ?\n**B.** Quels sont les signes visuels et sonores qui indiquent que ma flamme est bien réglée (couleur, forme, bruit) ?\n**C.** Comment puis-je améliorer ma coordination main-droite/main-gauche lors du travail avec le chalumeau (tenue, manipulation, etc.) ?",
+      "judge_output": "**AUCUNE** \n\nToutes les affirmations de la réponse évaluée sont soutenues par le contexte documentaire fourni.",
+      "has_hallucination": false,
+      "judge_reliability_note": "Likely reliable negative."
+    },
+    {
+      "qid": "ann21_expert_3",
+      "query": "Quelles sont les précautions à prendre pour utiliser l'outil à arc électrique avec la main droite pour éviter un coup brusque ?",
+      "register": "expert",
+      "n_context_docs": 8,
+      "context_sources": [
+        "GX010229_etirage_coli_test_envoi.MP4#21_raw",
+        "GX010191.MP4#17_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "course_7_module_263_chunk_2",
+        "course_54_module_756_chunk_29",
+        "course_98_module_1208_chunk_0",
+        "course_41_module_429_chunk_2"
+      ],
+      "response": "Pour utiliser l'outil à arc électrique avec la main droite tout en évitant des coups brusques, voici les précautions à prendre :\n\n**Étapes clés pour une utilisation maîtrisée de l'outil à arc électrique :**\n\n1. **Positionnement de la main** : Assurez-vous que votre main droite est bien positionnée sur la molette de réglage. Placez votre pouce sur le dessus de la molette et vos autres doigts en dessous pour un contrôle stable.\n   \n2. **Rotation douce de la molette** : Tournez la molette avec un mouvement fluide et contrôlé. Évitez les mouvements brusques ou saccadés qui pourraient entraîner un changement soudain de l'intensité du gaz.\n   \n3. **Pression progressive** : Appliquez une pression progressive et régulière sur la molette. Une pression excessive ou trop rapide peut entraîner des variations soudaines dans l'intensité de la flamme.\n   \n4. **Observation visuelle** : Gardez un œil sur la flamme pendant que vous ajustez la molette. Visez une flamme bleue, qui est plus contrôlée et moins intense qu'une flamme jaune ou orangée.\n   \n5. **Pratique et maîtrise** : Pratiquez régulièrement pour développer une sensation naturelle de contrôle sur la molette. Cela vous permettra d'ajuster l'intensité du gaz avec précision sans mouvements brusques.\n\n**Erreurs fréquentes et corrections :**\n\n- **Erreur :** Tourner la molette trop rapidement ou avec force, ce qui peut provoquer un changement soudain de l'intensité du gaz.\n  - **Correction :** Pratiquez des rotations douces et progressives, en ajustant lentement jusqu'à obtenir la flamme souhaitée.\n\n- **Erreur :** Ne pas surveiller constamment la flamme pendant l'ajustement.\n  - **Correction :** Gardez toujours un œil sur la flamme pour ajuster en temps réel et éviter les variations indésirables.\n\n- **Erreur :** Utiliser une pression inégale ou irrégulière sur la molette.\n  - **Correction :** Appliquez une pression constante et uniforme, en ajustant doucement pour obtenir le résultat souhaité.\n\n**Pour aller plus loin :**\n\n**A.** Comment ajuster précisément l'intensité du gaz pour obtenir une flamme bleue stable ? \n   - La flamme bleue est obtenue lorsque le rapport entre le gaz et l'air est optimal. Pour ajuster, commencez avec une petite ouverture du robinet de gaz, puis augmentez progressivement jusqu'à obtenir une flamme bleue stable. Si elle devient trop intense (jaune/orangée), diminuez légèrement le débit de gaz.\n\n**B.** Quels sont les signes visuels d'une utilisation correcte de l'outil à arc électrique ? \n   - Une utilisation correcte se manifeste par une flamme bleue, stable et contrôlée. La flamme ne doit pas être trop longue ou trop intense (jaune/orangée). Un bruit régulier (un \"sifflement\" doux) peut également être un indicateur d'un bon réglage.\n\n**C.** Comment maintenir une bonne stabilité lors de l'utilisation d'outils dans le soufflage de verre ? \n   - Pour maintenir une bonne stabilité, assurez-vous que vos avant-bras reposent sur une surface stable (comme une poutre ou un support adapté). Utilisez vos deux mains (main dominante et main secondaire) pour contrôler le verre et les outils avec précision, tout en gardant vos poignets souples pour des mouvements fluides.",
+      "judge_output": "**AUCUNE**\n\nToutes les affirmations énumérées dans la réponse sont soutenues par le contexte documentaire fourni. \n\n- La première affirmation sur le positionnement de la main est cohérente avec le fait que la main droite est la plus dominante et utilise l'outil à arc électrique.\n- La deuxième affirmation sur la rotation douce de la molette est soutenue par le fait que la molette est facile à tourner et qu'il faut bien manier son mouvement pour éviter des coups brusques.\n- La troisième affirmation sur la pression progressive est cohérente avec le fait qu'une pression excessive ou trop rapide peut entraîner des variations soudaines dans l'intensité de la flamme.\n- La quatrième affirmation sur l'observation visuelle est soutenue par le fait que l'on vise une flamme bleue, plus contrôlée, et que l'on observe la flamme pendant l'ajustement.\n- La cinquième affirmation sur la pratique et la maîtrise est cohérente avec le fait que la régularité du biseau et la gestuelle de bascule du verre demandent un apprentissage et une pratique régulière.\n\nAinsi, aucune affirmation n'est non soutenue par le contexte fourni.",
+      "has_hallucination": false,
+      "judge_reliability_note": "Likely reliable negative."
+    },
+    {
+      "qid": "ann21_novice_1",
+      "query": "Pourquoi j'ai besoin de tourner cette petite molette ?",
+      "register": "novice",
+      "n_context_docs": 8,
+      "context_sources": [
+        "GX010191.MP4#17_raw",
+        "GX010229_etirage_coli_test_envoi.MP4#21_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "course_7_module_263_chunk_2",
+        "course_54_module_712_chunk_131",
+        "course_98_module_1211_chunk_0",
+        "course_41_module_429_chunk_2"
+      ],
+      "response": "Pourquoi j'ai besoin de tourner cette petite molette ?\n\nLa molette que vous tournez sert à réguler le débit du gaz dans votre chalumeau. En la tournant, vous ajustez la quantité de gaz qui passe à travers le chalumeau, ce qui influence directement la température et la taille de la flamme. \n\n**Pourquoi est-ce important ?**\n- **Contrôle de la température :** Une flamme trop chaude (jaune/orangée) peut endommager le verre ou le faire fondre de manière inégale. En diminuant le débit de gaz, vous réduisez l'intensité de la flamme, ce qui permet d'obtenir une flamme plus stable et plus contrôlable (bleue), idéale pour travailler le verre.\n- **Précision du travail :** Une flamme bien contrôlée permet des manipulations précises, essentielles pour réaliser des biseaux réguliers et fins.\n- **Sécurité :** Une flamme trop intense peut être dangereuse et difficile à maîtriser, augmentant le risque d'accident.\n\n**Comment l'utiliser ?**\n- Commencez par allumer le chalumeau avec l'outil à arc électrique.\n- Ouvrez légèrement le robinet de gaz avec votre main gauche (si c'est votre main non dominante).\n- Tournez lentement la molette avec votre main droite pour ajuster le débit de gaz.\n- Observez la couleur de la flamme : elle doit devenir bleue pour indiquer une température plus basse et plus contrôlable.\n- Ajustez jusqu'à obtenir une flamme bleue stable et bien formée.\n\n**Pour aller plus loin :**\n\n**A.** Comment puis-je savoir si ma flamme est bien réglée ?\n**B.** Quels sont les autres moyens de contrôler la température de la flamme en soufflage de verre ?\n**C.** Comment puis-je améliorer ma maîtrise du geste pour ajuster précisément le débit de gaz ? \n\n**A.** Pour vérifier si votre flamme est bien réglée, observez sa couleur (bleue est idéale) et sa forme (stabilité et régularité). Vous pouvez également tester en chauffant doucement un morceau de verre : si il se ramollit progressivement sans fondre trop rapidement, c'est bon signe. \n**B.** Outre la molette, vous pouvez ajuster la distance entre le chalumeau et le verre, ainsi que l'angle d'approche. Une distance plus grande ou un angle plus oblique peuvent réduire l'intensité sans modifier directement le débit de gaz. \n**C.** Pratiquez régulièrement en variant les positions et les angles d'approche du chalumeau. Utilisez un morceau de verre d'entraînement pour vous familiariser avec les sensations liées aux différents débits de gaz. La régularité vient avec l'expérience, donc soyez patient et persévérant.",
+      "judge_output": "**AUCUNE**\n\nToutes les affirmations de la réponse sont soutenues par le contexte fourni. \n\n- La molette sert à réguler le débit de gaz, ce qui influence la température et la taille de la flamme.\n- La flamme doit être ramenée à une couleur bleue pour être contrôlée et travailler le verre de manière précise.\n- Le contrôle de la flamme est important pour la sécurité, la précision du travail et la qualité du biseau.\n- L'utilisation de la molette est expliquée dans le contexte, ainsi que l'importance de la couleur de la flamme et la manière de l'ajuster. \n\nLes questions supplémentaires (A et B) sont également pertinentes et peuvent être abordées en se basant sur le contexte fourni. \n\n**A.** Pour savoir si la flamme est bien réglée, on peut observer sa couleur (bleue) et sa stabilité. Une flamme bleue et bien formée est un bon indicateur d'un réglage correct.\n**B.** D'autres moyens pour ajuster la flamme incluent l'ouverture du robinet de gaz (avec la main gauche, selon le contexte), et l'observation de la progression du travail sur le verre (par transparence, pour vérifier la régularité du biseau). \n\nToutes ces affirmations sont soutenues par le contexte.",
+      "has_hallucination": false,
+      "judge_reliability_note": "Likely reliable negative."
+    }
+  ]
+}
