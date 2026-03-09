@@ -1,0 +1,1310 @@
+{
+  "per_query": [
+    {
+      "qid": "ann17_expert_1",
+      "register": "expert",
+      "raw_query": "Comment puis-je déterminer l'intensité optimale de la flamme pour le soufflage de verre ?",
+      "refined_query": "Comment déterminer l'intensité optimale de la flamme pour le soufflage de verre en utilisant l'outil arc électrique et en ajustant la molette de gaz ?",
+      "technical_terms": [
+        "outil",
+        "molette",
+        "déterminer",
+        "soufflage",
+        "intensité",
+        "flamme",
+        "ajustant",
+        "optimale",
+        "verre",
+        "utilisant",
+        "électrique"
+      ],
+      "grounded_terms": [
+        "outil",
+        "molette",
+        "intensité",
+        "flamme",
+        "verre",
+        "électrique"
+      ],
+      "ungrounded_terms": [
+        "déterminer",
+        "soufflage",
+        "ajustant",
+        "optimale",
+        "utilisant"
+      ],
+      "grounding_rate": 0.5454545454545454,
+      "n_terms": 11,
+      "n_grounded": 6
+    },
+    {
+      "qid": "ann17_expert_2",
+      "register": "expert",
+      "raw_query": "Comment fonctionne l'allumage par arc électrique et quel est son rôle dans le contrôle de la flamme ?",
+      "refined_query": "\"Quelle est la fonction de l'allumage par arc électrique dans le contrôle de la flamme et comment se manifeste-t-il techniquement ?\"",
+      "technical_terms": [
+        "contrôle",
+        "manifeste-t-il",
+        "flamme",
+        "techniquement",
+        "fonction",
+        "allumage",
+        "électrique"
+      ],
+      "grounded_terms": [
+        "contrôle",
+        "flamme",
+        "électrique"
+      ],
+      "ungrounded_terms": [
+        "manifeste-t-il",
+        "techniquement",
+        "fonction",
+        "allumage"
+      ],
+      "grounding_rate": 0.42857142857142855,
+      "n_terms": 7,
+      "n_grounded": 3
+    },
+    {
+      "qid": "ann17_expert_3",
+      "register": "expert",
+      "raw_query": "Pourquoi est-il nécessaire de faire passer du gaz dans le chalumeau après avoir allumé la flamme ?",
+      "refined_query": "Pourquoi est-il nécessaire d'ajuster le débit de gaz dans le chalumeau après l'allumage de la flamme pour obtenir une flamme bleue et contrôlée ?",
+      "technical_terms": [
+        "obtenir",
+        "débit",
+        "bleue",
+        "est-il",
+        "ajuster",
+        "flamme",
+        "allumage",
+        "contrôlée",
+        "chalumeau",
+        "nécessaire"
+      ],
+      "grounded_terms": [
+        "bleue",
+        "flamme",
+        "contrôlée",
+        "chalumeau"
+      ],
+      "ungrounded_terms": [
+        "obtenir",
+        "débit",
+        "est-il",
+        "ajuster",
+        "allumage",
+        "nécessaire"
+      ],
+      "grounding_rate": 0.4,
+      "n_terms": 10,
+      "n_grounded": 4
+    },
+    {
+      "qid": "ann17_novice_1",
+      "register": "novice",
+      "raw_query": "Pourquoi la flamme est-elle jaune et orangée au début et comment la rendre bleue ?",
+      "refined_query": "Pourquoi la flamme est-elle jaune et orangée au début et comment ajuster le débit de gaz pour obtenir une flamme bleue contrôlée ?",
+      "technical_terms": [
+        "jaune",
+        "obtenir",
+        "débit",
+        "bleue",
+        "flamme",
+        "orangée",
+        "est-elle",
+        "ajuster",
+        "début",
+        "contrôlée"
+      ],
+      "grounded_terms": [
+        "jaune",
+        "bleue",
+        "flamme",
+        "orangée",
+        "début",
+        "contrôlée"
+      ],
+      "ungrounded_terms": [
+        "obtenir",
+        "débit",
+        "est-elle",
+        "ajuster"
+      ],
+      "grounding_rate": 0.6,
+      "n_terms": 10,
+      "n_grounded": 6
+    },
+    {
+      "qid": "ann17_novice_2",
+      "register": "novice",
+      "raw_query": "Pourquoi est-il important de baisser l'intensité de la flamme pour la contrôler ?",
+      "refined_query": "Pourquoi est-il essentiel de réduire l'intensité de la flamme pour assurer son contrôle optimal et obtenir une combustion bleue ?",
+      "technical_terms": [
+        "optimal",
+        "réduire",
+        "essentiel",
+        "contrôle",
+        "obtenir",
+        "bleue",
+        "intensité",
+        "flamme",
+        "est-il",
+        "combustion",
+        "assurer"
+      ],
+      "grounded_terms": [
+        "contrôle",
+        "bleue",
+        "intensité",
+        "flamme"
+      ],
+      "ungrounded_terms": [
+        "optimal",
+        "réduire",
+        "essentiel",
+        "obtenir",
+        "est-il",
+        "combustion",
+        "assurer"
+      ],
+      "grounding_rate": 0.36363636363636365,
+      "n_terms": 11,
+      "n_grounded": 4
+    },
+    {
+      "qid": "ann17_novice_3",
+      "register": "novice",
+      "raw_query": "Pourquoi entend-on un petit pop quand on allume le chalumeau avec un briquet ?",
+      "refined_query": "Pourquoi entend-on un petit pop quand on allume le chalumeau avec un briquet ?",
+      "technical_terms": [
+        "allume",
+        "entend-on",
+        "chalumeau",
+        "briquet",
+        "petit"
+      ],
+      "grounded_terms": [
+        "allume",
+        "chalumeau",
+        "briquet",
+        "petit"
+      ],
+      "ungrounded_terms": [
+        "entend-on"
+      ],
+      "grounding_rate": 0.8,
+      "n_terms": 5,
+      "n_grounded": 4
+    },
+    {
+      "qid": "ann21_expert_1",
+      "register": "expert",
+      "raw_query": "Quel est le type de gaz utilisé pour adoucir la flamme du chalumeau et la rendre bleue ?",
+      "refined_query": "Quel type de gaz est utilisé pour atténuer l'intensité de la flamme du chalumeau et la rendre bleue ?",
+      "technical_terms": [
+        "utilisé",
+        "bleue",
+        "atténuer",
+        "flamme",
+        "intensité",
+        "chalumeau",
+        "rendre"
+      ],
+      "grounded_terms": [
+        "bleue",
+        "flamme",
+        "intensité",
+        "chalumeau"
+      ],
+      "ungrounded_terms": [
+        "utilisé",
+        "atténuer",
+        "rendre"
+      ],
+      "grounding_rate": 0.5714285714285714,
+      "n_terms": 7,
+      "n_grounded": 4
+    },
+    {
+      "qid": "ann21_expert_2",
+      "register": "expert",
+      "raw_query": "Comment puis-je contrôler la flamme de manière précise pour éviter des coups brusques lors de l'utilisation de la molette ?",
+      "refined_query": "Comment ajuster le débit de gaz pour contrôler précisément la flamme du chalumeau et éviter des fluctuations brusques lors de l'utilisation de la molette ?",
+      "technical_terms": [
+        "molette",
+        "contrôler",
+        "brusques",
+        "utilisation",
+        "débit",
+        "flamme",
+        "ajuster",
+        "chalumeau",
+        "fluctuations",
+        "éviter",
+        "précisément"
+      ],
+      "grounded_terms": [
+        "molette",
+        "contrôler",
+        "brusques",
+        "flamme",
+        "chalumeau",
+        "éviter"
+      ],
+      "ungrounded_terms": [
+        "utilisation",
+        "débit",
+        "ajuster",
+        "fluctuations",
+        "précisément"
+      ],
+      "grounding_rate": 0.5454545454545454,
+      "n_terms": 11,
+      "n_grounded": 6
+    },
+    {
+      "qid": "ann21_expert_3",
+      "register": "expert",
+      "raw_query": "Quelles sont les précautions à prendre pour utiliser l'outil à arc électrique avec la main droite pour éviter un coup brusque ?",
+      "refined_query": "Quelles sont les précautions à prendre pour utiliser correctement l'outil à arc électrique avec la main droite, notamment en ajustant la molette de gaz et en contrôlant la couleur de la flamme pour éviter un coup brusque ?",
+      "technical_terms": [
+        "outil",
+        "droite",
+        "utiliser",
+        "molette",
+        "notamment",
+        "brusque",
+        "précautions",
+        "flamme",
+        "contrôlant",
+        "ajustant",
+        "couleur",
+        "correctement",
+        "prendre",
+        "éviter",
+        "électrique"
+      ],
+      "grounded_terms": [
+        "outil",
+        "droite",
+        "molette",
+        "brusque",
+        "flamme",
+        "couleur",
+        "éviter",
+        "électrique"
+      ],
+      "ungrounded_terms": [
+        "utiliser",
+        "notamment",
+        "précautions",
+        "contrôlant",
+        "ajustant",
+        "correctement",
+        "prendre"
+      ],
+      "grounding_rate": 0.5333333333333333,
+      "n_terms": 15,
+      "n_grounded": 8
+    },
+    {
+      "qid": "ann21_novice_1",
+      "register": "novice",
+      "raw_query": "Pourquoi j'ai besoin de tourner cette petite molette ?",
+      "refined_query": "Pourquoi dois-je ajuster la molette de régulation du débit de gaz sur mon outil de soudage à arc électrique pour obtenir une flamme bleue et mieux contrôler le processus de soudure ?",
+      "technical_terms": [
+        "outil",
+        "régulation",
+        "molette",
+        "contrôler",
+        "obtenir",
+        "débit",
+        "bleue",
+        "flamme",
+        "ajuster",
+        "soudure",
+        "processus",
+        "dois-je",
+        "soudage",
+        "mieux",
+        "électrique"
+      ],
+      "grounded_terms": [
+        "outil",
+        "molette",
+        "contrôler",
+        "bleue",
+        "flamme",
+        "électrique"
+      ],
+      "ungrounded_terms": [
+        "régulation",
+        "obtenir",
+        "débit",
+        "ajuster",
+        "soudure",
+        "processus",
+        "dois-je",
+        "soudage",
+        "mieux"
+      ],
+      "grounding_rate": 0.4,
+      "n_terms": 15,
+      "n_grounded": 6
+    },
+    {
+      "qid": "ann21_novice_2",
+      "register": "novice",
+      "raw_query": "Comment je peux éviter que ma flamme devienne trop jaune ?",
+      "refined_query": "Comment puis-je ajuster le débit de gaz pour obtenir une flamme bleue avec un chalumeau à arc électrique ?",
+      "technical_terms": [
+        "obtenir",
+        "puis-je",
+        "débit",
+        "flamme",
+        "ajuster",
+        "bleue",
+        "chalumeau",
+        "électrique"
+      ],
+      "grounded_terms": [
+        "flamme",
+        "bleue",
+        "chalumeau",
+        "électrique"
+      ],
+      "ungrounded_terms": [
+        "obtenir",
+        "puis-je",
+        "débit",
+        "ajuster"
+      ],
+      "grounding_rate": 0.5,
+      "n_terms": 8,
+      "n_grounded": 4
+    },
+    {
+      "qid": "ann21_novice_3",
+      "register": "novice",
+      "raw_query": "Qu'est-ce qu'il faut faire avec ma main gauche pendant que je travaille avec le chalumeau ?",
+      "refined_query": "Quelle est la position et l'utilisation appropriée de votre main gauche lors de l'utilisation du chalumeau, en tenant compte des termes techniques tels que \"outil arc électrique\", \"molette\", \"flamme incandescente jaune vif\", \"flamme contrôlée bleue\" et \"biseau oblique\" ?",
+      "technical_terms": [
+        "oblique",
+        "jaune",
+        "contrôlée",
+        "chalumeau",
+        "termes",
+        "bleue",
+        "flamme",
+        "incandescente",
+        "biseau",
+        "électrique",
+        "utilisation",
+        "tenant",
+        "appropriée",
+        "position",
+        "outil",
+        "molette",
+        "gauche",
+        "compte",
+        "techniques"
+      ],
+      "grounded_terms": [
+        "oblique",
+        "jaune",
+        "contrôlée",
+        "chalumeau",
+        "bleue",
+        "flamme",
+        "incandescente",
+        "biseau",
+        "électrique",
+        "tenant",
+        "outil",
+        "molette",
+        "gauche",
+        "techniques"
+      ],
+      "ungrounded_terms": [
+        "termes",
+        "utilisation",
+        "appropriée",
+        "position",
+        "compte"
+      ],
+      "grounding_rate": 0.7368421052631579,
+      "n_terms": 19,
+      "n_grounded": 14
+    },
+    {
+      "qid": "ann22_expert_1",
+      "register": "expert",
+      "raw_query": "Comment puis-je vérifier visuellement la régularité d'un biseau lors du soufflage de verre ?",
+      "refined_query": "\"Comment puis-je vérifier visuellement la régularité d'un biseau lors du meulage ou du soufflage de verre en utilisant les techniques de centrage, de déplacement et de contrôle de l'outil ou de la flamme ?\"",
+      "technical_terms": [
+        "outil",
+        "meulage",
+        "régularité",
+        "contrôle",
+        "soufflage",
+        "puis-je",
+        "flamme",
+        "vérifier",
+        "verre",
+        "utilisant",
+        "déplacement",
+        "techniques",
+        "visuellement",
+        "biseau",
+        "centrage"
+      ],
+      "grounded_terms": [
+        "outil",
+        "régularité",
+        "contrôle",
+        "flamme",
+        "vérifier",
+        "verre",
+        "techniques",
+        "visuellement",
+        "biseau"
+      ],
+      "ungrounded_terms": [
+        "meulage",
+        "soufflage",
+        "puis-je",
+        "utilisant",
+        "déplacement",
+        "centrage"
+      ],
+      "grounding_rate": 0.6,
+      "n_terms": 15,
+      "n_grounded": 9
+    },
+    {
+      "qid": "ann22_expert_2",
+      "register": "expert",
+      "raw_query": "Quel rôle joue le ressenti en termes de pression lors du travail sur la meule ?",
+      "refined_query": "Quel rôle joue la pression exercée sur la meule lors du travail de meulage du verre ?",
+      "technical_terms": [
+        "meulage",
+        "verre",
+        "travail",
+        "pression",
+        "meule",
+        "exercée"
+      ],
+      "grounded_terms": [
+        "verre",
+        "travail",
+        "pression",
+        "meule"
+      ],
+      "ungrounded_terms": [
+        "meulage",
+        "exercée"
+      ],
+      "grounding_rate": 0.6666666666666666,
+      "n_terms": 6,
+      "n_grounded": 4
+    },
+    {
+      "qid": "ann22_expert_3",
+      "register": "expert",
+      "raw_query": "Pourquoi est-il important de maintenir une respiration régulière pendant le travail sur la meule ?",
+      "refined_query": "Pourquoi est-il crucial d'adopter une technique de respiration contrôlée et régulière lors de l'usinage du verre sur la meule ?",
+      "technical_terms": [
+        "régulière",
+        "adopter",
+        "est-il",
+        "respiration",
+        "contrôlée",
+        "crucial",
+        "verre",
+        "usinage",
+        "meule",
+        "technique"
+      ],
+      "grounded_terms": [
+        "régulière",
+        "respiration",
+        "verre",
+        "meule",
+        "technique"
+      ],
+      "ungrounded_terms": [
+        "adopter",
+        "est-il",
+        "contrôlée",
+        "crucial",
+        "usinage"
+      ],
+      "grounding_rate": 0.5,
+      "n_terms": 10,
+      "n_grounded": 5
+    },
+    {
+      "qid": "ann22_novice_1",
+      "register": "novice",
+      "raw_query": "Pourquoi mon verre tombe-t-il lors du soufflage de verre ?",
+      "refined_query": "Pourquoi mon verre se brise-t-il lors du soufflage de verre en effectuant des mouvements de haut en bas et en posant l'arête de la meule sur les tracés ?",
+      "technical_terms": [
+        "brise-t-il",
+        "soufflage",
+        "effectuant",
+        "mouvements",
+        "meule",
+        "verre",
+        "tracés",
+        "arête",
+        "posant"
+      ],
+      "grounded_terms": [
+        "mouvements",
+        "meule",
+        "verre",
+        "tracés",
+        "arête"
+      ],
+      "ungrounded_terms": [
+        "brise-t-il",
+        "soufflage",
+        "effectuant",
+        "posant"
+      ],
+      "grounding_rate": 0.5555555555555556,
+      "n_terms": 9,
+      "n_grounded": 5
+    },
+    {
+      "qid": "ann22_novice_2",
+      "register": "novice",
+      "raw_query": "Comment je peux savoir si mon biseau est régulier ?",
+      "refined_query": "\"Comment puis-je vérifier si mon biseau est correctement réalisé en utilisant les techniques de meulage et de travail sur le verre ?\"",
+      "technical_terms": [
+        "meulage",
+        "puis-je",
+        "réalisé",
+        "vérifier",
+        "verre",
+        "utilisant",
+        "travail",
+        "correctement",
+        "techniques",
+        "biseau"
+      ],
+      "grounded_terms": [
+        "vérifier",
+        "verre",
+        "travail",
+        "techniques",
+        "biseau"
+      ],
+      "ungrounded_terms": [
+        "meulage",
+        "puis-je",
+        "réalisé",
+        "utilisant",
+        "correctement"
+      ],
+      "grounding_rate": 0.5,
+      "n_terms": 10,
+      "n_grounded": 5
+    },
+    {
+      "qid": "ann22_novice_3",
+      "register": "novice",
+      "raw_query": "Pourquoi je dois retenir ma respiration pendant la taille du biseau ?",
+      "refined_query": "\"Pourquoi est-il nécessaire de contrôler la position et le mouvement de la meule lors de la taille du biseau ?\"",
+      "technical_terms": [
+        "contrôler",
+        "biseau",
+        "mouvement",
+        "est-il",
+        "taille",
+        "position",
+        "nécessaire",
+        "meule"
+      ],
+      "grounded_terms": [
+        "contrôler",
+        "biseau",
+        "mouvement",
+        "taille",
+        "meule"
+      ],
+      "ungrounded_terms": [
+        "est-il",
+        "position",
+        "nécessaire"
+      ],
+      "grounding_rate": 0.625,
+      "n_terms": 8,
+      "n_grounded": 5
+    },
+    {
+      "qid": "ann23_expert_1",
+      "register": "expert",
+      "raw_query": "Quelle est la différence entre le biseau droit et le biseau oblique en termes de technique de soufflage de verre ?",
+      "refined_query": "Quelle est la différence entre le biseau droit et le biseau oblique en termes de technique de soufflage de verre, notamment en ce qui concerne la position de l'arête de la meule sur le tracé, la manipulation du verre, et l'utilisation du chalumeau ?",
+      "technical_terms": [
+        "manipulation",
+        "oblique",
+        "arête",
+        "notamment",
+        "soufflage",
+        "utilisation",
+        "tracé",
+        "différence",
+        "entre",
+        "termes",
+        "concerne",
+        "meule",
+        "verre",
+        "position",
+        "chalumeau",
+        "biseau",
+        "droit",
+        "technique"
+      ],
+      "grounded_terms": [
+        "oblique",
+        "arête",
+        "tracé",
+        "entre",
+        "meule",
+        "verre",
+        "chalumeau",
+        "biseau",
+        "droit",
+        "technique"
+      ],
+      "ungrounded_terms": [
+        "manipulation",
+        "notamment",
+        "soufflage",
+        "utilisation",
+        "différence",
+        "termes",
+        "concerne",
+        "position"
+      ],
+      "grounding_rate": 0.5555555555555556,
+      "n_terms": 18,
+      "n_grounded": 10
+    },
+    {
+      "qid": "ann23_expert_2",
+      "register": "expert",
+      "raw_query": "Comment réaliser un biseau propre en soufflage de verre ?",
+      "refined_query": "Comment réaliser un biseau oblique en soufflage de verre en utilisant une meule et un outil arc électrique ?",
+      "technical_terms": [
+        "outil",
+        "oblique",
+        "soufflage",
+        "réaliser",
+        "électrique",
+        "verre",
+        "utilisant",
+        "biseau",
+        "meule"
+      ],
+      "grounded_terms": [
+        "outil",
+        "oblique",
+        "réaliser",
+        "électrique",
+        "verre",
+        "biseau",
+        "meule"
+      ],
+      "ungrounded_terms": [
+        "soufflage",
+        "utilisant"
+      ],
+      "grounding_rate": 0.7777777777777778,
+      "n_terms": 9,
+      "n_grounded": 7
+    },
+    {
+      "qid": "ann23_expert_3",
+      "register": "expert",
+      "raw_query": "Quels sont les écueils communs auxquels les débutants se heurtent en soufflage de verre et comment les éviter ?",
+      "refined_query": "Quels sont les écueils courants auxquels les débutants sont confrontés en soufflage de verre, notamment en ce qui concerne la réalisation du biseau oblique, le centrage sur la meule, l'utilisation de l'outil arc électrique et le contrôle de la flamme, et comment peuvent-ils être évités ?",
+      "technical_terms": [
+        "oblique",
+        "notamment",
+        "confrontés",
+        "débutants",
+        "centrage",
+        "contrôle",
+        "flamme",
+        "concerne",
+        "réalisation",
+        "peuvent-ils",
+        "biseau",
+        "courants",
+        "électrique",
+        "meule",
+        "utilisation",
+        "évités",
+        "outil",
+        "soufflage",
+        "auxquels",
+        "verre",
+        "écueils"
+      ],
+      "grounded_terms": [
+        "oblique",
+        "contrôle",
+        "flamme",
+        "biseau",
+        "électrique",
+        "meule",
+        "outil",
+        "verre"
+      ],
+      "ungrounded_terms": [
+        "notamment",
+        "confrontés",
+        "débutants",
+        "centrage",
+        "concerne",
+        "réalisation",
+        "peuvent-ils",
+        "courants",
+        "utilisation",
+        "évités",
+        "soufflage",
+        "auxquels",
+        "écueils"
+      ],
+      "grounding_rate": 0.38095238095238093,
+      "n_terms": 21,
+      "n_grounded": 8
+    },
+    {
+      "qid": "ann23_novice_1",
+      "register": "novice",
+      "raw_query": "Pourquoi mon verre se déplace quand je le manipule ?",
+      "refined_query": "Pourquoi le mouvement de mon outil de meulage sur la surface du verre provoque-t-il un déplacement de celui-ci ?",
+      "technical_terms": [
+        "outil",
+        "meulage",
+        "mouvement",
+        "provoque-t-il",
+        "verre",
+        "surface",
+        "déplacement",
+        "celui-ci"
+      ],
+      "grounded_terms": [
+        "outil",
+        "mouvement",
+        "verre",
+        "surface"
+      ],
+      "ungrounded_terms": [
+        "meulage",
+        "provoque-t-il",
+        "déplacement",
+        "celui-ci"
+      ],
+      "grounding_rate": 0.5,
+      "n_terms": 8,
+      "n_grounded": 4
+    },
+    {
+      "qid": "ann23_novice_2",
+      "register": "novice",
+      "raw_query": "Pourquoi mon biseau n'est pas régulier ?",
+      "refined_query": "Pourquoi mon biseau oblique n'est pas régulier lors de l'utilisation de la meule ?",
+      "technical_terms": [
+        "oblique",
+        "régulier",
+        "utilisation",
+        "biseau",
+        "meule"
+      ],
+      "grounded_terms": [
+        "oblique",
+        "régulier",
+        "biseau",
+        "meule"
+      ],
+      "ungrounded_terms": [
+        "utilisation"
+      ],
+      "grounding_rate": 0.8,
+      "n_terms": 5,
+      "n_grounded": 4
+    },
+    {
+      "qid": "ann23_novice_3",
+      "register": "novice",
+      "raw_query": "Pourquoi j'entends des sons différents quand je travaille le verre ?",
+      "refined_query": "Pourquoi j'entends des sons différents quand je travaille le verre sur la meule en effectuant des mouvements de va-et-vient et en modifiant l'inclinaison de la pièce ?",
+      "technical_terms": [
+        "va-et-vient",
+        "modifiant",
+        "pièce",
+        "effectuant",
+        "inclinaison",
+        "mouvements",
+        "verre",
+        "travaille",
+        "différents",
+        "entends",
+        "meule"
+      ],
+      "grounded_terms": [
+        "mouvements",
+        "verre",
+        "travaille",
+        "meule"
+      ],
+      "ungrounded_terms": [
+        "va-et-vient",
+        "modifiant",
+        "pièce",
+        "effectuant",
+        "inclinaison",
+        "différents",
+        "entends"
+      ],
+      "grounding_rate": 0.36363636363636365,
+      "n_terms": 11,
+      "n_grounded": 4
+    },
+    {
+      "qid": "course83_1",
+      "register": "expert",
+      "raw_query": "Quelles sont les étapes principales pour installer une exposition de soufflage de verre dans un musée?",
+      "refined_query": "Quelles sont les étapes principales pour réaliser le piquage, le biseau oblique et l'utilisation de l'outil arc électrique dans le cadre de l'installation d'une exposition de soufflage de verre dans un musée ?",
+      "technical_terms": [
+        "outil",
+        "cadre",
+        "oblique",
+        "étapes",
+        "installation",
+        "musée",
+        "utilisation",
+        "réaliser",
+        "soufflage",
+        "exposition",
+        "verre",
+        "principales",
+        "piquage",
+        "biseau",
+        "électrique"
+      ],
+      "grounded_terms": [
+        "outil",
+        "oblique",
+        "réaliser",
+        "verre",
+        "biseau",
+        "électrique"
+      ],
+      "ungrounded_terms": [
+        "cadre",
+        "étapes",
+        "installation",
+        "musée",
+        "utilisation",
+        "soufflage",
+        "exposition",
+        "principales",
+        "piquage"
+      ],
+      "grounding_rate": 0.4,
+      "n_terms": 15,
+      "n_grounded": 6
+    },
+    {
+      "qid": "course83_2",
+      "register": "expert",
+      "raw_query": "Quels outils et équipements sont nécessaires pour le soufflage de verre dans un contexte d'installation muséale?",
+      "refined_query": "\"Quels outils et équipements spécifiques sont nécessaires pour le soufflage de verre dans un contexte muséal, incluant la meule, l'outil arc électrique, le chalumeau et les techniques de biseau oblique et droit ?\"",
+      "technical_terms": [
+        "nécessaires",
+        "outil",
+        "contexte",
+        "oblique",
+        "soufflage",
+        "muséal",
+        "biseau",
+        "électrique",
+        "incluant",
+        "verre",
+        "chalumeau",
+        "droit",
+        "techniques",
+        "équipements",
+        "outils",
+        "meule",
+        "spécifiques"
+      ],
+      "grounded_terms": [
+        "outil",
+        "oblique",
+        "biseau",
+        "électrique",
+        "verre",
+        "chalumeau",
+        "droit",
+        "techniques",
+        "meule"
+      ],
+      "ungrounded_terms": [
+        "nécessaires",
+        "contexte",
+        "soufflage",
+        "muséal",
+        "incluant",
+        "équipements",
+        "outils",
+        "spécifiques"
+      ],
+      "grounding_rate": 0.5294117647058824,
+      "n_terms": 17,
+      "n_grounded": 9
+    },
+    {
+      "qid": "course83_3",
+      "register": "expert",
+      "raw_query": "Comment mettre en valeur le processus de soufflage de verre dans une exposition muséale à l'aide de photos et de vidéos?",
+      "refined_query": "\"Comment mettre en valeur le processus de soufflage de verre dans une exposition muséale à l'aide de photos et de vidéos, en intégrant des techniques telles que le piquage au centre de la trace de feutre, le travail du biseau oblique, et l'utilisation d'un outil arc électrique pour contrôler la flamme ?\"",
+      "technical_terms": [
+        "oblique",
+        "vidéos",
+        "centre",
+        "contrôler",
+        "mettre",
+        "flamme",
+        "processus",
+        "travail",
+        "biseau",
+        "trace",
+        "telles",
+        "électrique",
+        "feutre",
+        "muséale",
+        "utilisation",
+        "photos",
+        "valeur",
+        "intégrant",
+        "piquage",
+        "outil",
+        "soufflage",
+        "exposition",
+        "verre",
+        "techniques"
+      ],
+      "grounded_terms": [
+        "oblique",
+        "centre",
+        "contrôler",
+        "mettre",
+        "flamme",
+        "travail",
+        "biseau",
+        "trace",
+        "électrique",
+        "feutre",
+        "outil",
+        "verre",
+        "techniques"
+      ],
+      "ungrounded_terms": [
+        "vidéos",
+        "processus",
+        "telles",
+        "muséale",
+        "utilisation",
+        "photos",
+        "valeur",
+        "intégrant",
+        "piquage",
+        "soufflage",
+        "exposition"
+      ],
+      "grounding_rate": 0.5416666666666666,
+      "n_terms": 24,
+      "n_grounded": 13
+    },
+    {
+      "qid": "course83_4",
+      "register": "expert",
+      "raw_query": "Qu'est-ce que le modèle d'opération de geste (GOM) dans le contexte du soufflage du verre ?",
+      "refined_query": "Qu'est-ce que le modèle d'opération de geste (GOM) dans le contexte du soufflage du verre, en considérant l'utilisation de l'outil arc électrique, la manipulation de la molette pour contrôler la flamme, et les techniques spécifiques comme le biseau oblique ou le travail au centre des tracés ?",
+      "technical_terms": [
+        "contexte",
+        "oblique",
+        "centre",
+        "tracés",
+        "manipulation",
+        "contrôler",
+        "comme",
+        "considérant",
+        "geste",
+        "flamme",
+        "travail",
+        "est-ce",
+        "biseau",
+        "électrique",
+        "utilisation",
+        "spécifiques",
+        "outil",
+        "molette",
+        "soufflage",
+        "opération",
+        "verre",
+        "techniques",
+        "modèle"
+      ],
+      "grounded_terms": [
+        "oblique",
+        "centre",
+        "tracés",
+        "contrôler",
+        "comme",
+        "geste",
+        "flamme",
+        "travail",
+        "biseau",
+        "électrique",
+        "outil",
+        "molette",
+        "verre",
+        "techniques"
+      ],
+      "ungrounded_terms": [
+        "contexte",
+        "manipulation",
+        "considérant",
+        "est-ce",
+        "utilisation",
+        "spécifiques",
+        "soufflage",
+        "opération",
+        "modèle"
+      ],
+      "grounding_rate": 0.6086956521739131,
+      "n_terms": 23,
+      "n_grounded": 14
+    },
+    {
+      "qid": "course83_5",
+      "register": "expert",
+      "raw_query": "Comment le GOM aide-t-il à illustrer les résultats de l'analyse dans le soufflage de verre ?",
+      "refined_query": "Comment le chalumeau à arc électrique contribue-t-il à la maîtrise de la flamme lors du soufflage du verre, en permettant d'obtenir une flamme contrôlée et de couleur bleue, et comment cela illustre-t-il les résultats de l'analyse dans ce processus ?",
+      "technical_terms": [
+        "illustre-t-il",
+        "maîtrise",
+        "soufflage",
+        "contribue-t-il",
+        "permettant",
+        "obtenir",
+        "bleue",
+        "résultats",
+        "flamme",
+        "contrôlée",
+        "processus",
+        "verre",
+        "chalumeau",
+        "couleur",
+        "analyse",
+        "électrique"
+      ],
+      "grounded_terms": [
+        "bleue",
+        "flamme",
+        "contrôlée",
+        "verre",
+        "chalumeau",
+        "couleur",
+        "électrique"
+      ],
+      "ungrounded_terms": [
+        "illustre-t-il",
+        "maîtrise",
+        "soufflage",
+        "contribue-t-il",
+        "permettant",
+        "obtenir",
+        "résultats",
+        "processus",
+        "analyse"
+      ],
+      "grounding_rate": 0.4375,
+      "n_terms": 16,
+      "n_grounded": 7
+    },
+    {
+      "qid": "course83_6",
+      "register": "expert",
+      "raw_query": "Quel est l'avantage de l'utilisation de GOM pour présenter les résultats du soufflage de verre ?",
+      "refined_query": "Quels sont les avantages de l'utilisation du chalumeau à oxygène et propane (GOM) pour le soufflage du verre, notamment en termes de contrôle de la flamme et de précision dans la manipulation du matériau ?",
+      "technical_terms": [
+        "manipulation",
+        "propane",
+        "utilisation",
+        "oxygène",
+        "avantages",
+        "soufflage",
+        "notamment",
+        "termes",
+        "contrôle",
+        "flamme",
+        "précision",
+        "matériau",
+        "verre",
+        "chalumeau"
+      ],
+      "grounded_terms": [
+        "contrôle",
+        "flamme",
+        "verre",
+        "chalumeau"
+      ],
+      "ungrounded_terms": [
+        "manipulation",
+        "propane",
+        "utilisation",
+        "oxygène",
+        "avantages",
+        "soufflage",
+        "notamment",
+        "termes",
+        "précision",
+        "matériau"
+      ],
+      "grounding_rate": 0.2857142857142857,
+      "n_terms": 14,
+      "n_grounded": 4
+    },
+    {
+      "qid": "course83_7",
+      "register": "expert",
+      "raw_query": "Qui a inventé le soufflage de verre?",
+      "refined_query": "Qui a développé la technique de soufflage du verre à l'aide d'un chalumeau à arc électrique ?",
+      "technical_terms": [
+        "soufflage",
+        "verre",
+        "développé",
+        "chalumeau",
+        "électrique",
+        "technique"
+      ],
+      "grounded_terms": [
+        "verre",
+        "chalumeau",
+        "électrique",
+        "technique"
+      ],
+      "ungrounded_terms": [
+        "soufflage",
+        "développé"
+      ],
+      "grounding_rate": 0.6666666666666666,
+      "n_terms": 6,
+      "n_grounded": 4
+    },
+    {
+      "qid": "course83_8",
+      "register": "expert",
+      "raw_query": "Quelle est la technique utilisée pour souffler le verre?",
+      "refined_query": "Quelle est la technique de contrôle de l'intensité de la flamme d'un chalumeau à arc électrique pour souffler le verre ?",
+      "technical_terms": [
+        "contrôle",
+        "souffler",
+        "intensité",
+        "flamme",
+        "verre",
+        "chalumeau",
+        "électrique",
+        "technique"
+      ],
+      "grounded_terms": [
+        "contrôle",
+        "intensité",
+        "flamme",
+        "verre",
+        "chalumeau",
+        "électrique",
+        "technique"
+      ],
+      "ungrounded_terms": [
+        "souffler"
+      ],
+      "grounding_rate": 0.875,
+      "n_terms": 8,
+      "n_grounded": 7
+    },
+    {
+      "qid": "course83_9",
+      "register": "expert",
+      "raw_query": "Quelles formes les premières œuvres de soufflage de verre produisaient-elles?",
+      "refined_query": "Quelles formes les premières œuvres de soufflage de verre produisaient-elles, en utilisant des techniques telles que le biseau oblique, le travail au centre des tracés, et le contrôle de la flamme pour obtenir une couleur bleue contrôlée ?",
+      "technical_terms": [
+        "oblique",
+        "obtenir",
+        "contrôlée",
+        "utilisant",
+        "centre",
+        "tracés",
+        "uvres",
+        "contrôle",
+        "bleue",
+        "flamme",
+        "travail",
+        "biseau",
+        "telles",
+        "premières",
+        "produisaient-elles",
+        "formes",
+        "soufflage",
+        "verre",
+        "couleur",
+        "techniques"
+      ],
+      "grounded_terms": [
+        "oblique",
+        "contrôlée",
+        "centre",
+        "tracés",
+        "bleue",
+        "flamme",
+        "travail",
+        "biseau",
+        "verre",
+        "couleur",
+        "techniques"
+      ],
+      "ungrounded_terms": [
+        "obtenir",
+        "utilisant",
+        "uvres",
+        "contrôle",
+        "telles",
+        "premières",
+        "produisaient-elles",
+        "formes",
+        "soufflage"
+      ],
+      "grounding_rate": 0.55,
+      "n_terms": 20,
+      "n_grounded": 11
+    }
+  ],
+  "aggregate": {
+    "mean_grounding_rate": 0.5498339463398079,
+    "std_grounding_rate": 0.13847989750336984,
+    "n_queries": 33,
+    "n_below_90pct": 33,
+    "n_below_70pct": 28
+  }
+}

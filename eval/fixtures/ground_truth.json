@@ -1,0 +1,467 @@
+[
+  {
+    "qid": "ann17_expert_1",
+    "query": "Comment puis-je déterminer l'intensité optimale de la flamme pour le soufflage de verre ?",
+    "register": "expert",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      17
+    ],
+    "relevant_source_keys": [
+      "GX010191.MP4#17_raw"
+    ],
+    "generated_from": "annotation_17"
+  },
+  {
+    "qid": "ann17_expert_2",
+    "query": "Comment fonctionne l'allumage par arc électrique et quel est son rôle dans le contrôle de la flamme ?",
+    "register": "expert",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      17
+    ],
+    "relevant_source_keys": [
+      "GX010191.MP4#17_raw"
+    ],
+    "generated_from": "annotation_17"
+  },
+  {
+    "qid": "ann17_expert_3",
+    "query": "Pourquoi est-il nécessaire de faire passer du gaz dans le chalumeau après avoir allumé la flamme ?",
+    "register": "expert",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      17
+    ],
+    "relevant_source_keys": [
+      "GX010191.MP4#17_raw"
+    ],
+    "generated_from": "annotation_17"
+  },
+  {
+    "qid": "ann17_novice_1",
+    "query": "Pourquoi la flamme est-elle jaune et orangée au début et comment la rendre bleue ?",
+    "register": "novice",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      17
+    ],
+    "relevant_source_keys": [
+      "GX010191.MP4#17_raw"
+    ],
+    "generated_from": "annotation_17"
+  },
+  {
+    "qid": "ann17_novice_2",
+    "query": "Pourquoi est-il important de baisser l'intensité de la flamme pour la contrôler ?",
+    "register": "novice",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      17
+    ],
+    "relevant_source_keys": [
+      "GX010191.MP4#17_raw"
+    ],
+    "generated_from": "annotation_17"
+  },
+  {
+    "qid": "ann17_novice_3",
+    "query": "Pourquoi entend-on un petit pop quand on allume le chalumeau avec un briquet ?",
+    "register": "novice",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      17
+    ],
+    "relevant_source_keys": [
+      "GX010191.MP4#17_raw"
+    ],
+    "generated_from": "annotation_17"
+  },
+  {
+    "qid": "ann21_expert_1",
+    "query": "Quel est le type de gaz utilisé pour adoucir la flamme du chalumeau et la rendre bleue ?",
+    "register": "expert",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      21
+    ],
+    "relevant_source_keys": [
+      "GX010229_etirage_coli_test_envoi.MP4#21_raw"
+    ],
+    "generated_from": "annotation_21"
+  },
+  {
+    "qid": "ann21_expert_2",
+    "query": "Comment puis-je contrôler la flamme de manière précise pour éviter des coups brusques lors de l'utilisation de la molette ?",
+    "register": "expert",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      21
+    ],
+    "relevant_source_keys": [
+      "GX010229_etirage_coli_test_envoi.MP4#21_raw"
+    ],
+    "generated_from": "annotation_21"
+  },
+  {
+    "qid": "ann21_expert_3",
+    "query": "Quelles sont les précautions à prendre pour utiliser l'outil à arc électrique avec la main droite pour éviter un coup brusque ?",
+    "register": "expert",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      21
+    ],
+    "relevant_source_keys": [
+      "GX010229_etirage_coli_test_envoi.MP4#21_raw"
+    ],
+    "generated_from": "annotation_21"
+  },
+  {
+    "qid": "ann21_novice_1",
+    "query": "Pourquoi j'ai besoin de tourner cette petite molette ?",
+    "register": "novice",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      21
+    ],
+    "relevant_source_keys": [
+      "GX010229_etirage_coli_test_envoi.MP4#21_raw"
+    ],
+    "generated_from": "annotation_21"
+  },
+  {
+    "qid": "ann21_novice_2",
+    "query": "Comment je peux éviter que ma flamme devienne trop jaune ?",
+    "register": "novice",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      21
+    ],
+    "relevant_source_keys": [
+      "GX010229_etirage_coli_test_envoi.MP4#21_raw"
+    ],
+    "generated_from": "annotation_21"
+  },
+  {
+    "qid": "ann21_novice_3",
+    "query": "Qu'est-ce qu'il faut faire avec ma main gauche pendant que je travaille avec le chalumeau ?",
+    "register": "novice",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      21
+    ],
+    "relevant_source_keys": [
+      "GX010229_etirage_coli_test_envoi.MP4#21_raw"
+    ],
+    "generated_from": "annotation_21"
+  },
+  {
+    "qid": "ann22_expert_1",
+    "query": "Comment puis-je vérifier visuellement la régularité d'un biseau lors du soufflage de verre ?",
+    "register": "expert",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      22
+    ],
+    "relevant_source_keys": [
+      "Loic_biseauDroit.mov#22_raw"
+    ],
+    "generated_from": "annotation_22"
+  },
+  {
+    "qid": "ann22_expert_2",
+    "query": "Quel rôle joue le ressenti en termes de pression lors du travail sur la meule ?",
+    "register": "expert",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      22
+    ],
+    "relevant_source_keys": [
+      "Loic_biseauDroit.mov#22_raw"
+    ],
+    "generated_from": "annotation_22"
+  },
+  {
+    "qid": "ann22_expert_3",
+    "query": "Pourquoi est-il important de maintenir une respiration régulière pendant le travail sur la meule ?",
+    "register": "expert",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      22
+    ],
+    "relevant_source_keys": [
+      "Loic_biseauDroit.mov#22_raw"
+    ],
+    "generated_from": "annotation_22"
+  },
+  {
+    "qid": "ann22_novice_1",
+    "query": "Pourquoi mon verre tombe-t-il lors du soufflage de verre ?",
+    "register": "novice",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      22
+    ],
+    "relevant_source_keys": [
+      "Loic_biseauDroit.mov#22_raw"
+    ],
+    "generated_from": "annotation_22"
+  },
+  {
+    "qid": "ann22_novice_2",
+    "query": "Comment je peux savoir si mon biseau est régulier ?",
+    "register": "novice",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      22
+    ],
+    "relevant_source_keys": [
+      "Loic_biseauDroit.mov#22_raw"
+    ],
+    "generated_from": "annotation_22"
+  },
+  {
+    "qid": "ann22_novice_3",
+    "query": "Pourquoi je dois retenir ma respiration pendant la taille du biseau ?",
+    "register": "novice",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      22
+    ],
+    "relevant_source_keys": [
+      "Loic_biseauDroit.mov#22_raw"
+    ],
+    "generated_from": "annotation_22"
+  },
+  {
+    "qid": "ann23_expert_1",
+    "query": "Quelle est la différence entre le biseau droit et le biseau oblique en termes de technique de soufflage de verre ?",
+    "register": "expert",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      23
+    ],
+    "relevant_source_keys": [
+      "Loic_biseauOblique.mov.mp4#23_raw"
+    ],
+    "generated_from": "annotation_23"
+  },
+  {
+    "qid": "ann23_expert_2",
+    "query": "Comment réaliser un biseau propre en soufflage de verre ?",
+    "register": "expert",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      23
+    ],
+    "relevant_source_keys": [
+      "Loic_biseauOblique.mov.mp4#23_raw"
+    ],
+    "generated_from": "annotation_23"
+  },
+  {
+    "qid": "ann23_expert_3",
+    "query": "Quels sont les écueils communs auxquels les débutants se heurtent en soufflage de verre et comment les éviter ?",
+    "register": "expert",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      23
+    ],
+    "relevant_source_keys": [
+      "Loic_biseauOblique.mov.mp4#23_raw"
+    ],
+    "generated_from": "annotation_23"
+  },
+  {
+    "qid": "ann23_novice_1",
+    "query": "Pourquoi mon verre se déplace quand je le manipule ?",
+    "register": "novice",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      23
+    ],
+    "relevant_source_keys": [
+      "Loic_biseauOblique.mov.mp4#23_raw"
+    ],
+    "generated_from": "annotation_23"
+  },
+  {
+    "qid": "ann23_novice_2",
+    "query": "Pourquoi mon biseau n'est pas régulier ?",
+    "register": "novice",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      23
+    ],
+    "relevant_source_keys": [
+      "Loic_biseauOblique.mov.mp4#23_raw"
+    ],
+    "generated_from": "annotation_23"
+  },
+  {
+    "qid": "ann23_novice_3",
+    "query": "Pourquoi j'entends des sons différents quand je travaille le verre ?",
+    "register": "novice",
+    "source": "annotation",
+    "relevant_annotation_ids": [
+      23
+    ],
+    "relevant_source_keys": [
+      "Loic_biseauOblique.mov.mp4#23_raw"
+    ],
+    "generated_from": "annotation_23"
+  },
+  {
+    "qid": "course83_1",
+    "query": "Quelles sont les étapes principales pour installer une exposition de soufflage de verre dans un musée?",
+    "register": "expert",
+    "source": "course_content",
+    "relevant_annotation_ids": [],
+    "relevant_source_keys": [],
+    "relevant_course_sources": [
+      "course_83_module_1186_chunk_0"
+    ],
+    "generated_from": "course_83_doc_0"
+  },
+  {
+    "qid": "course83_2",
+    "query": "Quels outils et équipements sont nécessaires pour le soufflage de verre dans un contexte d'installation muséale?",
+    "register": "expert",
+    "source": "course_content",
+    "relevant_annotation_ids": [],
+    "relevant_source_keys": [],
+    "relevant_course_sources": [
+      "course_83_module_1186_chunk_0"
+    ],
+    "generated_from": "course_83_doc_0"
+  },
+  {
+    "qid": "course83_3",
+    "query": "Comment mettre en valeur le processus de soufflage de verre dans une exposition muséale à l'aide de photos et de vidéos?",
+    "register": "expert",
+    "source": "course_content",
+    "relevant_annotation_ids": [],
+    "relevant_source_keys": [],
+    "relevant_course_sources": [
+      "course_83_module_1186_chunk_0"
+    ],
+    "generated_from": "course_83_doc_0"
+  },
+  {
+    "qid": "course83_4",
+    "query": "Qu'est-ce que le modèle d'opération de geste (GOM) dans le contexte du soufflage du verre ?",
+    "register": "expert",
+    "source": "course_content",
+    "relevant_annotation_ids": [],
+    "relevant_source_keys": [],
+    "relevant_course_sources": [
+      "course_83_module_1187_chunk_0"
+    ],
+    "generated_from": "course_83_doc_1"
+  },
+  {
+    "qid": "course83_5",
+    "query": "Comment le GOM aide-t-il à illustrer les résultats de l'analyse dans le soufflage de verre ?",
+    "register": "expert",
+    "source": "course_content",
+    "relevant_annotation_ids": [],
+    "relevant_source_keys": [],
+    "relevant_course_sources": [
+      "course_83_module_1187_chunk_0"
+    ],
+    "generated_from": "course_83_doc_1"
+  },
+  {
+    "qid": "course83_6",
+    "query": "Quel est l'avantage de l'utilisation de GOM pour présenter les résultats du soufflage de verre ?",
+    "register": "expert",
+    "source": "course_content",
+    "relevant_annotation_ids": [],
+    "relevant_source_keys": [],
+    "relevant_course_sources": [
+      "course_83_module_1187_chunk_0"
+    ],
+    "generated_from": "course_83_doc_1"
+  },
+  {
+    "qid": "course83_7",
+    "query": "Qui a inventé le soufflage de verre?",
+    "register": "expert",
+    "source": "course_content",
+    "relevant_annotation_ids": [],
+    "relevant_source_keys": [],
+    "relevant_course_sources": [
+      "course_83_module_1195_chunk_0"
+    ],
+    "generated_from": "course_83_doc_2"
+  },
+  {
+    "qid": "course83_8",
+    "query": "Quelle est la technique utilisée pour souffler le verre?",
+    "register": "expert",
+    "source": "course_content",
+    "relevant_annotation_ids": [],
+    "relevant_source_keys": [],
+    "relevant_course_sources": [
+      "course_83_module_1195_chunk_0"
+    ],
+    "generated_from": "course_83_doc_2"
+  },
+  {
+    "qid": "course83_9",
+    "query": "Quelles formes les premières œuvres de soufflage de verre produisaient-elles?",
+    "register": "expert",
+    "source": "course_content",
+    "relevant_annotation_ids": [],
+    "relevant_source_keys": [],
+    "relevant_course_sources": [
+      "course_83_module_1195_chunk_0"
+    ],
+    "generated_from": "course_83_doc_2"
+  },
+  {
+    "qid": "adv_1",
+    "query": "Quelle est la capitale du Japon ?",
+    "register": "adversarial",
+    "source": "adversarial",
+    "relevant_annotation_ids": [],
+    "relevant_source_keys": [],
+    "adversarial_type": "off_topic"
+  },
+  {
+    "qid": "adv_2",
+    "query": "Comment réparer une voiture diesel ?",
+    "register": "adversarial",
+    "source": "adversarial",
+    "relevant_annotation_ids": [],
+    "relevant_source_keys": [],
+    "adversarial_type": "off_topic"
+  },
+  {
+    "qid": "adv_3",
+    "query": "bleu mardi rotation verre pourquoi",
+    "register": "adversarial",
+    "source": "adversarial",
+    "relevant_annotation_ids": [],
+    "relevant_source_keys": [],
+    "adversarial_type": "nonsense"
+  },
+  {
+    "qid": "adv_4",
+    "query": "Comment sculpter le marbre avec un ciseau à froid ?",
+    "register": "adversarial",
+    "source": "adversarial",
+    "relevant_annotation_ids": [],
+    "relevant_source_keys": [],
+    "adversarial_type": "adjacent_unanswerable"
+  },
+  {
+    "qid": "adv_5",
+    "query": "Quelle est la température de fusion de l'acier inoxydable ?",
+    "register": "adversarial",
+    "source": "adversarial",
+    "relevant_annotation_ids": [],
+    "relevant_source_keys": [],
+    "adversarial_type": "adjacent_unanswerable"
+  }
+]

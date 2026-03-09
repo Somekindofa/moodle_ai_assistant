@@ -1,0 +1,657 @@
+{
+  "annotations": {
+    "total_annotation_docs": 4,
+    "total_annotated_duration_s": 154.33,
+    "per_annotation": [
+      {
+        "annotation_id": 17,
+        "video_filename": "GX010191.MP4",
+        "duration_s": 25.11,
+        "transcription_chars": 677,
+        "transcription_tokens_approx": 169,
+        "source": "GX010191.MP4#17_raw"
+      },
+      {
+        "annotation_id": 21,
+        "video_filename": "GX010229_etirage_coli_test_envoi.MP4",
+        "duration_s": 34.74,
+        "transcription_chars": 581,
+        "transcription_tokens_approx": 145,
+        "source": "GX010229_etirage_coli_test_envoi.MP4#21_raw"
+      },
+      {
+        "annotation_id": 22,
+        "video_filename": "Loic_biseauDroit.mov",
+        "duration_s": 39.8,
+        "transcription_chars": 1827,
+        "transcription_tokens_approx": 456,
+        "source": "Loic_biseauDroit.mov#22_raw"
+      },
+      {
+        "annotation_id": 23,
+        "video_filename": "Loic_biseauOblique.mov.mp4",
+        "duration_s": 54.68,
+        "transcription_chars": 1619,
+        "transcription_tokens_approx": 404,
+        "source": "Loic_biseauOblique.mov.mp4#23_raw"
+      }
+    ]
+  },
+  "courses": {
+    "total_course_collections": 63,
+    "total_course_chunks": 11556,
+    "all_unique_module_types": [
+      "label",
+      "page",
+      "resource"
+    ],
+    "top_5_by_size": [
+      {
+        "collection": "course_54",
+        "doc_count": 2087,
+        "avg_chunk_len": 652,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_52",
+        "doc_count": 1618,
+        "avg_chunk_len": 772,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_11",
+        "doc_count": 790,
+        "avg_chunk_len": 200,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_61",
+        "doc_count": 790,
+        "avg_chunk_len": 199,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_40",
+        "doc_count": 762,
+        "avg_chunk_len": 768,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      }
+    ],
+    "craft_relevant_courses": {
+      "course_83": {
+        "collection": "course_83",
+        "doc_count": 10,
+        "avg_chunk_len": 845,
+        "module_types": [
+          "label"
+        ]
+      },
+      "course_98": {
+        "collection": "course_98",
+        "doc_count": 9,
+        "avg_chunk_len": 879,
+        "module_types": [
+          "label"
+        ]
+      }
+    },
+    "per_course": [
+      {
+        "collection": "course_10",
+        "doc_count": 28,
+        "avg_chunk_len": 205,
+        "module_types": [
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_101",
+        "doc_count": 179,
+        "avg_chunk_len": 602,
+        "module_types": [
+          "page"
+        ]
+      },
+      {
+        "collection": "course_11",
+        "doc_count": 790,
+        "avg_chunk_len": 200,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_13",
+        "doc_count": 168,
+        "avg_chunk_len": 168,
+        "module_types": [
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_14",
+        "doc_count": 15,
+        "avg_chunk_len": 213,
+        "module_types": [
+          "resource",
+          "page"
+        ]
+      },
+      {
+        "collection": "course_15",
+        "doc_count": 79,
+        "avg_chunk_len": 152,
+        "module_types": [
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_19",
+        "doc_count": 124,
+        "avg_chunk_len": 175,
+        "module_types": [
+          "resource",
+          "page"
+        ]
+      },
+      {
+        "collection": "course_20",
+        "doc_count": 38,
+        "avg_chunk_len": 155,
+        "module_types": [
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_22",
+        "doc_count": 135,
+        "avg_chunk_len": 149,
+        "module_types": [
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_27",
+        "doc_count": 51,
+        "avg_chunk_len": 88,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_29",
+        "doc_count": 17,
+        "avg_chunk_len": 798,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_30",
+        "doc_count": 10,
+        "avg_chunk_len": 606,
+        "module_types": [
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_32",
+        "doc_count": 151,
+        "avg_chunk_len": 1383,
+        "module_types": [
+          "resource",
+          "page"
+        ]
+      },
+      {
+        "collection": "course_35",
+        "doc_count": 1,
+        "avg_chunk_len": 6,
+        "module_types": [
+          "label"
+        ]
+      },
+      {
+        "collection": "course_36",
+        "doc_count": 2,
+        "avg_chunk_len": 246,
+        "module_types": [
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_37",
+        "doc_count": 317,
+        "avg_chunk_len": 386,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_38",
+        "doc_count": 4,
+        "avg_chunk_len": 2192,
+        "module_types": [
+          "label"
+        ]
+      },
+      {
+        "collection": "course_39",
+        "doc_count": 169,
+        "avg_chunk_len": 245,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_40",
+        "doc_count": 762,
+        "avg_chunk_len": 768,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_41",
+        "doc_count": 91,
+        "avg_chunk_len": 254,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_42",
+        "doc_count": 2,
+        "avg_chunk_len": 354,
+        "module_types": [
+          "label"
+        ]
+      },
+      {
+        "collection": "course_43",
+        "doc_count": 191,
+        "avg_chunk_len": 182,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_44",
+        "doc_count": 2,
+        "avg_chunk_len": 191,
+        "module_types": [
+          "label"
+        ]
+      },
+      {
+        "collection": "course_46",
+        "doc_count": 70,
+        "avg_chunk_len": 240,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_48",
+        "doc_count": 13,
+        "avg_chunk_len": 515,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_49",
+        "doc_count": 13,
+        "avg_chunk_len": 1244,
+        "module_types": [
+          "label",
+          "resource",
+          "page"
+        ]
+      },
+      {
+        "collection": "course_5",
+        "doc_count": 350,
+        "avg_chunk_len": 79,
+        "module_types": [
+          "resource",
+          "page"
+        ]
+      },
+      {
+        "collection": "course_50",
+        "doc_count": 156,
+        "avg_chunk_len": 1348,
+        "module_types": [
+          "label",
+          "resource",
+          "page"
+        ]
+      },
+      {
+        "collection": "course_51",
+        "doc_count": 3,
+        "avg_chunk_len": 286,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_52",
+        "doc_count": 1618,
+        "avg_chunk_len": 772,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_53",
+        "doc_count": 40,
+        "avg_chunk_len": 142,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_54",
+        "doc_count": 2087,
+        "avg_chunk_len": 652,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_55",
+        "doc_count": 314,
+        "avg_chunk_len": 430,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_56",
+        "doc_count": 33,
+        "avg_chunk_len": 188,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_57",
+        "doc_count": 40,
+        "avg_chunk_len": 797,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_58",
+        "doc_count": 3,
+        "avg_chunk_len": 73,
+        "module_types": [
+          "label"
+        ]
+      },
+      {
+        "collection": "course_59",
+        "doc_count": 6,
+        "avg_chunk_len": 90,
+        "module_types": [
+          "label"
+        ]
+      },
+      {
+        "collection": "course_6",
+        "doc_count": 82,
+        "avg_chunk_len": 201,
+        "module_types": [
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_60",
+        "doc_count": 126,
+        "avg_chunk_len": 119,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_61",
+        "doc_count": 790,
+        "avg_chunk_len": 199,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_62",
+        "doc_count": 88,
+        "avg_chunk_len": 76,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_63",
+        "doc_count": 2,
+        "avg_chunk_len": 113,
+        "module_types": [
+          "label"
+        ]
+      },
+      {
+        "collection": "course_64",
+        "doc_count": 504,
+        "avg_chunk_len": 72,
+        "module_types": [
+          "label",
+          "resource",
+          "page"
+        ]
+      },
+      {
+        "collection": "course_65",
+        "doc_count": 168,
+        "avg_chunk_len": 166,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_66",
+        "doc_count": 14,
+        "avg_chunk_len": 206,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_67",
+        "doc_count": 1,
+        "avg_chunk_len": 10,
+        "module_types": [
+          "label"
+        ]
+      },
+      {
+        "collection": "course_68",
+        "doc_count": 1,
+        "avg_chunk_len": 9,
+        "module_types": [
+          "label"
+        ]
+      },
+      {
+        "collection": "course_69",
+        "doc_count": 212,
+        "avg_chunk_len": 189,
+        "module_types": [
+          "label",
+          "resource",
+          "page"
+        ]
+      },
+      {
+        "collection": "course_7",
+        "doc_count": 9,
+        "avg_chunk_len": 1542,
+        "module_types": [
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_70",
+        "doc_count": 340,
+        "avg_chunk_len": 177,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_71",
+        "doc_count": 239,
+        "avg_chunk_len": 343,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_72",
+        "doc_count": 469,
+        "avg_chunk_len": 904,
+        "module_types": [
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_78",
+        "doc_count": 142,
+        "avg_chunk_len": 144,
+        "module_types": [
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_8",
+        "doc_count": 1,
+        "avg_chunk_len": 71,
+        "module_types": [
+          "label"
+        ]
+      },
+      {
+        "collection": "course_80",
+        "doc_count": 6,
+        "avg_chunk_len": 1110,
+        "module_types": [
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_81",
+        "doc_count": 232,
+        "avg_chunk_len": 148,
+        "module_types": [
+          "label",
+          "resource"
+        ]
+      },
+      {
+        "collection": "course_83",
+        "doc_count": 10,
+        "avg_chunk_len": 845,
+        "module_types": [
+          "label"
+        ]
+      },
+      {
+        "collection": "course_87",
+        "doc_count": 7,
+        "avg_chunk_len": 537,
+        "module_types": [
+          "label"
+        ]
+      },
+      {
+        "collection": "course_88",
+        "doc_count": 8,
+        "avg_chunk_len": 707,
+        "module_types": [
+          "label"
+        ]
+      },
+      {
+        "collection": "course_89",
+        "doc_count": 11,
+        "avg_chunk_len": 727,
+        "module_types": [
+          "label"
+        ]
+      },
+      {
+        "collection": "course_9",
+        "doc_count": 6,
+        "avg_chunk_len": 131,
+        "module_types": [
+          "label"
+        ]
+      },
+      {
+        "collection": "course_90",
+        "doc_count": 7,
+        "avg_chunk_len": 826,
+        "module_types": [
+          "label"
+        ]
+      },
+      {
+        "collection": "course_98",
+        "doc_count": 9,
+        "avg_chunk_len": 879,
+        "module_types": [
+          "label"
+        ]
+      }
+    ]
+  }
+}

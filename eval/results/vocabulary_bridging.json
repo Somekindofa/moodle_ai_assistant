@@ -1,0 +1,327 @@
+{
+  "per_query": [
+    {
+      "qid": "ann17_expert_1",
+      "register": "expert",
+      "raw_query": "Comment puis-je déterminer l'intensité optimale de la flamme pour le soufflage de verre ?",
+      "refined_query": "Comment déterminer l'intensité optimale de la flamme pour le soufflage de verre en utilisant l'outil arc électrique et en ajustant la molette de gaz ?",
+      "mean_cos_raw": 0.5571623983771606,
+      "mean_cos_refined": 0.614726410998758,
+      "delta_cos": 0.05756401262159738,
+      "relevant_ids": [
+        17
+      ]
+    },
+    {
+      "qid": "ann17_expert_2",
+      "register": "expert",
+      "raw_query": "Comment fonctionne l'allumage par arc électrique et quel est son rôle dans le contrôle de la flamme ?",
+      "refined_query": "\"Quelle est la fonction de l'allumage par arc électrique dans le contrôle de la flamme et comment se manifeste-t-il techniquement ?\"",
+      "mean_cos_raw": 0.6606300976728401,
+      "mean_cos_refined": 0.6346301862331368,
+      "delta_cos": -0.02599991143970326,
+      "relevant_ids": [
+        17
+      ]
+    },
+    {
+      "qid": "ann17_expert_3",
+      "register": "expert",
+      "raw_query": "Pourquoi est-il nécessaire de faire passer du gaz dans le chalumeau après avoir allumé la flamme ?",
+      "refined_query": "Pourquoi est-il nécessaire d'ajuster le débit de gaz dans le chalumeau après l'allumage de la flamme pour obtenir une flamme bleue et contrôlée ?",
+      "mean_cos_raw": 0.6877507614413949,
+      "mean_cos_refined": 0.6976809073396943,
+      "delta_cos": 0.009930145898299436,
+      "relevant_ids": [
+        17
+      ]
+    },
+    {
+      "qid": "ann17_novice_1",
+      "register": "novice",
+      "raw_query": "Pourquoi la flamme est-elle jaune et orangée au début et comment la rendre bleue ?",
+      "refined_query": "Pourquoi la flamme est-elle jaune et orangée au début et comment ajuster le débit de gaz pour obtenir une flamme bleue contrôlée ?",
+      "mean_cos_raw": 0.6538401352700183,
+      "mean_cos_refined": 0.6535750317013299,
+      "delta_cos": -0.00026510356868836293,
+      "relevant_ids": [
+        17
+      ]
+    },
+    {
+      "qid": "ann17_novice_2",
+      "register": "novice",
+      "raw_query": "Pourquoi est-il important de baisser l'intensité de la flamme pour la contrôler ?",
+      "refined_query": "Pourquoi est-il essentiel de réduire l'intensité de la flamme pour assurer son contrôle optimal et obtenir une combustion bleue ?",
+      "mean_cos_raw": 0.5654530377962133,
+      "mean_cos_refined": 0.585895627487799,
+      "delta_cos": 0.020442589691585744,
+      "relevant_ids": [
+        17
+      ]
+    },
+    {
+      "qid": "ann17_novice_3",
+      "register": "novice",
+      "raw_query": "Pourquoi entend-on un petit pop quand on allume le chalumeau avec un briquet ?",
+      "refined_query": "Pourquoi entend-on un petit pop quand on allume le chalumeau avec un briquet ?",
+      "mean_cos_raw": 0.6640834112086971,
+      "mean_cos_refined": 0.6640834112086971,
+      "delta_cos": 0.0,
+      "relevant_ids": [
+        17
+      ]
+    },
+    {
+      "qid": "ann21_expert_1",
+      "register": "expert",
+      "raw_query": "Quel est le type de gaz utilisé pour adoucir la flamme du chalumeau et la rendre bleue ?",
+      "refined_query": "Quel type de gaz est utilisé pour atténuer l'intensité de la flamme du chalumeau et la rendre bleue ?",
+      "mean_cos_raw": 0.5208707334719027,
+      "mean_cos_refined": 0.5254782358209957,
+      "delta_cos": 0.004607502349093018,
+      "relevant_ids": [
+        21
+      ]
+    },
+    {
+      "qid": "ann21_expert_2",
+      "register": "expert",
+      "raw_query": "Comment puis-je contrôler la flamme de manière précise pour éviter des coups brusques lors de l'utilisation de la molette ?",
+      "refined_query": "Comment ajuster le débit de gaz pour contrôler précisément la flamme du chalumeau et éviter des fluctuations brusques lors de l'utilisation de la molette ?",
+      "mean_cos_raw": 0.5857923441104944,
+      "mean_cos_refined": 0.5925655442575549,
+      "delta_cos": 0.00677320014706051,
+      "relevant_ids": [
+        21
+      ]
+    },
+    {
+      "qid": "ann21_expert_3",
+      "register": "expert",
+      "raw_query": "Quelles sont les précautions à prendre pour utiliser l'outil à arc électrique avec la main droite pour éviter un coup brusque ?",
+      "refined_query": "Quelles sont les précautions à prendre pour utiliser correctement l'outil à arc électrique avec la main droite, notamment en ajustant la molette de gaz et en contrôlant la couleur de la flamme pour éviter un coup brusque ?",
+      "mean_cos_raw": 0.6563027458762278,
+      "mean_cos_refined": 0.7616932085342796,
+      "delta_cos": 0.10539046265805174,
+      "relevant_ids": [
+        21
+      ]
+    },
+    {
+      "qid": "ann21_novice_1",
+      "register": "novice",
+      "raw_query": "Pourquoi j'ai besoin de tourner cette petite molette ?",
+      "refined_query": "Pourquoi dois-je ajuster la molette de régulation du débit de gaz sur mon outil de soudage à arc électrique pour obtenir une flamme bleue et mieux contrôler le processus de soudure ?",
+      "mean_cos_raw": 0.46066221118212025,
+      "mean_cos_refined": 0.6414017573087752,
+      "delta_cos": 0.180739546126655,
+      "relevant_ids": [
+        21
+      ]
+    },
+    {
+      "qid": "ann21_novice_2",
+      "register": "novice",
+      "raw_query": "Comment je peux éviter que ma flamme devienne trop jaune ?",
+      "refined_query": "Comment puis-je ajuster le débit de gaz pour obtenir une flamme bleue avec un chalumeau à arc électrique ?",
+      "mean_cos_raw": 0.48622297982549084,
+      "mean_cos_refined": 0.635541058819489,
+      "delta_cos": 0.14931807899399813,
+      "relevant_ids": [
+        21
+      ]
+    },
+    {
+      "qid": "ann21_novice_3",
+      "register": "novice",
+      "raw_query": "Qu'est-ce qu'il faut faire avec ma main gauche pendant que je travaille avec le chalumeau ?",
+      "refined_query": "Quelle est la position et l'utilisation appropriée de votre main gauche lors de l'utilisation du chalumeau, en tenant compte des termes techniques tels que \"outil arc électrique\", \"molette\", \"flamme incandescente jaune vif\", \"flamme contrôlée bleue\" et \"biseau oblique\" ?",
+      "mean_cos_raw": 0.6445143633991091,
+      "mean_cos_refined": 0.6870895915284436,
+      "delta_cos": 0.042575228129334564,
+      "relevant_ids": [
+        21
+      ]
+    },
+    {
+      "qid": "ann22_expert_1",
+      "register": "expert",
+      "raw_query": "Comment puis-je vérifier visuellement la régularité d'un biseau lors du soufflage de verre ?",
+      "refined_query": "\"Comment puis-je vérifier visuellement la régularité d'un biseau lors du meulage ou du soufflage de verre en utilisant les techniques de centrage, de déplacement et de contrôle de l'outil ou de la flamme ?\"",
+      "mean_cos_raw": 0.5389303419958291,
+      "mean_cos_refined": 0.5569863045535368,
+      "delta_cos": 0.018055962557707694,
+      "relevant_ids": [
+        22
+      ]
+    },
+    {
+      "qid": "ann22_expert_2",
+      "register": "expert",
+      "raw_query": "Quel rôle joue le ressenti en termes de pression lors du travail sur la meule ?",
+      "refined_query": "Quel rôle joue la pression exercée sur la meule lors du travail de meulage du verre ?",
+      "mean_cos_raw": 0.4573988120789342,
+      "mean_cos_refined": 0.49906709981415465,
+      "delta_cos": 0.041668287735220466,
+      "relevant_ids": [
+        22
+      ]
+    },
+    {
+      "qid": "ann22_expert_3",
+      "register": "expert",
+      "raw_query": "Pourquoi est-il important de maintenir une respiration régulière pendant le travail sur la meule ?",
+      "refined_query": "Pourquoi est-il crucial d'adopter une technique de respiration contrôlée et régulière lors de l'usinage du verre sur la meule ?",
+      "mean_cos_raw": 0.4521882535754949,
+      "mean_cos_refined": 0.509857339213039,
+      "delta_cos": 0.05766908563754408,
+      "relevant_ids": [
+        22
+      ]
+    },
+    {
+      "qid": "ann22_novice_1",
+      "register": "novice",
+      "raw_query": "Pourquoi mon verre tombe-t-il lors du soufflage de verre ?",
+      "refined_query": "Pourquoi mon verre se brise-t-il lors du soufflage de verre en effectuant des mouvements de haut en bas et en posant l'arête de la meule sur les tracés ?",
+      "mean_cos_raw": 0.4295021168209427,
+      "mean_cos_refined": 0.5333228786805021,
+      "delta_cos": 0.10382076185955941,
+      "relevant_ids": [
+        22
+      ]
+    },
+    {
+      "qid": "ann22_novice_2",
+      "register": "novice",
+      "raw_query": "Comment je peux savoir si mon biseau est régulier ?",
+      "refined_query": "\"Comment puis-je vérifier si mon biseau est correctement réalisé en utilisant les techniques de meulage et de travail sur le verre ?\"",
+      "mean_cos_raw": 0.469346610786378,
+      "mean_cos_refined": 0.5486100872230789,
+      "delta_cos": 0.0792634764367009,
+      "relevant_ids": [
+        22
+      ]
+    },
+    {
+      "qid": "ann22_novice_3",
+      "register": "novice",
+      "raw_query": "Pourquoi je dois retenir ma respiration pendant la taille du biseau ?",
+      "refined_query": "\"Pourquoi est-il nécessaire de contrôler la position et le mouvement de la meule lors de la taille du biseau ?\"",
+      "mean_cos_raw": 0.4922798777701549,
+      "mean_cos_refined": 0.49776904610566924,
+      "delta_cos": 0.005489168335514327,
+      "relevant_ids": [
+        22
+      ]
+    },
+    {
+      "qid": "ann23_expert_1",
+      "register": "expert",
+      "raw_query": "Quelle est la différence entre le biseau droit et le biseau oblique en termes de technique de soufflage de verre ?",
+      "refined_query": "Quelle est la différence entre le biseau droit et le biseau oblique en termes de technique de soufflage de verre, notamment en ce qui concerne la position de l'arête de la meule sur le tracé, la manipulation du verre, et l'utilisation du chalumeau ?",
+      "mean_cos_raw": 0.5317794649231132,
+      "mean_cos_refined": 0.6090923902050275,
+      "delta_cos": 0.07731292528191425,
+      "relevant_ids": [
+        23
+      ]
+    },
+    {
+      "qid": "ann23_expert_2",
+      "register": "expert",
+      "raw_query": "Comment réaliser un biseau propre en soufflage de verre ?",
+      "refined_query": "Comment réaliser un biseau oblique en soufflage de verre en utilisant une meule et un outil arc électrique ?",
+      "mean_cos_raw": 0.530073561968147,
+      "mean_cos_refined": 0.576055410633285,
+      "delta_cos": 0.04598184866513799,
+      "relevant_ids": [
+        23
+      ]
+    },
+    {
+      "qid": "ann23_expert_3",
+      "register": "expert",
+      "raw_query": "Quels sont les écueils communs auxquels les débutants se heurtent en soufflage de verre et comment les éviter ?",
+      "refined_query": "Quels sont les écueils courants auxquels les débutants sont confrontés en soufflage de verre, notamment en ce qui concerne la réalisation du biseau oblique, le centrage sur la meule, l'utilisation de l'outil arc électrique et le contrôle de la flamme, et comment peuvent-ils être évités ?",
+      "mean_cos_raw": 0.4423254102176897,
+      "mean_cos_refined": 0.57993202016747,
+      "delta_cos": 0.13760660994978036,
+      "relevant_ids": [
+        23
+      ]
+    },
+    {
+      "qid": "ann23_novice_1",
+      "register": "novice",
+      "raw_query": "Pourquoi mon verre se déplace quand je le manipule ?",
+      "refined_query": "Pourquoi le mouvement de mon outil de meulage sur la surface du verre provoque-t-il un déplacement de celui-ci ?",
+      "mean_cos_raw": 0.41571985991169874,
+      "mean_cos_refined": 0.5071120525803336,
+      "delta_cos": 0.09139219266863491,
+      "relevant_ids": [
+        23
+      ]
+    },
+    {
+      "qid": "ann23_novice_2",
+      "register": "novice",
+      "raw_query": "Pourquoi mon biseau n'est pas régulier ?",
+      "refined_query": "Pourquoi mon biseau oblique n'est pas régulier lors de l'utilisation de la meule ?",
+      "mean_cos_raw": 0.45603341448338003,
+      "mean_cos_refined": 0.5395005014097467,
+      "delta_cos": 0.08346708692636667,
+      "relevant_ids": [
+        23
+      ]
+    },
+    {
+      "qid": "ann23_novice_3",
+      "register": "novice",
+      "raw_query": "Pourquoi j'entends des sons différents quand je travaille le verre ?",
+      "refined_query": "Pourquoi j'entends des sons différents quand je travaille le verre sur la meule en effectuant des mouvements de va-et-vient et en modifiant l'inclinaison de la pièce ?",
+      "mean_cos_raw": 0.43515352781603994,
+      "mean_cos_refined": 0.5515467366108953,
+      "delta_cos": 0.11639320879485532,
+      "relevant_ids": [
+        23
+      ]
+    }
+  ],
+  "aggregate": {
+    "expert": {
+      "n": 12,
+      "mean_cos_raw": 0.5517670771424358,
+      "std_cos_raw": 0.07918623777380453,
+      "mean_cos_refined": 0.5964804214809111,
+      "std_cos_refined": 0.07290664805143807,
+      "mean_delta": 0.04471334433847531,
+      "std_delta": 0.04442808897991807,
+      "test": "wilcoxon",
+      "p_value": 0.00244140625
+    },
+    "novice": {
+      "n": 12,
+      "mean_cos_raw": 0.514400962189187,
+      "std_cos_raw": 0.08860855842303977,
+      "mean_cos_refined": 0.58712064838873,
+      "std_cos_refined": 0.06319364834975114,
+      "mean_delta": 0.07271968619954305,
+      "std_delta": 0.05751355326771264,
+      "test": "wilcoxon",
+      "p_value": 0.0009765625
+    },
+    "all": {
+      "n": 24,
+      "mean_cos_raw": 0.5330840196658113,
+      "std_cos_raw": 0.08608150251920693,
+      "mean_cos_refined": 0.5918005349348204,
+      "std_cos_refined": 0.06838354772171748,
+      "mean_delta": 0.05871651526900917,
+      "std_delta": 0.05326275195718408,
+      "test": "wilcoxon",
+      "p_value": 4.363063392115561e-05
+    }
+  }
+}

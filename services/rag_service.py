@@ -54,7 +54,10 @@ class RAGService:
                 "- Ne produisez JAMAIS de balises <think> ni de raisonnement interne visible.\n"
                 "- N'inventez JAMAIS d'URLs, de liens, de références bibliographiques ou de citations.\n"
                 "- Basez-vous EXCLUSIVEMENT sur le contexte documentaire fourni. "
-                "Si le contexte est insuffisant, indiquez-le honnêtement sans compléter par des suppositions.\n\n"
+                "Si le contexte est insuffisant ou ne traite pas de la question posée, répondez UNIQUEMENT : "
+                "\"Je n'ai pas trouvé d'information pertinente dans le corpus pour répondre à cette question. "
+                "Veuillez reformuler ou consulter votre formateur.\" "
+                "Ne complétez JAMAIS par des connaissances extérieures au contexte fourni.\n\n"
                 "STRUCTURE DE LA RÉPONSE — adaptez-la à la nature de la question :\n"
                 "- Pour une question factuelle simple (température, durée, proportion, définition…), "
                 "répondez directement et précisément sans imposer de sections superflues.\n"
@@ -818,12 +821,38 @@ Génère une explication détaillée à la première personne de la technique co
         Queries both the video annotation collection and the per-course collection
         (if course_id is present in state).  Results are stored in state["context"]
         for the subsequent PRF reformulation step.
+
+        Guardrail (early rejection): the raw query is checked against the annotation
+        collection using L2 distance BEFORE PRF runs.  This prevents PRF from
+        "kidnapping" clearly off-topic queries into the corpus vocabulary and
+        producing hallucinated corpus-grounded answers.  If the raw query is too
+        distant from any annotation document, an empty context is returned
+        immediately — triggering the deterministic refusal in stream_generate.
         """
         vector_data = self.get_vector_store_data()
         has_annotation_docs = bool(vector_data.get("ids"))
 
         query = str(state.get("messages")[-1].content)
         course_id = state.get("course_id")
+
+        # Early guardrail: check raw query distance before PRF can transform it.
+        if has_annotation_docs:
+            try:
+                raw_embedding = self.embeddings.embed_query(query)
+                raw_result = self.vector_store._collection.query(
+                    query_embeddings=[raw_embedding],
+                    n_results=min(1, self.vector_store._collection.count()),
+                    include=["distances"],
+                )
+                raw_distances = raw_result["distances"][0] if raw_result["distances"] else []
+                if raw_distances and min(raw_distances) > self.L2_DISTANCE_THRESHOLD:
+                    logger.info(
+                        f"retrieve_initial: raw query L2={min(raw_distances):.0f} > "
+                        f"threshold — early rejection (guardrail)"
+                    )
+                    return {"context": [], "video_metadata": None}
+            except Exception as e:
+                logger.warning(f"Early guardrail check failed ({e}), continuing")
 
         results: List[Document] = []
 
@@ -911,11 +940,27 @@ Génère une explication détaillée à la première personne de la technique co
             logger.error(f"refine_query_prf failed: {e} — using original query")
             return {"refined_query": original_query}
 
+    # Maximum L2 distance threshold for the annotation relevance guardrail.
+    # Empirically calibrated on bge_multilingual_gemma2 (3584-dim, unnormalized):
+    #   - In-domain glassblowing queries → best L2 distance ~19,000–25,000
+    #   - Clearly off-topic queries       → best L2 distance ~40,000–53,000
+    # Threshold set at 39,000 to safely reject clearly irrelevant queries while
+    # passing all craft-domain queries.  Re-calibrate if the corpus or embedding
+    # model changes.
+    L2_DISTANCE_THRESHOLD: float = 39_000.0
+
     def retrieve_final_dual(self, state: ConversationState) -> Dict[str, Any]:
         """PRF step 3 — second-pass retrieval using the refined query.
 
         Queries both collections again with the PRF-improved query and replaces
         state["context"] with the final result set.
+
+        Guardrail (Option A, L2-distance based): embeds the refined query and
+        queries the annotation collection for its raw L2 distance to the nearest
+        neighbour.  If that minimum distance exceeds L2_DISTANCE_THRESHOLD, no
+        annotation document is close enough to be useful and the context is
+        cleared — causing stream_generate to emit the deterministic
+        "no resources" refusal rather than hallucinating from unrelated content.
         """
         refined_query = state.get("refined_query") or str(state.get("messages")[-1].content)
         course_id = state.get("course_id")
@@ -924,11 +969,31 @@ Génère une explication détaillée à la première personne de la technique co
         has_annotation_docs = bool(vector_data.get("ids"))
 
         results: List[Document] = []
+        min_l2_distance: float = 0.0
 
-        # 1. Video annotations
+        # 1. Video annotations — query with raw L2 distances for guardrail check.
         if has_annotation_docs:
-            annotation_results = self.similarity_search(refined_query, k=5)
-            results.extend(annotation_results)
+            try:
+                query_embedding = self.embeddings.embed_query(refined_query)
+                raw = self.vector_store._collection.query(
+                    query_embeddings=[query_embedding],
+                    n_results=min(5, self.vector_store._collection.count()),
+                    include=["documents", "metadatas", "distances"],
+                )
+                distances = raw["distances"][0] if raw["distances"] else []
+                min_l2_distance = min(distances) if distances else float("inf")
+
+                # Reconstruct Document objects from raw query result
+                seen: set = set()
+                for doc_text, meta in zip(raw["documents"][0], raw["metadatas"][0]):
+                    src = meta.get("source", "")
+                    if src not in seen:
+                        seen.add(src)
+                        results.append(Document(page_content=doc_text, metadata=meta))
+            except Exception as e:
+                logger.warning(f"Distance-based retrieval failed ({e}), falling back to MMR")
+                results.extend(self.similarity_search(refined_query, k=5))
+                min_l2_distance = 0.0  # assume OK on fallback
 
         # 2. Course collections — same all-courses strategy as retrieve_initial.
         if self.course_rag_service:
@@ -943,9 +1008,21 @@ Génère une explication détaillée à la première personne de la technique co
             logger.info("retrieve_final_dual: no documents found with refined query")
             return {"context": [], "video_metadata": None}
 
+        # Guardrail: reject the entire result set if no annotation doc is relevant.
+        # Only apply when we have annotation docs to score; if the collection is
+        # empty we skip the check to avoid blocking course-content-only queries.
+        if has_annotation_docs and min_l2_distance > self.L2_DISTANCE_THRESHOLD:
+            logger.info(
+                f"retrieve_final_dual: min_l2={min_l2_distance:.0f} > "
+                f"threshold={self.L2_DISTANCE_THRESHOLD:.0f} — returning empty context (guardrail)"
+            )
+            return {"context": [], "video_metadata": None}
+
         results = results[: self.MAX_CONTEXT_DOCS]
         video_metadata = self._extract_video_metadata(results)
-        logger.info(f"retrieve_final_dual: {len(results)} docs with refined query")
+        logger.info(
+            f"retrieve_final_dual: {len(results)} docs, min_l2={min_l2_distance:.0f}"
+        )
         return {"context": results, "video_metadata": video_metadata}
 
     # ============================================================================
