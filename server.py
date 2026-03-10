@@ -8,6 +8,10 @@ providing streaming responses and document-based or pure generation modes.
 import os
 import logging
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+
+# Load .env before any LangChain import so LANGSMITH_TRACING is picked up at SDK init time
+load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
