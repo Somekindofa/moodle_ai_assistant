@@ -255,12 +255,22 @@ async def stream_video(video_id: str, request: Request):
     if not os.path.exists(video_path):
         raise HTTPException(status_code=404, detail="Video file not found on disk")
 
-    # Security: Prevent path traversal
+    # Security: Prevent path traversal and enforce allowlisted directories
+    _ALLOWED_VIDEO_DIRS = [
+        Path("/opt/video_elicitation_annotation_tool").resolve(),
+        Path("/var/www/html").resolve(),
+        Path("/tmp").resolve(),
+    ]
     try:
         video_path_resolved = Path(video_path).resolve()
-        # Could add additional checks here for allowed directories
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid file path")
+
+    if not any(
+        str(video_path_resolved).startswith(str(d))
+        for d in _ALLOWED_VIDEO_DIRS
+    ):
+        raise HTTPException(status_code=403, detail="Video path not permitted")
 
     file_size = os.path.getsize(video_path)
 
@@ -377,6 +387,68 @@ async def delete_course(request: CourseDeleteRequest):
         return {"status": "ok", "collection_deleted": f"course_{request.course_id}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/annotations-dashboard")
+async def get_annotations_dashboard():
+    """Return all video elicitation annotations with video and user metadata for the dashboard."""
+    import pymysql
+    import pymysql.cursors
+
+    conn = pymysql.connect(
+        host="localhost",
+        user="moodleuser",
+        password=os.getenv("MOODLE_DB_PASSWORD", ""),
+        database="moodle",
+        cursorclass=pymysql.cursors.DictCursor,
+    )
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT
+                    a.id,
+                    a.craft,
+                    a.task,
+                    a.starttime,
+                    a.endtime,
+                    a.transcription,
+                    a.transcriptionstatus,
+                    a.reviewstatus,
+                    a.judgestatus,
+                    a.taggingstatus,
+                    a.issalient,
+                    a.tags,
+                    a.feedbackchoices,
+                    a.timecreated,
+                    v.filename  AS video_filename,
+                    v.source_type,
+                    u.username,
+                    u.firstname,
+                    u.lastname
+                FROM mdl_local_videoelicit_annotations a
+                LEFT JOIN mdl_local_videoelicit_videos v ON v.id = a.videoid
+                LEFT JOIN mdl_user u ON u.id = a.userid
+                ORDER BY a.timecreated DESC
+            """)
+            rows = cursor.fetchall()
+
+        for row in rows:
+            # Parse JSON fields stored as longtext
+            for field in ("tags", "feedbackchoices"):
+                raw = row.get(field)
+                if raw:
+                    try:
+                        row[field] = json.loads(raw)
+                    except (json.JSONDecodeError, TypeError):
+                        row[field] = []
+                else:
+                    row[field] = []
+            # Human-readable timestamp
+            row["timecreated"] = datetime.fromtimestamp(row["timecreated"]).isoformat() if row["timecreated"] else None
+
+        return {"annotations": rows, "total": len(rows)}
+    finally:
+        conn.close()
 
 
 @router.get("/course-status/{course_id}")

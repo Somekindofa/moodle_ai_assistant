@@ -86,9 +86,7 @@ class ConfigurationManager:
         for key in self.config.required_env_keys:
             value = self.env_vars.get(key) or os.getenv(key)
             if value:
-                self.logger.info(
-                    f"Successfully loaded {key}: {value[:4]}...{value[-4:]}"
-                )
+                self.logger.info(f"Successfully loaded {key}")
             else:
                 self.logger.warning(f"{key} not found in environment variables")
                 missing_keys.append(key)

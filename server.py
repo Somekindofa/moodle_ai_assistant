@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 # Load .env before any LangChain import so LANGSMITH_TRACING is picked up at SDK init time
 load_dotenv()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -48,14 +48,27 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Configure CORS for JavaScript frontend
+# Configure CORS — backend is internal-only (127.0.0.1), so lock down origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
+    allow_origins=["http://127.0.0.1", "http://localhost"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Internal-Token"],
 )
+
+_INTERNAL_TOKEN = os.getenv("INTERNAL_API_TOKEN", "")
+_PUBLIC_PATHS = {"/", "/api/health", "/api/status"}
+
+
+@app.middleware("http")
+async def require_internal_token(request: Request, call_next):
+    """Reject any request to sensitive endpoints that lacks the shared internal token."""
+    if request.url.path not in _PUBLIC_PATHS:
+        token = request.headers.get("X-Internal-Token", "")
+        if not _INTERNAL_TOKEN or token != _INTERNAL_TOKEN:
+            return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    return await call_next(request)
 
 # Include API routes
 app.include_router(router, prefix="/api")

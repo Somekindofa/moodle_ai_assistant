@@ -22,10 +22,13 @@ from services.rag_service import RAGService
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
+import dotenv
+dotenv.load_dotenv('/opt/craftpilot_backend/.env')
+
 MYSQL_CONFIG = dict(
     host='localhost',
     user='moodleuser',
-    password='M00dl3',
+    password=os.getenv('MOODLE_DB_PASSWORD', ''),
     database='moodle',
     charset='utf8mb4',
 )

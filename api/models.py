@@ -1,6 +1,6 @@
 """Pydantic models for API requests and responses."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional, Literal
 
 class ChatMessage(BaseModel):
@@ -13,10 +13,10 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     """Request model for chat endpoint."""
 
-    message: str
-    conversation_thread_id: str
-    selected_domain: Optional[str] = None  # Domain focus chosen by the user
-    course_id: Optional[str] = None        # Moodle course ID for per-course retrieval
+    message: str = Field(..., min_length=1, max_length=4000)
+    conversation_thread_id: str = Field(..., max_length=255)
+    selected_domain: Optional[str] = Field(None, max_length=100)
+    course_id: Optional[str] = Field(None, max_length=20)
     is_first_message: bool = False         # True on first message — triggers title generation
 
 
