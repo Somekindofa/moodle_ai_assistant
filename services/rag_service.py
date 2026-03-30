@@ -822,12 +822,13 @@ Génère une explication détaillée à la première personne de la technique co
         (if course_id is present in state).  Results are stored in state["context"]
         for the subsequent PRF reformulation step.
 
-        Guardrail (early rejection): the raw query is checked against the annotation
-        collection using L2 distance BEFORE PRF runs.  This prevents PRF from
-        "kidnapping" clearly off-topic queries into the corpus vocabulary and
-        producing hallucinated corpus-grounded answers.  If the raw query is too
-        distant from any annotation document, an empty context is returned
-        immediately — triggering the deterministic refusal in stream_generate.
+        Guardrail (annotation-only early rejection): the raw query is checked
+        against the annotation collection using L2 distance BEFORE PRF runs.
+        This prevents PRF from "kidnapping" clearly off-topic queries into the
+        annotation corpus vocabulary.  If the raw query is too distant from any
+        annotation document, annotation retrieval is skipped — but course content
+        retrieval still proceeds so that questions answered by course material are
+        not incorrectly refused.
         """
         vector_data = self.get_vector_store_data()
         has_annotation_docs = bool(vector_data.get("ids"))
@@ -835,8 +836,11 @@ Génère une explication détaillée à la première personne de la technique co
         query = str(state.get("messages")[-1].content)
         course_id = state.get("course_id")
 
-        # Early guardrail: check raw query distance before PRF can transform it.
+        results: List[Document] = []
+
+        # 1. Video annotations collection — guarded by L2 distance check.
         if has_annotation_docs:
+            annotation_guardrail_fired = False
             try:
                 raw_embedding = self.embeddings.embed_query(query)
                 raw_result = self.vector_store._collection.query(
@@ -846,25 +850,22 @@ Génère une explication détaillée à la première personne de la technique co
                 )
                 raw_distances = raw_result["distances"][0] if raw_result["distances"] else []
                 if raw_distances and min(raw_distances) > self.L2_DISTANCE_THRESHOLD:
+                    annotation_guardrail_fired = True
                     logger.info(
                         f"retrieve_initial: raw query L2={min(raw_distances):.0f} > "
-                        f"threshold — early rejection (guardrail)"
+                        f"threshold — skipping annotation retrieval (course content still searched)"
                     )
-                    return {"context": [], "video_metadata": None}
             except Exception as e:
-                logger.warning(f"Early guardrail check failed ({e}), continuing")
+                logger.warning(f"Early guardrail check failed ({e}), continuing with annotation retrieval")
 
-        results: List[Document] = []
-
-        # 1. Video annotations collection
-        if has_annotation_docs:
-            annotation_results = self.similarity_search(query, k=5)
-            results.extend(annotation_results)
+            if not annotation_guardrail_fired:
+                annotation_results = self.similarity_search(query, k=5)
+                results.extend(annotation_results)
         else:
             logger.info("Annotation collection empty — skipping annotation retrieval")
 
-        # 2. Course collections — priority course gets k=6, others k=1 (cross-course
-        #    retrieval is a weak signal; non-priority results are capped to reduce noise).
+        # 2. Course collections — always searched regardless of annotation guardrail.
+        #    Priority course gets k=6, all others k=1.
         if self.course_rag_service:
             course_results = self.course_rag_service.similarity_search_all_courses(
                 query,
@@ -955,12 +956,12 @@ Génère une explication détaillée à la première personne de la technique co
         Queries both collections again with the PRF-improved query and replaces
         state["context"] with the final result set.
 
-        Guardrail (Option A, L2-distance based): embeds the refined query and
-        queries the annotation collection for its raw L2 distance to the nearest
-        neighbour.  If that minimum distance exceeds L2_DISTANCE_THRESHOLD, no
-        annotation document is close enough to be useful and the context is
-        cleared — causing stream_generate to emit the deterministic
-        "no resources" refusal rather than hallucinating from unrelated content.
+        Guardrail (annotation-only, L2-distance based): embeds the refined query
+        and checks its L2 distance to the nearest annotation document.  If that
+        distance exceeds L2_DISTANCE_THRESHOLD, annotation results are excluded
+        from the final context — but course content results always pass through.
+        This means a question answered only by course material is never refused
+        simply because it is distant from the glassblowing annotation corpus.
         """
         refined_query = state.get("refined_query") or str(state.get("messages")[-1].content)
         course_id = state.get("course_id")
@@ -968,7 +969,7 @@ Génère une explication détaillée à la première personne de la technique co
         vector_data = self.get_vector_store_data()
         has_annotation_docs = bool(vector_data.get("ids"))
 
-        results: List[Document] = []
+        annotation_results: List[Document] = []
         min_l2_distance: float = 0.0
 
         # 1. Video annotations — query with raw L2 distances for guardrail check.
@@ -983,45 +984,45 @@ Génère une explication détaillée à la première personne de la technique co
                 distances = raw["distances"][0] if raw["distances"] else []
                 min_l2_distance = min(distances) if distances else float("inf")
 
-                # Reconstruct Document objects from raw query result
-                seen: set = set()
-                for doc_text, meta in zip(raw["documents"][0], raw["metadatas"][0]):
-                    src = meta.get("source", "")
-                    if src not in seen:
-                        seen.add(src)
-                        results.append(Document(page_content=doc_text, metadata=meta))
+                if min_l2_distance <= self.L2_DISTANCE_THRESHOLD:
+                    # Reconstruct Document objects from raw query result
+                    seen: set = set()
+                    for doc_text, meta in zip(raw["documents"][0], raw["metadatas"][0]):
+                        src = meta.get("source", "")
+                        if src not in seen:
+                            seen.add(src)
+                            annotation_results.append(Document(page_content=doc_text, metadata=meta))
+                else:
+                    logger.info(
+                        f"retrieve_final_dual: annotation L2={min_l2_distance:.0f} > "
+                        f"threshold={self.L2_DISTANCE_THRESHOLD:.0f} — excluding annotation results "
+                        f"(course content still included)"
+                    )
             except Exception as e:
                 logger.warning(f"Distance-based retrieval failed ({e}), falling back to MMR")
-                results.extend(self.similarity_search(refined_query, k=5))
-                min_l2_distance = 0.0  # assume OK on fallback
+                annotation_results.extend(self.similarity_search(refined_query, k=5))
 
-        # 2. Course collections — same all-courses strategy as retrieve_initial.
+        # 2. Course collections — always included regardless of annotation guardrail.
+        course_results: List[Document] = []
         if self.course_rag_service:
             course_results = self.course_rag_service.similarity_search_all_courses(
                 refined_query,
                 k_per_course=1,
                 priority_course_id=course_id,
             )
-            results = self._merge_dedup(results, course_results)
+
+        results = self._merge_dedup(annotation_results, course_results)
 
         if not results:
             logger.info("retrieve_final_dual: no documents found with refined query")
             return {"context": [], "video_metadata": None}
 
-        # Guardrail: reject the entire result set if no annotation doc is relevant.
-        # Only apply when we have annotation docs to score; if the collection is
-        # empty we skip the check to avoid blocking course-content-only queries.
-        if has_annotation_docs and min_l2_distance > self.L2_DISTANCE_THRESHOLD:
-            logger.info(
-                f"retrieve_final_dual: min_l2={min_l2_distance:.0f} > "
-                f"threshold={self.L2_DISTANCE_THRESHOLD:.0f} — returning empty context (guardrail)"
-            )
-            return {"context": [], "video_metadata": None}
-
         results = results[: self.MAX_CONTEXT_DOCS]
         video_metadata = self._extract_video_metadata(results)
         logger.info(
-            f"retrieve_final_dual: {len(results)} docs, min_l2={min_l2_distance:.0f}"
+            f"retrieve_final_dual: {len(results)} docs "
+            f"(annotations={len(annotation_results)}, course={len(course_results)}), "
+            f"annotation_min_l2={min_l2_distance:.0f}"
         )
         return {"context": results, "video_metadata": video_metadata}
 
