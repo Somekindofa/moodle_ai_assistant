@@ -109,13 +109,15 @@ class MoodleAIAssistantPipeline:
             logger.warning(f"Auto-sync of annotations failed: {str(e)}")
 
     def _build_conversation_graph(self) -> CompiledStateGraph:
-        """Build and compile the PRF (Pseudo-Relevance Feedback) conversation graph.
+        """Build and compile the PRF conversation graph with cross-encoder reranking.
 
-        Pipeline: retrieve_initial → refine_query_prf → retrieve_final_dual → generate
+        Pipeline:
+          retrieve_initial → refine_query_prf → retrieve_final_dual → rerank → generate
 
-        First pass retrieves from both video annotation and per-course collections.
-        The LLM then reformulates the query using corpus vocabulary (PRF).
-        Second pass retrieves again with the refined query.
+        retrieve_initial and retrieve_final_dual cast a wide net from both the
+        video annotation collection and per-course collections.  rerank filters
+        and re-orders the candidate set using a local multilingual cross-encoder,
+        replacing the old L2 distance guardrail with a principled relevance score.
         """
         try:
             return self.graph_service.build_conversation_graph(
@@ -123,6 +125,7 @@ class MoodleAIAssistantPipeline:
                     "retrieve_initial",
                     "refine_query_prf",
                     "retrieve_final_dual",
+                    "rerank",
                     "generate",
                 ]
             ).compile_graph()
@@ -362,7 +365,11 @@ class MoodleAIAssistantPipeline:
             result = self.rag_service.retrieve_final_dual(state)
             state.update(result)
 
-            # Re-emit video metadata if it changed after the final retrieval.
+            # --- PRF step 4: cross-encoder reranking and relevance filtering ---
+            result = self.rag_service.rerank(state)
+            state.update(result)
+
+            # Re-emit video metadata after reranking (top doc may have changed).
             if state.get("video_metadata"):
                 yield json.dumps({"event": "video_metadata", "data": state["video_metadata"]}) + "\n"
 
