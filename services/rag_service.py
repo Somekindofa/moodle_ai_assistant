@@ -623,13 +623,27 @@ Génère une explication détaillée à la première personne de la technique co
             if score >= self.RERANK_SCORE_THRESHOLD
         ]
 
+        top_score = float(scores.max())
+        all_scores_sorted = sorted([round(float(s), 4) for s in scores.tolist()], reverse=True)
+
         logger.info(
             f"rerank: {len(docs)} candidates → {len(passing)} passed threshold "
-            f"(top score={scores.max():.2f}, threshold={self.RERANK_SCORE_THRESHOLD})"
+            f"(top score={top_score:.2f}, threshold={self.RERANK_SCORE_THRESHOLD})"
         )
 
         video_metadata = self._extract_video_metadata(passing)
-        return {"context": passing, "video_metadata": video_metadata}
+        return {
+            "context": passing,
+            "video_metadata": video_metadata,
+            "rerank_debug": {
+                "disabled": False,
+                "candidates_in": len(docs),
+                "passing_out": len(passing),
+                "threshold": self.RERANK_SCORE_THRESHOLD,
+                "top_score": round(top_score, 4),
+                "scores": all_scores_sorted,
+            },
+        }
 
     def get_vector_store_data(self) -> Dict[str, Any]:
         """Get current vector store data."""
