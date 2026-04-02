@@ -12,6 +12,7 @@ from langchain_core.documents.base import Document
 from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage
 from langchain_core.prompts import PromptTemplate
 from langchain import hub
+from sentence_transformers import CrossEncoder
 
 from config.settings import ConfigurationManager
 from core.types import ConversationState
@@ -35,6 +36,7 @@ class RAGService:
         self.embeddings = self._initialize_embeddings()
         self.vector_store = self._initialize_vector_store()
         self.llm = self._initialize_llm()
+        self.cross_encoder = self._initialize_cross_encoder()
         self.annotation_service = annotation_service  # Optional dependency
         self.course_rag_service = course_rag_service  # Optional — per-course collections
 
@@ -206,6 +208,28 @@ class RAGService:
                 f"LLM initialization failed: {str(e)}. "
                 "Please ensure INFOMANIAK_API_KEY and INFOMANIAK_PRODUCT_ID are properly configured in your .env file."
             )
+
+    # Model name for the multilingual cross-encoder reranker.
+    # mmarco-mMiniLMv2-L12-H384-v1 is trained on MS MARCO translated into 14
+    # languages including French, making it well-suited for this corpus.
+    CROSS_ENCODER_MODEL = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+
+    # Minimum cross-encoder relevance score.  The model outputs logits on
+    # roughly the scale [-10, +10].  Docs scoring below this threshold are
+    # considered irrelevant and removed from context.  Calibrate against your
+    # corpus: a threshold of 0.0 rejects docs the model considers less likely
+    # to answer the query than not.
+    RERANK_SCORE_THRESHOLD: float = 0.0
+
+    def _initialize_cross_encoder(self) -> CrossEncoder:
+        """Load the multilingual cross-encoder reranker onto CPU."""
+        try:
+            model = CrossEncoder(self.CROSS_ENCODER_MODEL, device="cpu")
+            logger.info(f"Cross-encoder reranker loaded: {self.CROSS_ENCODER_MODEL}")
+            return model
+        except Exception as e:
+            logger.error(f"Failed to load cross-encoder ({e})")
+            raise
 
     def add_documents(self, documents: List[Document]) -> None:
         """Add documents to the vector store."""
@@ -573,33 +597,53 @@ Génère une explication détaillée à la première personne de la technique co
         return {"context": all_docs[:30]}  # Candidate pool
 
     def rerank(self, state: ConversationState) -> Dict[str, Any]:
-        """Re-rank context docs for relevance."""
-        if not self.llm:
-            top_docs = state.get("context", [])[:3]
-            video_metadata = self._extract_video_metadata(top_docs)
-            return {"context": top_docs, "video_metadata": video_metadata}
+        """Cross-encoder reranking — filters and re-orders retrieved docs by relevance.
 
-        original_query = str(state.get("messages")[-1].content)
+        Uses a local multilingual cross-encoder (no API call) to jointly score
+        each (query, doc) pair.  Docs below RERANK_SCORE_THRESHOLD are dropped,
+        which serves as the primary relevance gate replacing the old L2 guardrail.
+        If no doc passes the threshold the context is returned empty, triggering
+        the deterministic refusal in stream_generate / generate.
+        """
+        query = str(state.get("messages")[-1].content)
         docs = state.get("context", [])
-        if len(docs) <= 3:
-            top_docs = docs
-        else:
-            # Simple re-rank: Score top 10 with LLM
-            scored = []
-            for doc in docs[:10]:
-                prompt = f"Rate how relevant this content is to the query '{original_query}' (1-5, where 5 is highly relevant): {doc.page_content[:150]}"
-                try:
-                    score = int(self.llm.invoke(prompt).content.strip())
-                except:
-                    score = 1
-                scored.append((doc, score))
-            top_docs = [
-                doc for doc, _ in sorted(scored, key=lambda x: x[1], reverse=True)[:3]
-            ]
 
-        video_metadata = self._extract_video_metadata(top_docs)
-        logger.info(f"Re-ranked to top 3 docs")
-        return {"context": top_docs, "video_metadata": video_metadata}
+        if not docs:
+            return {"context": [], "video_metadata": None}
+
+        pairs = [(query, doc.page_content) for doc in docs]
+        scores = self.cross_encoder.predict(pairs)
+
+        scored_docs = sorted(
+            zip(scores, docs), key=lambda x: x[0], reverse=True
+        )
+
+        passing = [
+            doc for score, doc in scored_docs
+            if score >= self.RERANK_SCORE_THRESHOLD
+        ]
+
+        top_score = float(scores.max())
+        all_scores_sorted = sorted([round(float(s), 4) for s in scores.tolist()], reverse=True)
+
+        logger.info(
+            f"rerank: {len(docs)} candidates → {len(passing)} passed threshold "
+            f"(top score={top_score:.2f}, threshold={self.RERANK_SCORE_THRESHOLD})"
+        )
+
+        video_metadata = self._extract_video_metadata(passing)
+        return {
+            "context": passing,
+            "video_metadata": video_metadata,
+            "rerank_debug": {
+                "disabled": False,
+                "candidates_in": len(docs),
+                "passing_out": len(passing),
+                "threshold": self.RERANK_SCORE_THRESHOLD,
+                "top_score": round(top_score, 4),
+                "scores": all_scores_sorted,
+            },
+        }
 
     def get_vector_store_data(self) -> Dict[str, Any]:
         """Get current vector store data."""
@@ -820,14 +864,8 @@ Génère une explication détaillée à la première personne de la technique co
 
         Queries both the video annotation collection and the per-course collection
         (if course_id is present in state).  Results are stored in state["context"]
-        for the subsequent PRF reformulation step.
-
-        Guardrail (early rejection): the raw query is checked against the annotation
-        collection using L2 distance BEFORE PRF runs.  This prevents PRF from
-        "kidnapping" clearly off-topic queries into the corpus vocabulary and
-        producing hallucinated corpus-grounded answers.  If the raw query is too
-        distant from any annotation document, an empty context is returned
-        immediately — triggering the deterministic refusal in stream_generate.
+        for the subsequent PRF reformulation step.  Relevance filtering is handled
+        downstream by the cross-encoder rerank node — this step casts a wide net.
         """
         vector_data = self.get_vector_store_data()
         has_annotation_docs = bool(vector_data.get("ids"))
@@ -835,36 +873,16 @@ Génère une explication détaillée à la première personne de la technique co
         query = str(state.get("messages")[-1].content)
         course_id = state.get("course_id")
 
-        # Early guardrail: check raw query distance before PRF can transform it.
-        if has_annotation_docs:
-            try:
-                raw_embedding = self.embeddings.embed_query(query)
-                raw_result = self.vector_store._collection.query(
-                    query_embeddings=[raw_embedding],
-                    n_results=min(1, self.vector_store._collection.count()),
-                    include=["distances"],
-                )
-                raw_distances = raw_result["distances"][0] if raw_result["distances"] else []
-                if raw_distances and min(raw_distances) > self.L2_DISTANCE_THRESHOLD:
-                    logger.info(
-                        f"retrieve_initial: raw query L2={min(raw_distances):.0f} > "
-                        f"threshold — early rejection (guardrail)"
-                    )
-                    return {"context": [], "video_metadata": None}
-            except Exception as e:
-                logger.warning(f"Early guardrail check failed ({e}), continuing")
-
         results: List[Document] = []
 
-        # 1. Video annotations collection
+        # 1. Video annotations collection.
         if has_annotation_docs:
             annotation_results = self.similarity_search(query, k=5)
             results.extend(annotation_results)
         else:
             logger.info("Annotation collection empty — skipping annotation retrieval")
 
-        # 2. Course collections — priority course gets k=6, others k=1 (cross-course
-        #    retrieval is a weak signal; non-priority results are capped to reduce noise).
+        # 2. Course collections — priority course gets k=6, all others k=1.
         if self.course_rag_service:
             course_results = self.course_rag_service.similarity_search_all_courses(
                 query,
@@ -940,27 +958,12 @@ Génère une explication détaillée à la première personne de la technique co
             logger.error(f"refine_query_prf failed: {e} — using original query")
             return {"refined_query": original_query}
 
-    # Maximum L2 distance threshold for the annotation relevance guardrail.
-    # Empirically calibrated on bge_multilingual_gemma2 (3584-dim, unnormalized):
-    #   - In-domain glassblowing queries → best L2 distance ~19,000–25,000
-    #   - Clearly off-topic queries       → best L2 distance ~40,000–53,000
-    # Threshold set at 39,000 to safely reject clearly irrelevant queries while
-    # passing all craft-domain queries.  Re-calibrate if the corpus or embedding
-    # model changes.
-    L2_DISTANCE_THRESHOLD: float = 39_000.0
-
     def retrieve_final_dual(self, state: ConversationState) -> Dict[str, Any]:
         """PRF step 3 — second-pass retrieval using the refined query.
 
         Queries both collections again with the PRF-improved query and replaces
-        state["context"] with the final result set.
-
-        Guardrail (Option A, L2-distance based): embeds the refined query and
-        queries the annotation collection for its raw L2 distance to the nearest
-        neighbour.  If that minimum distance exceeds L2_DISTANCE_THRESHOLD, no
-        annotation document is close enough to be useful and the context is
-        cleared — causing stream_generate to emit the deterministic
-        "no resources" refusal rather than hallucinating from unrelated content.
+        state["context"] with the final candidate set.  Relevance filtering is
+        handled downstream by the cross-encoder rerank node.
         """
         refined_query = state.get("refined_query") or str(state.get("messages")[-1].content)
         course_id = state.get("course_id")
@@ -968,60 +971,32 @@ Génère une explication détaillée à la première personne de la technique co
         vector_data = self.get_vector_store_data()
         has_annotation_docs = bool(vector_data.get("ids"))
 
-        results: List[Document] = []
-        min_l2_distance: float = 0.0
+        annotation_results: List[Document] = []
 
-        # 1. Video annotations — query with raw L2 distances for guardrail check.
+        # 1. Video annotations.
         if has_annotation_docs:
-            try:
-                query_embedding = self.embeddings.embed_query(refined_query)
-                raw = self.vector_store._collection.query(
-                    query_embeddings=[query_embedding],
-                    n_results=min(5, self.vector_store._collection.count()),
-                    include=["documents", "metadatas", "distances"],
-                )
-                distances = raw["distances"][0] if raw["distances"] else []
-                min_l2_distance = min(distances) if distances else float("inf")
+            annotation_results = self.similarity_search(refined_query, k=5)
 
-                # Reconstruct Document objects from raw query result
-                seen: set = set()
-                for doc_text, meta in zip(raw["documents"][0], raw["metadatas"][0]):
-                    src = meta.get("source", "")
-                    if src not in seen:
-                        seen.add(src)
-                        results.append(Document(page_content=doc_text, metadata=meta))
-            except Exception as e:
-                logger.warning(f"Distance-based retrieval failed ({e}), falling back to MMR")
-                results.extend(self.similarity_search(refined_query, k=5))
-                min_l2_distance = 0.0  # assume OK on fallback
-
-        # 2. Course collections — same all-courses strategy as retrieve_initial.
+        # 2. Course collections.
+        course_results: List[Document] = []
         if self.course_rag_service:
             course_results = self.course_rag_service.similarity_search_all_courses(
                 refined_query,
                 k_per_course=1,
                 priority_course_id=course_id,
             )
-            results = self._merge_dedup(results, course_results)
+
+        results = self._merge_dedup(annotation_results, course_results)
 
         if not results:
             logger.info("retrieve_final_dual: no documents found with refined query")
             return {"context": [], "video_metadata": None}
 
-        # Guardrail: reject the entire result set if no annotation doc is relevant.
-        # Only apply when we have annotation docs to score; if the collection is
-        # empty we skip the check to avoid blocking course-content-only queries.
-        if has_annotation_docs and min_l2_distance > self.L2_DISTANCE_THRESHOLD:
-            logger.info(
-                f"retrieve_final_dual: min_l2={min_l2_distance:.0f} > "
-                f"threshold={self.L2_DISTANCE_THRESHOLD:.0f} — returning empty context (guardrail)"
-            )
-            return {"context": [], "video_metadata": None}
-
         results = results[: self.MAX_CONTEXT_DOCS]
         video_metadata = self._extract_video_metadata(results)
         logger.info(
-            f"retrieve_final_dual: {len(results)} docs, min_l2={min_l2_distance:.0f}"
+            f"retrieve_final_dual: {len(results)} candidates "
+            f"(annotations={len(annotation_results)}, course={len(course_results)})"
         )
         return {"context": results, "video_metadata": video_metadata}
 

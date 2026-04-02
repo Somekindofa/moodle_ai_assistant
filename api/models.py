@@ -18,6 +18,7 @@ class ChatRequest(BaseModel):
     selected_domain: Optional[str] = Field(None, max_length=100)
     course_id: Optional[str] = Field(None, max_length=20)
     is_first_message: bool = False         # True on first message — triggers title generation
+    disable_rerank: bool = False           # Ablation flag: skip cross-encoder reranking when True
 
 
 class SystemStatus(BaseModel):
