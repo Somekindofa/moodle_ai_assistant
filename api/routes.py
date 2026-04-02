@@ -44,6 +44,7 @@ async def generate_simplified_stream(
     selected_domain: Optional[str] = None,
     course_id: Optional[str] = None,
     is_first_message: bool = False,
+    disable_rerank: bool = False,
 ) -> AsyncGenerator[str, None]:
     """Stream the RAG pipeline response as JSON-lines.
 
@@ -53,6 +54,7 @@ async def generate_simplified_stream(
       {"event": "video_metadata", "data": {...}}       — optional source card
       {"event": "token", "data": "<text>"}             — one per token
       {"event": "documents", "data": [...]}            — document sources
+      {"event": "rerank_debug", "data": {...}}         — reranker diagnostics
       {"content": "[DONE]"}                            — terminal marker
     """
     async for line in pipeline.stream_response(
@@ -61,6 +63,7 @@ async def generate_simplified_stream(
         selected_domain=selected_domain,
         course_id=course_id,
         is_first_message=is_first_message,
+        disable_rerank=disable_rerank,
     ):
         yield line
 
@@ -98,6 +101,7 @@ async def chat_stream(request: ChatRequest):
             request.selected_domain,
             request.course_id,
             request.is_first_message,
+            request.disable_rerank,
         ),
         media_type="text/plain",
         headers={"X-Accel-Buffering": "no"},
