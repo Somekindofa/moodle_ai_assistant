@@ -1,10 +1,9 @@
 """Graph service for building and managing conversation workflows."""
 
 import logging
-from re import I
-from typing import List, Callable, Dict, Any, Optional, TypedDict, Union
 
-from langchain_core.runnables import RunnableLambda
+from typing import List, Optional
+
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph, START
 from langgraph.graph.state import CompiledStateGraph
@@ -27,9 +26,18 @@ class ConversationGraphService:
     def build_conversation_graph(
         self, functions: Optional[List[str]] = None
     ) -> "ConversationGraphService":
-        """Build conversation graph with specified RAG functions."""
+        """Build the PRF conversation graph with the given node sequence.
+
+        Default sequence: retrieve_initial → refine_query_prf → retrieve_final_dual → rerank → generate
+        """
         if functions is None:
-            functions = ["retrieve", "generate"]
+            functions = [
+                "retrieve_initial",
+                "refine_query_prf",
+                "retrieve_final_dual",
+                "rerank",
+                "generate",
+            ]
 
         # Create sequence of (name, callable) tuples
         sequence = []
@@ -52,44 +60,6 @@ class ConversationGraphService:
             self.edges.add((source_name, target_name))
 
         logger.info(f"Conversation graph built with functions: {functions}")
-        return self
-
-    def build_routed_graph(self) -> "ConversationGraphService":
-        """Build the production graph with an upfront router node.
-
-        Topology:
-            START → route_query ──┬─(rag)──→ multi_query → retrieve_combined → rerank → generate → END
-                                  └─(llm_only)──────────────────────────────→ direct_generate → END
-        """
-        rs = self.rag_service
-
-        self.state_graph.add_node("route_query",      rs.route_query)
-        self.state_graph.add_node("multi_query",       rs.multi_query)
-        self.state_graph.add_node("retrieve_combined", rs.retrieve_combined)
-        self.state_graph.add_node("rerank",            rs.rerank)
-        self.state_graph.add_node("generate",          rs.generate)
-        self.state_graph.add_node("direct_generate",   rs.direct_generate)
-
-        # Entry point
-        self.state_graph.add_edge(START, "route_query")
-        self.edges.add((START, "route_query"))
-
-        # Conditional branch on state["route"]
-        self.state_graph.add_conditional_edges(
-            "route_query",
-            lambda state: state.get("route", "rag"),
-            {
-                "rag":      "multi_query",
-                "llm_only": "direct_generate",
-            },
-        )
-
-        # RAG path
-        self.state_graph.add_edge("multi_query",       "retrieve_combined")
-        self.state_graph.add_edge("retrieve_combined", "rerank")
-        self.state_graph.add_edge("rerank",            "generate")
-
-        logger.info("Routed graph built: route_query → {rag: multi_query→…→generate | llm_only: direct_generate}")
         return self
 
     def compile_graph(self, checkpointer=None) -> CompiledStateGraph:
