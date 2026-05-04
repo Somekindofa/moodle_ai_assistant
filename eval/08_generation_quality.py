@@ -12,8 +12,11 @@ import os
 import json
 from pathlib import Path
 
+import dotenv
+
 sys.path.insert(0, '/opt/craftpilot_backend')
 os.chdir('/opt/craftpilot_backend')
+dotenv.load_dotenv('/opt/craftpilot_backend/.env')
 
 from openai import OpenAI
 from config.settings import ConfigurationManager
@@ -21,8 +24,8 @@ from services.rag_service import RAGService
 from services.annotation_service import AnnotationService
 from langchain_core.messages import HumanMessage
 
-API_KEY = "REDACTED_OLD_INFOMANIAK_KEY"
-PRODUCT_ID = "106980"
+API_KEY = os.environ["INFOMANIAK_API_KEY"]
+PRODUCT_ID = os.environ["INFOMANIAK_PRODUCT_ID"]
 BASE_URL = f"https://api.infomaniak.com/2/ai/{PRODUCT_ID}/openai/v1"
 LLM_MODEL = "swiss-ai/Apertus-70B-Instruct-2509"
 

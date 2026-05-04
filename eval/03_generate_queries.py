@@ -10,8 +10,11 @@ import time
 import logging
 import re
 
+import dotenv
+
 os.chdir('/opt/craftpilot_backend')
 sys.path.insert(0, '/opt/craftpilot_backend')
+dotenv.load_dotenv('/opt/craftpilot_backend/.env')
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -20,8 +23,8 @@ from openai import OpenAI
 FIXTURES_DIR = '/opt/craftpilot_backend/eval/fixtures'
 os.makedirs(FIXTURES_DIR, exist_ok=True)
 
-INFOMANIAK_API_KEY = "REDACTED_OLD_INFOMANIAK_KEY"
-INFOMANIAK_PRODUCT_ID = "106980"
+INFOMANIAK_API_KEY = os.environ["INFOMANIAK_API_KEY"]
+INFOMANIAK_PRODUCT_ID = os.environ["INFOMANIAK_PRODUCT_ID"]
 LLM_MODEL = "swiss-ai/Apertus-70B-Instruct-2509"
 
 client = OpenAI(
