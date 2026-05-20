@@ -22,7 +22,10 @@ class LangChainService:
     def _initialize_client(self) -> None:
         """Initialize LangChain client with API key."""
         try:
-            api_key = self.config_manager.get_env_var("LANGCHAIN_API_KEY")
+            api_key = (
+                self.config_manager.get_env_var("LANGSMITH_API_KEY")
+                or self.config_manager.get_env_var("LANGCHAIN_API_KEY")
+            )
             if not api_key:
                 logger.warning(
                     "No LangChain API key found. Please check your environment variables."
