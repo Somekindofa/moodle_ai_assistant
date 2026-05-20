@@ -5,6 +5,7 @@ from langchain_core.documents.base import Document
 from langchain_core.messages import AnyMessage
 import pandas as pd
 from typing import List, Dict, Any, Literal, Optional
+from langsmith import traceable
 
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
@@ -302,6 +303,7 @@ class MoodleAIAssistantPipeline:
             logger.warning(f"Title generation failed: {e}")
             return message[:60]
 
+    @traceable(name="stream_response", run_type="chain")
     async def stream_response(
         self,
         message: str,
@@ -351,11 +353,6 @@ class MoodleAIAssistantPipeline:
             # --- PRF step 1: initial retrieval ---
             result = self.rag_service.retrieve_initial(state)
             state.update(result)
-
-            # Emit video metadata early so the client can show the source card
-            # while generation is still in progress.
-            if state.get("video_metadata"):
-                yield json.dumps({"event": "video_metadata", "data": state["video_metadata"]}) + "\n"
 
             # --- PRF step 2: corpus-grounded query refinement ---
             result = self.rag_service.refine_query_prf(state)
