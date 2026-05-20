@@ -3,6 +3,7 @@
 import os
 import logging
 from typing import List, Dict, Any, Union, Optional
+from langsmith import traceable
 from typing_extensions import Literal
 from datetime import datetime
 
@@ -210,21 +211,33 @@ class RAGService:
             )
 
     # Model name for the multilingual cross-encoder reranker.
-    # mmarco-mMiniLMv2-L12-H384-v1 is trained on MS MARCO translated into 14
-    # languages including French, making it well-suited for this corpus.
-    CROSS_ENCODER_MODEL = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+    # bge-reranker-v2-m3 is a multilingual model with calibrated scores where
+    # 0.0 is a meaningful relevance boundary, unlike mmarco models whose raw
+    # logits are systematically negative on non-web-document corpora.
+    CROSS_ENCODER_MODEL = "BAAI/bge-reranker-v2-m3"
 
-    # Minimum cross-encoder relevance score.  The model outputs logits on
-    # roughly the scale [-10, +10].  Docs scoring below this threshold are
-    # considered irrelevant and removed from context.  Calibrate against your
-    # corpus: a threshold of 0.0 rejects docs the model considers less likely
-    # to answer the query than not.
+    # Minimum cross-encoder relevance score.  BGE reranker outputs scores in a
+    # range where 0.0 separates relevant from non-relevant, so this threshold
+    # can be used at face value without corpus-specific calibration.
     RERANK_SCORE_THRESHOLD: float = 0.0
 
     def _initialize_cross_encoder(self) -> CrossEncoder:
         """Load the multilingual cross-encoder reranker onto CPU."""
         try:
-            model = CrossEncoder(self.CROSS_ENCODER_MODEL, device="cpu")
+            model = CrossEncoder(
+                self.CROSS_ENCODER_MODEL,
+                device="cpu",
+                trust_remote_code=True,
+            )
+            # Sanity-check: a model that returns all-zero scores for any input
+            # has not initialised correctly and would pass every doc through.
+            test_scores = model.predict([("test query", "test document")])
+            if float(test_scores[0]) == 0.0:
+                raise RuntimeError(
+                    f"Cross-encoder {self.CROSS_ENCODER_MODEL} returned a zero "
+                    "score on a sanity-check pair — classification head likely "
+                    "uninitialised. Check model name and sentence-transformers version."
+                )
             logger.info(f"Cross-encoder reranker loaded: {self.CROSS_ENCODER_MODEL}")
             return model
         except Exception as e:
@@ -488,6 +501,7 @@ Génère une explication détaillée à la première personne de la technique co
             logger.error(f"Failed to generate response: {str(e)}")
             raise
 
+    @traceable(name="stream_generate", run_type="llm")
     async def stream_generate(self, state: ConversationState):
         """Async generator that streams LLM tokens for the generate step.
 
@@ -596,6 +610,7 @@ Génère une explication détaillée à la première personne de la technique co
         logger.info(f"Combined {len(all_docs)} unique docs from variants")
         return {"context": all_docs[:30]}  # Candidate pool
 
+    @traceable(name="rerank", run_type="chain")
     def rerank(self, state: ConversationState) -> Dict[str, Any]:
         """Cross-encoder reranking — filters and re-orders retrieved docs by relevance.
 
@@ -859,6 +874,7 @@ Génère une explication détaillée à la première personne de la technique co
     # = 4 850 tok, leaving a comfortable margin).
     MAX_CONTEXT_DOCS = 8
 
+    @traceable(name="retrieve_initial", run_type="retriever")
     def retrieve_initial(self, state: ConversationState) -> Dict[str, Any]:
         """PRF step 1 — first-pass retrieval with the raw user query.
 
@@ -902,6 +918,7 @@ Génère une explication détaillée à la première personne de la technique co
         logger.info(f"retrieve_initial: {len(results)} docs retrieved")
         return {"context": results, "video_metadata": video_metadata}
 
+    @traceable(name="refine_query_prf", run_type="chain")
     def refine_query_prf(self, state: ConversationState) -> Dict[str, Any]:
         """PRF step 2 — corpus-grounded query reformulation.
 
@@ -958,6 +975,7 @@ Génère une explication détaillée à la première personne de la technique co
             logger.error(f"refine_query_prf failed: {e} — using original query")
             return {"refined_query": original_query}
 
+    @traceable(name="retrieve_final_dual", run_type="retriever")
     def retrieve_final_dual(self, state: ConversationState) -> Dict[str, Any]:
         """PRF step 3 — second-pass retrieval using the refined query.
 
