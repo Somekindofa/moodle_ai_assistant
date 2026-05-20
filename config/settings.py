@@ -55,7 +55,7 @@ class AppConfig:
 
     rag: RAGConfig = field(default_factory=RAGConfig)
     required_env_keys: List[str] = field(
-        default_factory=lambda: ["INFOMANIAK_API_KEY", "INFOMANIAK_PRODUCT_ID", "LANGCHAIN_API_KEY"]
+        default_factory=lambda: ["INFOMANIAK_API_KEY", "INFOMANIAK_PRODUCT_ID", "LANGSMITH_API_KEY"]
     )
     css_path: str = "css/custom.css"
     supported_file_types: List[str] = field(
