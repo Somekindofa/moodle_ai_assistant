@@ -361,6 +361,18 @@ class MoodleAIAssistantPipeline:
         try:
             from langchain_core.messages import HumanMessage
 
+            # --- Pre-LLM topic classifier ---
+            is_in_domain = await self._classify_in_domain(message)
+            if not is_in_domain:
+                yield json.dumps({"event": "status", "data": "Vérification de la question…"}) + "\n"
+                yield json.dumps({"event": "token", "data": (
+                    "Je n'ai pas trouvé d'information pertinente dans le corpus "
+                    "pour répondre à cette question. Veuillez poser une question "
+                    "sur les arts et métiers ou consulter votre formateur."
+                )}) + "\n"
+                yield json.dumps({"content": "[DONE]"}) + "\n"
+                return
+
             # Generate and emit the conversation title before the PRF pipeline
             # so the client can update the sidebar title immediately.
             if is_first_message:
