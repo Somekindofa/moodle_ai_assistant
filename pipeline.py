@@ -328,8 +328,9 @@ class MoodleAIAssistantPipeline:
             ))
             human = HumanMessage(content=message)
             response = await classifier_llm.ainvoke([system, human])
-            answer = response.content.strip().upper()
-            return "OUI" in answer or "YES" in answer
+            import re
+            first_word = re.sub(r"[^A-Z]", "", response.content.strip().upper().split()[0]) if response.content.strip() else ""
+            return first_word in {"OUI", "YES"}
         except Exception as e:
             logger.warning(f"Input classifier failed (fail-open): {e}")
             return True
