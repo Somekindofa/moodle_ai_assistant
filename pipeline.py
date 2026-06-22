@@ -311,12 +311,14 @@ class MoodleAIAssistantPipeline:
     async def _classify_in_domain(self, message: str) -> bool:
         """Return True if message is in-domain (craft trades / apprenticeship).
 
-        Uses a minimal LLM call (max_tokens=5, temperature=0) to classify.
+        Uses a minimal LLM call (max_tokens=10, temperature=0) to classify.
         Fails open on any exception so legitimate questions are never blocked.
+        Note: a crafted message can manipulate the classifier to return True (fail-open path);
+        the main RAG system-prompt guardrail remains the last line of defence for such cases.
         """
         try:
             from langchain_core.messages import SystemMessage, HumanMessage
-            classifier_llm = self.rag_service.llm.bind(max_tokens=5, temperature=0)
+            classifier_llm = self.rag_service.llm.bind(max_tokens=10, temperature=0)
             system = SystemMessage(content=(
                 "Tu es un classifieur de sujets. Réponds par un seul mot : "
                 "OUI si la question concerne les arts et métiers, l'apprentissage, "
@@ -327,7 +329,7 @@ class MoodleAIAssistantPipeline:
             human = HumanMessage(content=message)
             response = await classifier_llm.ainvoke([system, human])
             answer = response.content.strip().upper()
-            return answer.startswith("OUI") or answer.startswith("YES")
+            return "OUI" in answer or "YES" in answer
         except Exception as e:
             logger.warning(f"Input classifier failed (fail-open): {e}")
             return True
@@ -349,6 +351,7 @@ class MoodleAIAssistantPipeline:
         token-by-token so the client sees output immediately.
 
         Yields JSON-line strings:
+          {"event": "status", "data": "..."}               — pipeline step hints
           {"event": "conversation_title", "data": "..."}  — only when is_first_message=True
           {"event": "video_metadata", "data": {...}}       — optional, before tokens
           {"event": "token", "data": "<text>"}             — one per LLM token
