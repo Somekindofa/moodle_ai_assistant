@@ -35,11 +35,6 @@ class MoodleAIAssistantPipeline:
     MAX_RERANK_CANDIDATES = 5
 
     def __init__(self, config_manager: Optional[ConfigurationManager] = None):
-        import torch
-        # Use both available CPU cores for PyTorch inference.
-        torch.set_num_threads(2)
-        torch.set_num_interop_threads(1)
-
         self.config_manager = config_manager or ConfigurationManager()
 
         # Initialize services in dependency order
