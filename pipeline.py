@@ -29,7 +29,17 @@ StreamMode = Literal["values", "updates"]
 class MoodleAIAssistantPipeline:
     """Main pipeline orchestrating the Moodle AI Assistant services."""
 
+    # Maximum number of candidates passed to the cross-encoder reranker.
+    # Keeping this low is critical on 2-core CPUs where bge-reranker-v2-m3
+    # takes ~5 s per document pair.
+    MAX_RERANK_CANDIDATES = 5
+
     def __init__(self, config_manager: Optional[ConfigurationManager] = None):
+        import torch
+        # Use both available CPU cores for PyTorch inference.
+        torch.set_num_threads(2)
+        torch.set_num_interop_threads(1)
+
         self.config_manager = config_manager or ConfigurationManager()
 
         # Initialize services in dependency order
@@ -311,6 +321,7 @@ class MoodleAIAssistantPipeline:
         selected_domain: Optional[str] = None,
         course_id: Optional[str] = None,
         is_first_message: bool = False,
+        disable_rerank: bool = False,
     ):
         """Async generator that streams the full response as JSON-lines events.
 
@@ -325,6 +336,7 @@ class MoodleAIAssistantPipeline:
           {"event": "documents", "data": [...]}            — after all tokens
           {"content": "[DONE]"}                            — terminal marker
         """
+        import asyncio
         import json
 
         try:
@@ -351,26 +363,39 @@ class MoodleAIAssistantPipeline:
             }
 
             # --- PRF step 1: initial retrieval ---
-            result = self.rag_service.retrieve_initial(state)
+            yield json.dumps({"event": "status", "data": "Recherche dans la base de connaissances…"}) + "\n"
+            result = await asyncio.to_thread(self.rag_service.retrieve_initial, state)
             state.update(result)
 
             # --- PRF step 2: corpus-grounded query refinement ---
-            result = self.rag_service.refine_query_prf(state)
+            yield json.dumps({"event": "status", "data": "Reformulation de la question…"}) + "\n"
+            result = await asyncio.to_thread(self.rag_service.refine_query_prf, state)
             state.update(result)
 
             # --- PRF step 3: final retrieval with refined query ---
-            result = self.rag_service.retrieve_final_dual(state)
+            yield json.dumps({"event": "status", "data": "Récupération des sources pertinentes…"}) + "\n"
+            result = await asyncio.to_thread(self.rag_service.retrieve_final_dual, state)
             state.update(result)
 
             # --- PRF step 4: cross-encoder reranking and relevance filtering ---
-            result = self.rag_service.rerank(state)
-            state.update(result)
+            if not disable_rerank:
+                yield json.dumps({"event": "status", "data": "Classement des résultats…"}) + "\n"
+                # Cap candidates before reranking — bge-reranker-v2-m3 takes
+                # ~5 s per pair on a 2-core CPU, so keep the list tight.
+                ctx = state.get("context", [])
+                if len(ctx) > self.MAX_RERANK_CANDIDATES:
+                    state["context"] = ctx[: self.MAX_RERANK_CANDIDATES]
+                # Run synchronous cross-encoder inference in a thread so the
+                # event loop remains responsive during the ~20-30 s prediction.
+                result = await asyncio.to_thread(self.rag_service.rerank, state)
+                state.update(result)
 
             # Re-emit video metadata after reranking (top doc may have changed).
             if state.get("video_metadata"):
                 yield json.dumps({"event": "video_metadata", "data": state["video_metadata"]}) + "\n"
 
             # --- Stream the generate step token by token ---
+            yield json.dumps({"event": "status", "data": "Génération de la réponse…"}) + "\n"
             async for token in self.rag_service.stream_generate(state):
                 yield json.dumps({"event": "token", "data": token}) + "\n"
 
