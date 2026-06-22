@@ -308,6 +308,30 @@ class MoodleAIAssistantPipeline:
             logger.warning(f"Title generation failed: {e}")
             return message[:60]
 
+    async def _classify_in_domain(self, message: str) -> bool:
+        """Return True if message is in-domain (craft trades / apprenticeship).
+
+        Uses a minimal LLM call (max_tokens=5, temperature=0) to classify.
+        Fails open on any exception so legitimate questions are never blocked.
+        """
+        try:
+            from langchain_core.messages import SystemMessage, HumanMessage
+            classifier_llm = self.rag_service.llm.bind(max_tokens=5, temperature=0)
+            system = SystemMessage(content=(
+                "Tu es un classifieur de sujets. Réponds par un seul mot : "
+                "OUI si la question concerne les arts et métiers, l'apprentissage, "
+                "les techniques artisanales (soufflage de verre, ganterie, menuiserie, "
+                "sellerie, etc.). Réponds NON pour tout le reste (politique, actualité, "
+                "géographie, célébrités, etc.). Réponds uniquement OUI ou NON."
+            ))
+            human = HumanMessage(content=message)
+            response = await classifier_llm.ainvoke([system, human])
+            answer = response.content.strip().upper()
+            return answer.startswith("OUI") or answer.startswith("YES")
+        except Exception as e:
+            logger.warning(f"Input classifier failed (fail-open): {e}")
+            return True
+
     @traceable(name="stream_response", run_type="chain")
     async def stream_response(
         self,
