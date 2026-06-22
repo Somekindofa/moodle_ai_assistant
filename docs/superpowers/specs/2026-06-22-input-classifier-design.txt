@@ -1,0 +1,99 @@
+# Input Classifier — Design Spec
+
+**Date:** 2026-06-22  
+**Status:** Approved  
+**Scope:** `pipeline.py` only — one new method, one hook at the top of `stream_response()`
+
+---
+
+## Problem
+
+The existing guardrail is a system-prompt instruction. The LLM can reason around it — demonstrated by a question about the US president producing glass-blowing follow-up questions instead of a refusal. Prompt-only guardrails are unreliable because the model weighs helpfulness against the constraint.
+
+## Solution
+
+A pre-LLM classification step that short-circuits the pipeline in Python before the retriever or main LLM are ever called. The LLM cannot override a Python `return` statement.
+
+---
+
+## Architecture
+
+```
+stream_response()
+  │
+  ├─► _classify_in_domain(message)   ← new, ~1–2 s
+  │     └─ off-topic → yield refusal → return
+  │
+  ├─► _generate_conversation_title() (first message only)
+  ├─► retrieve_initial
+  ├─► refine_query_prf
+  ├─► retrieve_final_dual
+  ├─► rerank
+  └─► stream_generate
+```
+
+The classifier runs before title generation so off-topic messages waste zero retrieval or generation budget.
+
+---
+
+## `_classify_in_domain(message: str) -> bool`
+
+**Location:** new async method on `MoodleAIAssistantPipeline` in `pipeline.py`
+
+**LLM call:** `self.rag_service.llm.bind(max_tokens=5, temperature=0)` — same pattern as `_generate_conversation_title`. Reuses the already-initialised Infomaniak endpoint; no new dependencies.
+
+**Prompt:**
+
+```
+System:
+Tu es un classifieur de sujets. Réponds par un seul mot :
+OUI si la question concerne les arts et métiers, l'apprentissage,
+les techniques artisanales (soufflage de verre, ganterie, menuiserie,
+sellerie, etc.). Réponds NON pour tout le reste (politique, actualité,
+géographie, célébrités, etc.). Réponds uniquement OUI ou NON.
+
+User:
+{message}
+```
+
+**Parsing:** case-insensitive check — `"OUI"` or `"YES"` at the start of the response → `True` (in-domain). Anything else → `False`.
+
+**Error handling:** any exception (network, timeout, unexpected response format) → log the error → return `True` (fail-open). A misclassified legitimate question is a worse outcome than a missed off-topic hit.
+
+---
+
+## Hook in `stream_response()`
+
+Inserted before any `yield` at the top of the `try` block:
+
+```python
+is_in_domain = await self._classify_in_domain(message)
+if not is_in_domain:
+    yield json.dumps({"event": "status", "data": "Vérification de la question…"}) + "\n"
+    yield json.dumps({"event": "token", "data": (
+        "Je n'ai pas trouvé d'information pertinente dans le corpus "
+        "pour répondre à cette question. Veuillez poser une question "
+        "sur les arts et métiers ou consulter votre formateur."
+    )}) + "\n"
+    yield json.dumps({"content": "[DONE]"}) + "\n"
+    return
+```
+
+The refusal is emitted as a normal `token` event so the frontend renders it identically to a real response — no new event types or frontend changes needed.
+
+---
+
+## Constraints
+
+- No new dependencies.
+- No new service classes — the method lives directly on `MoodleAIAssistantPipeline`.
+- The hint is generic (not domain-aware) for consistency across all contexts.
+- The `status` event fires before the classification result is known; this is acceptable because the classification is fast enough that the user perceives it as a single step.
+
+---
+
+## Out of scope
+
+- Logging off-topic queries to a separate store for analysis (can be added later by extending `_classify_in_domain`).
+- Tuning thresholds or adding a confidence score — the binary YES/NO response is sufficient for this phase.
+- Frontend changes — not required.
