@@ -1,0 +1,329 @@
+# Input Classifier Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Add a pre-LLM topic classifier that short-circuits `stream_response()` with a soft refusal before any retrieval runs, when the user's question is off-topic.
+
+**Architecture:** A new async method `_classify_in_domain(message)` on `MoodleAIAssistantPipeline` calls the existing Infomaniak LLM with `max_tokens=5, temperature=0` and a French YES/NO prompt. It is called at the very top of `stream_response()` before title generation; off-topic questions receive a soft refusal token stream and the generator returns immediately.
+
+**Tech Stack:** Python asyncio, LangChain `ChatOpenAI` (via `self.rag_service.llm.bind()`), `unittest.mock`, pytest.
+
+## Global Constraints
+
+- No new dependencies — reuse `self.rag_service.llm` exactly as `_generate_conversation_title` does.
+- No new service classes — method lives directly on `MoodleAIAssistantPipeline` in `pipeline.py`.
+- Fail-open on any exception — return `True` (in-domain) so legitimate questions are never blocked by infrastructure errors.
+- Refusal text is generic (not domain-aware): `"Je n'ai pas trouvé d'information pertinente dans le corpus pour répondre à cette question. Veuillez poser une question sur les arts et métiers ou consulter votre formateur."`
+- Imports inside `stream_response` stay inside that method (existing pattern).
+
+---
+
+### Task 1: `_classify_in_domain` method + tests
+
+**Files:**
+- Modify: `pipeline.py` (add method after `_generate_conversation_title`, around line 309)
+- Test: `tests/test_pipeline_integration.py` (append to existing file)
+
+**Interfaces:**
+- Produces: `async def _classify_in_domain(self, message: str) -> bool` — `True` = in-domain, `False` = off-topic.
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to `tests/test_pipeline_integration.py`:
+
+```python
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
+from pipeline import MoodleAIAssistantPipeline
+
+
+def _make_pipeline_with_mock_llm(response_content: str):
+    """Return a MoodleAIAssistantPipeline whose LLM is fully mocked."""
+    with patch.object(MoodleAIAssistantPipeline, "__init__", lambda self, *a, **kw: None):
+        pipeline = MoodleAIAssistantPipeline.__new__(MoodleAIAssistantPipeline)
+
+    mock_response = MagicMock()
+    mock_response.content = response_content
+
+    mock_bound_llm = MagicMock()
+    mock_bound_llm.ainvoke = AsyncMock(return_value=mock_response)
+
+    mock_llm = MagicMock()
+    mock_llm.bind.return_value = mock_bound_llm
+
+    mock_rag_service = MagicMock()
+    mock_rag_service.llm = mock_llm
+
+    pipeline.rag_service = mock_rag_service
+    return pipeline
+
+
+@pytest.mark.asyncio
+async def test_classify_in_domain_returns_true_for_oui():
+    pipeline = _make_pipeline_with_mock_llm("OUI")
+    assert await pipeline._classify_in_domain("Comment souffler le verre ?") is True
+
+
+@pytest.mark.asyncio
+async def test_classify_in_domain_returns_true_for_yes():
+    pipeline = _make_pipeline_with_mock_llm("YES")
+    assert await pipeline._classify_in_domain("How do I shape molten glass?") is True
+
+
+@pytest.mark.asyncio
+async def test_classify_in_domain_returns_false_for_non():
+    pipeline = _make_pipeline_with_mock_llm("NON")
+    assert await pipeline._classify_in_domain("Qui est le président des États-Unis ?") is False
+
+
+@pytest.mark.asyncio
+async def test_classify_in_domain_returns_false_for_no():
+    pipeline = _make_pipeline_with_mock_llm("NO")
+    assert await pipeline._classify_in_domain("What is the capital of France?") is False
+
+
+@pytest.mark.asyncio
+async def test_classify_in_domain_fails_open_on_exception():
+    """Any LLM error must return True (fail-open) so real questions are never blocked."""
+    with patch.object(MoodleAIAssistantPipeline, "__init__", lambda self, *a, **kw: None):
+        pipeline = MoodleAIAssistantPipeline.__new__(MoodleAIAssistantPipeline)
+
+    mock_bound_llm = MagicMock()
+    mock_bound_llm.ainvoke = AsyncMock(side_effect=Exception("network error"))
+
+    mock_llm = MagicMock()
+    mock_llm.bind.return_value = mock_bound_llm
+
+    mock_rag_service = MagicMock()
+    mock_rag_service.llm = mock_llm
+    pipeline.rag_service = mock_rag_service
+
+    result = await pipeline._classify_in_domain("Qui est Napoleon ?")
+    assert result is True
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+```bash
+cd /opt/craftpilot_backend && python -m pytest tests/test_pipeline_integration.py::test_classify_in_domain_returns_true_for_oui tests/test_pipeline_integration.py::test_classify_in_domain_returns_false_for_non tests/test_pipeline_integration.py::test_classify_in_domain_fails_open_on_exception -v
+```
+
+Expected: `AttributeError: type object 'MoodleAIAssistantPipeline' has no attribute '_classify_in_domain'`
+
+- [ ] **Step 3: Implement `_classify_in_domain`**
+
+In `pipeline.py`, add this method immediately after `_generate_conversation_title` (after line ~309, before the `@traceable` decorator on `stream_response`):
+
+```python
+async def _classify_in_domain(self, message: str) -> bool:
+    """Return True if message is in-domain (craft trades / apprenticeship).
+
+    Uses a minimal LLM call (max_tokens=5, temperature=0) to classify.
+    Fails open on any exception so legitimate questions are never blocked.
+    """
+    try:
+        from langchain_core.messages import SystemMessage, HumanMessage
+        classifier_llm = self.rag_service.llm.bind(max_tokens=5, temperature=0)
+        system = SystemMessage(content=(
+            "Tu es un classifieur de sujets. Réponds par un seul mot : "
+            "OUI si la question concerne les arts et métiers, l'apprentissage, "
+            "les techniques artisanales (soufflage de verre, ganterie, menuiserie, "
+            "sellerie, etc.). Réponds NON pour tout le reste (politique, actualité, "
+            "géographie, célébrités, etc.). Réponds uniquement OUI ou NON."
+        ))
+        human = HumanMessage(content=message)
+        response = await classifier_llm.ainvoke([system, human])
+        answer = response.content.strip().upper()
+        return answer.startswith("OUI") or answer.startswith("YES")
+    except Exception as e:
+        logger.warning(f"Input classifier failed (fail-open): {e}")
+        return True
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+```bash
+cd /opt/craftpilot_backend && python -m pytest tests/test_pipeline_integration.py::test_classify_in_domain_returns_true_for_oui tests/test_pipeline_integration.py::test_classify_in_domain_returns_true_for_yes tests/test_pipeline_integration.py::test_classify_in_domain_returns_false_for_non tests/test_pipeline_integration.py::test_classify_in_domain_returns_false_for_no tests/test_pipeline_integration.py::test_classify_in_domain_fails_open_on_exception -v
+```
+
+Expected: 5 passed.
+
+- [ ] **Step 5: Commit**
+
+```bash
+cd /opt/craftpilot_backend && git add pipeline.py tests/test_pipeline_integration.py && git commit -m "feat: add _classify_in_domain method for pre-LLM topic classification"
+```
+
+---
+
+### Task 2: Hook classifier into `stream_response`
+
+**Files:**
+- Modify: `pipeline.py` — top of `stream_response()` `try` block (~line 337)
+
+**Interfaces:**
+- Consumes: `_classify_in_domain(self, message: str) -> bool` from Task 1.
+
+- [ ] **Step 1: Write the failing test**
+
+Append to `tests/test_pipeline_integration.py`:
+
+```python
+@pytest.mark.asyncio
+async def test_stream_response_short_circuits_off_topic():
+    """Off-topic question must yield status + refusal token + [DONE] and nothing else."""
+    pipeline = _make_pipeline_with_mock_llm("NON")
+
+    events = []
+    async for line in pipeline.stream_response(
+        message="Qui est le président des États-Unis ?",
+        conversation_thread_id="test-thread",
+        is_first_message=False,
+    ):
+        import json as _json
+        events.append(_json.loads(line))
+
+    assert events[0] == {"event": "status", "data": "Vérification de la question…"}
+    assert events[1]["event"] == "token"
+    assert "arts et métiers" in events[1]["data"]
+    assert events[2] == {"content": "[DONE]"}
+    assert len(events) == 3
+
+
+@pytest.mark.asyncio
+async def test_stream_response_does_not_short_circuit_in_domain():
+    """In-domain question must NOT be short-circuited (retrieval pipeline runs)."""
+    pipeline = _make_pipeline_with_mock_llm("OUI")
+
+    # Patch the retrieval steps so they don't hit real services
+    async def _fake_retrieve(state):
+        return {"context": [], "video_metadata": None}
+
+    pipeline.rag_service.retrieve_initial = MagicMock(return_value={
+        "context": [], "video_metadata": None, "refined_query": None,
+        "hypothetical_document": None, "enhanced_query": None, "query_variants": [],
+    })
+    pipeline.rag_service.refine_query_prf = MagicMock(return_value={})
+    pipeline.rag_service.retrieve_final_dual = MagicMock(return_value={"context": []})
+    pipeline.rag_service.rerank = MagicMock(return_value={"context": []})
+
+    async def _fake_stream_generate(state):
+        yield "Bonjour"
+
+    pipeline.rag_service.stream_generate = _fake_stream_generate
+
+    events = []
+    async for line in pipeline.stream_response(
+        message="Comment souffler le verre ?",
+        conversation_thread_id="test-thread",
+        is_first_message=False,
+    ):
+        import json as _json
+        events.append(_json.loads(line))
+
+    event_types = [e.get("event") or e.get("content") for e in events]
+    assert "token" in event_types
+    # Must NOT have stopped after 3 events
+    assert len(events) > 3
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+```bash
+cd /opt/craftpilot_backend && python -m pytest tests/test_pipeline_integration.py::test_stream_response_short_circuits_off_topic tests/test_pipeline_integration.py::test_stream_response_does_not_short_circuit_in_domain -v
+```
+
+Expected: both FAIL — `test_stream_response_short_circuits_off_topic` because the hook doesn't exist yet; `test_stream_response_does_not_short_circuit_in_domain` may also fail for the same reason.
+
+- [ ] **Step 3: Add the hook to `stream_response`**
+
+In `pipeline.py`, inside `stream_response()`, at the top of the `try` block — before the `if is_first_message:` check — insert:
+
+```python
+            # --- Pre-LLM topic classifier ---
+            is_in_domain = await self._classify_in_domain(message)
+            if not is_in_domain:
+                yield json.dumps({"event": "status", "data": "Vérification de la question…"}) + "\n"
+                yield json.dumps({"event": "token", "data": (
+                    "Je n'ai pas trouvé d'information pertinente dans le corpus "
+                    "pour répondre à cette question. Veuillez poser une question "
+                    "sur les arts et métiers ou consulter votre formateur."
+                )}) + "\n"
+                yield json.dumps({"content": "[DONE]"}) + "\n"
+                return
+```
+
+The full top of the `try` block in `stream_response` now reads:
+
+```python
+        try:
+            from langchain_core.messages import HumanMessage
+
+            # --- Pre-LLM topic classifier ---
+            is_in_domain = await self._classify_in_domain(message)
+            if not is_in_domain:
+                yield json.dumps({"event": "status", "data": "Vérification de la question…"}) + "\n"
+                yield json.dumps({"event": "token", "data": (
+                    "Je n'ai pas trouvé d'information pertinente dans le corpus "
+                    "pour répondre à cette question. Veuillez poser une question "
+                    "sur les arts et métiers ou consulter votre formateur."
+                )}) + "\n"
+                yield json.dumps({"content": "[DONE]"}) + "\n"
+                return
+
+            # Generate and emit the conversation title before the PRF pipeline
+            # so the client can update the sidebar title immediately.
+            if is_first_message:
+                title = await self._generate_conversation_title(message)
+                yield json.dumps({"event": "conversation_title", "data": title}) + "\n"
+
+            # ... rest of the pipeline unchanged
+```
+
+- [ ] **Step 4: Run all classifier tests**
+
+```bash
+cd /opt/craftpilot_backend && python -m pytest tests/test_pipeline_integration.py -k "classify_in_domain or short_circuit" -v
+```
+
+Expected: 7 passed.
+
+- [ ] **Step 5: Commit**
+
+```bash
+cd /opt/craftpilot_backend && git add pipeline.py tests/test_pipeline_integration.py && git commit -m "feat: hook input classifier into stream_response — short-circuits off-topic questions before retrieval"
+```
+
+---
+
+### Task 3: Manual smoke test
+
+No code changes — verify the live service behaves correctly after restart.
+
+- [ ] **Step 1: Restart the backend**
+
+Ask the user to run:
+```
+! sudo systemctl restart craftpilot-backend
+```
+
+- [ ] **Step 2: Test off-topic question**
+
+In the CraftPilot chat UI, send: `"Qui est le président des États-Unis ?"`
+
+Expected response (only this, nothing else):
+> "Je n'ai pas trouvé d'information pertinente dans le corpus pour répondre à cette question. Veuillez poser une question sur les arts et métiers ou consulter votre formateur."
+
+- [ ] **Step 3: Test in-domain question**
+
+Send: `"Comment souffler une paraison de verre ?"`
+
+Expected: normal RAG response with "Pour aller plus loin" section.
+
+- [ ] **Step 4: Verify fail-open by checking logs**
+
+```bash
+sudo journalctl -u craftpilot-backend -n 50 | grep "classifier"
+```
+
+Expected: no `"Input classifier failed"` warnings for normal traffic.

@@ -29,6 +29,11 @@ StreamMode = Literal["values", "updates"]
 class MoodleAIAssistantPipeline:
     """Main pipeline orchestrating the Moodle AI Assistant services."""
 
+    # Maximum number of candidates passed to the cross-encoder reranker.
+    # Keeping this low is critical on 2-core CPUs where bge-reranker-v2-m3
+    # takes ~5 s per document pair.
+    MAX_RERANK_CANDIDATES = 5
+
     def __init__(self, config_manager: Optional[ConfigurationManager] = None):
         self.config_manager = config_manager or ConfigurationManager()
 
@@ -303,6 +308,33 @@ class MoodleAIAssistantPipeline:
             logger.warning(f"Title generation failed: {e}")
             return message[:60]
 
+    async def _classify_in_domain(self, message: str) -> bool:
+        """Return True if message is in-domain (craft trades / apprenticeship).
+
+        Uses a minimal LLM call (max_tokens=10, temperature=0) to classify.
+        Fails open on any exception so legitimate questions are never blocked.
+        Note: a crafted message can manipulate the classifier to return True (fail-open path);
+        the main RAG system-prompt guardrail remains the last line of defence for such cases.
+        """
+        try:
+            from langchain_core.messages import SystemMessage, HumanMessage
+            classifier_llm = self.rag_service.llm.bind(max_tokens=10, temperature=0)
+            system = SystemMessage(content=(
+                "Tu es un classifieur de sujets. Réponds par un seul mot : "
+                "OUI si la question concerne les arts et métiers, l'apprentissage, "
+                "les techniques artisanales (soufflage de verre, ganterie, menuiserie, "
+                "sellerie, etc.). Réponds NON pour tout le reste (politique, actualité, "
+                "géographie, célébrités, etc.). Réponds uniquement OUI ou NON."
+            ))
+            human = HumanMessage(content=message)
+            response = await classifier_llm.ainvoke([system, human])
+            import re
+            first_word = re.sub(r"[^A-Z]", "", response.content.strip().upper().split()[0]) if response.content.strip() else ""
+            return first_word in {"OUI", "YES"}
+        except Exception as e:
+            logger.warning(f"Input classifier failed (fail-open): {e}")
+            return True
+
     @traceable(name="stream_response", run_type="chain")
     async def stream_response(
         self,
@@ -311,6 +343,7 @@ class MoodleAIAssistantPipeline:
         selected_domain: Optional[str] = None,
         course_id: Optional[str] = None,
         is_first_message: bool = False,
+        disable_rerank: bool = False,
     ):
         """Async generator that streams the full response as JSON-lines events.
 
@@ -319,16 +352,30 @@ class MoodleAIAssistantPipeline:
         token-by-token so the client sees output immediately.
 
         Yields JSON-line strings:
+          {"event": "status", "data": "..."}               — pipeline step hints
           {"event": "conversation_title", "data": "..."}  — only when is_first_message=True
           {"event": "video_metadata", "data": {...}}       — optional, before tokens
           {"event": "token", "data": "<text>"}             — one per LLM token
           {"event": "documents", "data": [...]}            — after all tokens
           {"content": "[DONE]"}                            — terminal marker
         """
+        import asyncio
         import json
 
         try:
             from langchain_core.messages import HumanMessage
+
+            # --- Pre-LLM topic classifier ---
+            is_in_domain = await self._classify_in_domain(message)
+            if not is_in_domain:
+                yield json.dumps({"event": "status", "data": "Vérification de la question…"}) + "\n"
+                yield json.dumps({"event": "token", "data": (
+                    "Je n'ai pas trouvé d'information pertinente dans le corpus "
+                    "pour répondre à cette question. Veuillez poser une question "
+                    "sur les arts et métiers ou consulter votre formateur."
+                )}) + "\n"
+                yield json.dumps({"content": "[DONE]"}) + "\n"
+                return
 
             # Generate and emit the conversation title before the PRF pipeline
             # so the client can update the sidebar title immediately.
@@ -351,26 +398,39 @@ class MoodleAIAssistantPipeline:
             }
 
             # --- PRF step 1: initial retrieval ---
-            result = self.rag_service.retrieve_initial(state)
+            yield json.dumps({"event": "status", "data": "Recherche dans la base de connaissances…"}) + "\n"
+            result = await asyncio.to_thread(self.rag_service.retrieve_initial, state)
             state.update(result)
 
             # --- PRF step 2: corpus-grounded query refinement ---
-            result = self.rag_service.refine_query_prf(state)
+            yield json.dumps({"event": "status", "data": "Reformulation de la question…"}) + "\n"
+            result = await asyncio.to_thread(self.rag_service.refine_query_prf, state)
             state.update(result)
 
             # --- PRF step 3: final retrieval with refined query ---
-            result = self.rag_service.retrieve_final_dual(state)
+            yield json.dumps({"event": "status", "data": "Récupération des sources pertinentes…"}) + "\n"
+            result = await asyncio.to_thread(self.rag_service.retrieve_final_dual, state)
             state.update(result)
 
             # --- PRF step 4: cross-encoder reranking and relevance filtering ---
-            result = self.rag_service.rerank(state)
-            state.update(result)
+            if not disable_rerank:
+                yield json.dumps({"event": "status", "data": "Classement des résultats…"}) + "\n"
+                # Cap candidates before reranking — bge-reranker-v2-m3 takes
+                # ~5 s per pair on a 2-core CPU, so keep the list tight.
+                ctx = state.get("context", [])
+                if len(ctx) > self.MAX_RERANK_CANDIDATES:
+                    state["context"] = ctx[: self.MAX_RERANK_CANDIDATES]
+                # Run synchronous cross-encoder inference in a thread so the
+                # event loop remains responsive during the ~20-30 s prediction.
+                result = await asyncio.to_thread(self.rag_service.rerank, state)
+                state.update(result)
 
             # Re-emit video metadata after reranking (top doc may have changed).
             if state.get("video_metadata"):
                 yield json.dumps({"event": "video_metadata", "data": state["video_metadata"]}) + "\n"
 
             # --- Stream the generate step token by token ---
+            yield json.dumps({"event": "status", "data": "Génération de la réponse…"}) + "\n"
             async for token in self.rag_service.stream_generate(state):
                 yield json.dumps({"event": "token", "data": token}) + "\n"
 
