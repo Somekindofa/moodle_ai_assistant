@@ -21,6 +21,7 @@ dependencies:
   - fastapi
   - pydantic
   - requests
+  - httpx
   - python-dotenv
   - typing_extensions
 
