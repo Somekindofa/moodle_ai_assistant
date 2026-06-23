@@ -16,6 +16,7 @@ from langchain import hub
 from sentence_transformers import CrossEncoder
 
 from config.settings import ConfigurationManager
+from services.reranker_service import InfomaniakReranker
 from core.types import ConversationState
 
 
@@ -221,8 +222,12 @@ class RAGService:
     # can be used at face value without corpus-specific calibration.
     RERANK_SCORE_THRESHOLD: float = 0.0
 
-    def _initialize_cross_encoder(self) -> CrossEncoder:
-        """Load the multilingual cross-encoder reranker onto CPU."""
+    def _initialize_cross_encoder(self):
+        """Load local cross-encoder or skip if remote reranker is configured."""
+        if self.config_manager.get_config().rag.use_remote_reranker:
+            logger.info("Remote reranker configured — skipping local cross-encoder load")
+            return None
+
         try:
             model = CrossEncoder(
                 self.CROSS_ENCODER_MODEL,
@@ -612,13 +617,12 @@ Génère une explication détaillée à la première personne de la technique co
 
     @traceable(name="rerank", run_type="chain")
     def rerank(self, state: ConversationState) -> Dict[str, Any]:
-        """Cross-encoder reranking — filters and re-orders retrieved docs by relevance.
+        """Rerank retrieved docs by relevance — local cross-encoder or remote API.
 
-        Uses a local multilingual cross-encoder (no API call) to jointly score
-        each (query, doc) pair.  Docs below RERANK_SCORE_THRESHOLD are dropped,
-        which serves as the primary relevance gate replacing the old L2 guardrail.
-        If no doc passes the threshold the context is returned empty, triggering
-        the deterministic refusal in stream_generate / generate.
+        When use_remote_reranker=True, delegates to InfomaniakReranker (HTTP API).
+        When False, uses the local multilingual cross-encoder (no API call).
+        Docs below threshold are dropped; empty context triggers the deterministic
+        refusal in stream_generate / generate.
         """
         query = str(state.get("messages")[-1].content)
         docs = state.get("context", [])
@@ -626,6 +630,37 @@ Génère une explication détaillée à la première personne de la technique co
         if not docs:
             return {"context": [], "video_metadata": None}
 
+        rag_cfg = self.config_manager.get_config().rag
+
+        if rag_cfg.use_remote_reranker:
+            api_key = self.config_manager.get_env_var("INFOMANIAK_API_KEY")
+            product_id = self.config_manager.get_env_var("INFOMANIAK_PRODUCT_ID")
+            remote = InfomaniakReranker(
+                api_key=api_key,
+                product_id=product_id,
+                model=rag_cfg.reranker_model,
+                threshold=rag_cfg.remote_reranker_score_threshold,
+            )
+            passing = remote.rerank(query, docs)
+            logger.info(
+                f"rerank (remote): {len(docs)} candidates → {len(passing)} passed "
+                f"threshold={rag_cfg.remote_reranker_score_threshold}"
+            )
+            video_metadata = self._extract_video_metadata(passing)
+            return {
+                "context": passing,
+                "video_metadata": video_metadata,
+                "rerank_debug": {
+                    "disabled": False,
+                    "backend": "remote",
+                    "model": rag_cfg.reranker_model,
+                    "candidates_in": len(docs),
+                    "passing_out": len(passing),
+                    "threshold": rag_cfg.remote_reranker_score_threshold,
+                },
+            }
+
+        # Local cross-encoder path
         pairs = [(query, doc.page_content) for doc in docs]
         scores = self.cross_encoder.predict(pairs)
 
@@ -642,7 +677,7 @@ Génère une explication détaillée à la première personne de la technique co
         all_scores_sorted = sorted([round(float(s), 4) for s in scores.tolist()], reverse=True)
 
         logger.info(
-            f"rerank: {len(docs)} candidates → {len(passing)} passed threshold "
+            f"rerank (local): {len(docs)} candidates → {len(passing)} passed threshold "
             f"(top score={top_score:.2f}, threshold={self.RERANK_SCORE_THRESHOLD})"
         )
 
@@ -652,6 +687,7 @@ Génère une explication détaillée à la première personne de la technique co
             "video_metadata": video_metadata,
             "rerank_debug": {
                 "disabled": False,
+                "backend": "local",
                 "candidates_in": len(docs),
                 "passing_out": len(passing),
                 "threshold": self.RERANK_SCORE_THRESHOLD,
