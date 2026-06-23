@@ -47,6 +47,12 @@ class RAGConfig:
     llm_frequency_penalty: float = 0.2
     llm_presence_penalty: float = 0.1
     similarity_search_k: int = 15
+    # Remote reranker via Infomaniak Cohere-compatible endpoint
+    use_remote_reranker: bool = False
+    reranker_model: str = "rerank-multilingual-v3.0"
+    # Cohere scores are calibrated probabilities in [0,1]; BGE scores are raw
+    # logits where 0.0 is the threshold.  Keep thresholds separate.
+    remote_reranker_score_threshold: float = 0.1
 
 
 @dataclass
