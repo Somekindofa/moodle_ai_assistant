@@ -18,6 +18,7 @@ from api.models import (
     CourseModuleIngestRequest,
     CourseModuleDeleteRequest,
     CourseDeleteRequest,
+    ResyncProjectRequest,
 )
 from pipeline import MoodleAIAssistantPipeline
 from config.settings import ConfigurationManager
@@ -154,6 +155,62 @@ async def ingest_annotation(request: AnnotationIngestRequest):
         }
 
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/resync-project-annotations")
+async def resync_project_annotations(request: ResyncProjectRequest):
+    """Delete and re-ingest all ChromaDB documents for a project with updated cohort metadata.
+
+    Called automatically by the video elicitation backend when an expert
+    changes the allowed_cohort_id on an existing project.
+    """
+    try:
+        project_name = request.project_name
+
+        # 1. Find all existing ChromaDB docs for this project
+        existing = pipeline.rag_service.vector_store.get(
+            where={"project_name": project_name}
+        )
+        if existing and existing.get("ids"):
+            pipeline.rag_service.vector_store.delete(ids=existing["ids"])
+            logger.info(
+                f"resync: deleted {len(existing['ids'])} docs for project '{project_name}'"
+            )
+
+        # 2. Fetch annotations from SQLite and re-ingest with new cohort metadata
+        annotations = pipeline.annotation_service.get_completed_annotations(
+            include_extended=True
+        )
+        project_annotations = [
+            a for a in annotations if (a.get("project_name") or "unknown") == project_name
+        ]
+
+        if not project_annotations:
+            return {"status": "ok", "documents_resynced": 0, "project_name": project_name}
+
+        # Inject the new cohort_id into each annotation before converting
+        for ann in project_annotations:
+            ann["allowed_cohort_id"] = request.allowed_cohort_id
+
+        docs = []
+        for ann in project_annotations:
+            docs.extend(
+                pipeline.annotation_service.annotation_to_documents(ann, use_extended=True)
+            )
+
+        if docs:
+            pipeline.rag_service.add_documents(docs)
+
+        return {
+            "status": "ok",
+            "documents_resynced": len(docs),
+            "project_name": project_name,
+            "allowed_cohort_id": request.allowed_cohort_id,
+        }
+
+    except Exception as e:
+        logger.error(f"resync-project-annotations failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

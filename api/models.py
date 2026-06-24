@@ -99,7 +99,7 @@ class CourseDeleteRequest(BaseModel):
 
 class VideoMetadata(BaseModel):
     """Video metadata for streaming and display."""
-    
+
     video_id: str
     filename: str
     filepath: str
@@ -109,3 +109,9 @@ class VideoMetadata(BaseModel):
     video_url: str
     annotation_id: Optional[int] = None
     project_name: Optional[str] = None
+
+
+class ResyncProjectRequest(BaseModel):
+    """Payload for re-tagging a project's ChromaDB documents with a new cohort."""
+    project_name: str = Field(..., max_length=255)
+    allowed_cohort_id: Optional[int] = None   # None = open access
