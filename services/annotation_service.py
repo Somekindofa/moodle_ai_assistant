@@ -192,7 +192,10 @@ class AnnotationService:
             "source_type": annotation["source_type"] or "unknown",
             "project_name": annotation.get("project_name") or "unknown",
             "annotation_created_at": annotation["annotation_created_at"] or "",
-            "type": "video_annotation"
+            "type": "video_annotation",
+            # Silo fields — cohort_id=-1 and open_access=True mean visible to all
+            "cohort_id": annotation.get("allowed_cohort_id") if annotation.get("allowed_cohort_id") is not None else -1,
+            "open_access": annotation.get("allowed_cohort_id") is None,
         }
         
         # Document 1: Raw transcription

@@ -67,6 +67,7 @@ class AnnotationIngestRequest(BaseModel):
     source_type: str = "local"
     project_name: str = "unknown"
     audio_filepath: str = ""
+    allowed_cohort_id: Optional[int] = None          # None = open access
 
 
 class CourseModuleIngestRequest(BaseModel):
