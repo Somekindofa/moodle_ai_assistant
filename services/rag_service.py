@@ -23,6 +23,22 @@ from core.types import ConversationState
 logger = logging.getLogger(__name__)
 
 
+def build_cohort_filter(user_cohort_ids: list) -> dict:
+    """Build a ChromaDB `where` filter enforcing cohort-level access.
+
+    Documents pass if they are open-access (cohort_id == -1, open_access == True)
+    OR if their cohort_id is in the user's allowed cohort list.
+    """
+    if not user_cohort_ids:
+        return {"open_access": True}
+    return {
+        "$or": [
+            {"cohort_id": {"$in": list(user_cohort_ids)}},
+            {"open_access": True},
+        ]
+    }
+
+
 class RAGService:
     """Service for RAG (Retrieval Augmented Generation) operations."""
 
@@ -284,7 +300,12 @@ class RAGService:
             logger.error(f"Failed to remove documents: {str(e)}")
             raise
 
-    def similarity_search(self, query: str, k: Optional[int] = None) -> List[Document]:
+    def similarity_search(
+        self,
+        query: str,
+        k: Optional[int] = None,
+        cohort_filter: Optional[dict] = None,
+    ) -> List[Document]:
         """Searches the vector store for documents similar to the provided `query` string.
         Args:
             query (str): The search query string to find similar documents for.
@@ -307,7 +328,12 @@ class RAGService:
             k = k or self.config.similarity_search_k
             seen_docs = set()
             unique_results = []
-            results = self.vector_store.max_marginal_relevance_search(query, k=k)
+
+            kwargs = {}
+            if cohort_filter is not None:
+                kwargs["filter"] = cohort_filter
+
+            results = self.vector_store.max_marginal_relevance_search(query, k=k, **kwargs)
             for doc in results:
                 logger.info(f"Document {doc.metadata.get('source', '')}")
                 doc_content = str(doc.metadata.get("source"))
@@ -408,7 +434,9 @@ Génère une explication détaillée à la première personne de la technique co
                 logger.warning("No HyDE document available, using original query")
 
             # Single retrieval pass with appropriate k
-            retrieved_docs = self.similarity_search(search_query, k=5)
+            user_cohort_ids = state.get("user_cohort_ids") or []
+            cohort_filter = build_cohort_filter(user_cohort_ids) if user_cohort_ids is not None else None
+            retrieved_docs = self.similarity_search(search_query, k=5, cohort_filter=cohort_filter)
 
             if not retrieved_docs:
                 logger.info("No relevant documents found")
@@ -603,10 +631,12 @@ Génère une explication détaillée à la première personne de la technique co
     def retrieve_combined(self, state: ConversationState) -> Dict[str, Any]:
         """Retrieve and combine docs from all query variants."""
         variants = state.get("query_variants", [str(state.get("messages")[-1].content)])
+        user_cohort_ids = state.get("user_cohort_ids") or []
+        cohort_filter = build_cohort_filter(user_cohort_ids) if user_cohort_ids is not None else None
         all_docs = []
         seen_sources = set()
         for query in variants:
-            docs = self.similarity_search(query, k=10)  # Smaller k for limited data
+            docs = self.similarity_search(query, k=10, cohort_filter=cohort_filter)  # Smaller k for limited data
             for doc in docs:
                 source = doc.metadata.get("source")
                 if source not in seen_sources:
@@ -928,8 +958,10 @@ Génère une explication détaillée à la première personne de la technique co
         results: List[Document] = []
 
         # 1. Video annotations collection.
+        user_cohort_ids = state.get("user_cohort_ids") or []
+        cohort_filter = build_cohort_filter(user_cohort_ids) if user_cohort_ids is not None else None
         if has_annotation_docs:
-            annotation_results = self.similarity_search(query, k=5)
+            annotation_results = self.similarity_search(query, k=5, cohort_filter=cohort_filter)
             results.extend(annotation_results)
         else:
             logger.info("Annotation collection empty — skipping annotation retrieval")
@@ -1026,10 +1058,12 @@ Génère une explication détaillée à la première personne de la technique co
         has_annotation_docs = bool(vector_data.get("ids"))
 
         annotation_results: List[Document] = []
+        user_cohort_ids = state.get("user_cohort_ids") or []
+        cohort_filter = build_cohort_filter(user_cohort_ids) if user_cohort_ids is not None else None
 
         # 1. Video annotations.
         if has_annotation_docs:
-            annotation_results = self.similarity_search(refined_query, k=5)
+            annotation_results = self.similarity_search(refined_query, k=5, cohort_filter=cohort_filter)
 
         # 2. Course collections.
         course_results: List[Document] = []
@@ -1066,8 +1100,10 @@ Génère une explication détaillée à la première personne de la technique co
         logger.info(f"State at retrieve: {state}")
 
         if has_documents:
+            user_cohort_ids = state.get("user_cohort_ids") or []
+            cohort_filter = build_cohort_filter(user_cohort_ids) if user_cohort_ids is not None else None
             retrieved_docs = self.similarity_search(
-                str(state.get("messages")[-1].content)
+                str(state.get("messages")[-1].content), cohort_filter=cohort_filter
             )
             if not retrieved_docs:
                 logger.info("No relevant documents found for the query")
@@ -1210,7 +1246,9 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
 
             # Perform retrieval with enhanced query
             # Use k=1 to get only the most relevant document
-            retrieved_docs = self.similarity_search(enhanced_query, k=15)
+            user_cohort_ids = state.get("user_cohort_ids") or []
+            cohort_filter = build_cohort_filter(user_cohort_ids) if user_cohort_ids is not None else None
+            retrieved_docs = self.similarity_search(enhanced_query, k=15, cohort_filter=cohort_filter)
 
             if not retrieved_docs:
                 logger.info("No relevant documents found with enhanced query")
