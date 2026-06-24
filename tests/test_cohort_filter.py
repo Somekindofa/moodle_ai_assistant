@@ -59,3 +59,18 @@ def test_build_cohort_filter_with_cohorts():
 def test_build_cohort_filter_no_cohorts_returns_open_only():
     f = build_cohort_filter([])
     assert f == {"open_access": True}
+
+
+def test_retrieve_no_filter_when_cohorts_not_in_state():
+    """When user_cohort_ids is absent from state, no filter reaches ChromaDB."""
+    from langchain_core.messages import HumanMessage
+    svc = _make_service()
+    state = {
+        "messages": [HumanMessage(content="test query")],
+        "query_variants": [],
+        "user_cohort_ids": None,   # explicitly not set
+    }
+    svc.get_vector_store_data = MagicMock(return_value={"ids": ["x"]})
+    svc.retrieve(state)
+    call_kwargs = svc.vector_store.max_marginal_relevance_search.call_args
+    assert call_kwargs is None or "filter" not in (call_kwargs.kwargs or {})

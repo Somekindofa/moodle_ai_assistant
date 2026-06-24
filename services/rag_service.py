@@ -434,7 +434,7 @@ Génère une explication détaillée à la première personne de la technique co
                 logger.warning("No HyDE document available, using original query")
 
             # Single retrieval pass with appropriate k
-            user_cohort_ids = state.get("user_cohort_ids") or []
+            user_cohort_ids = state.get("user_cohort_ids")
             cohort_filter = build_cohort_filter(user_cohort_ids) if user_cohort_ids is not None else None
             retrieved_docs = self.similarity_search(search_query, k=5, cohort_filter=cohort_filter)
 
@@ -631,7 +631,7 @@ Génère une explication détaillée à la première personne de la technique co
     def retrieve_combined(self, state: ConversationState) -> Dict[str, Any]:
         """Retrieve and combine docs from all query variants."""
         variants = state.get("query_variants", [str(state.get("messages")[-1].content)])
-        user_cohort_ids = state.get("user_cohort_ids") or []
+        user_cohort_ids = state.get("user_cohort_ids")
         cohort_filter = build_cohort_filter(user_cohort_ids) if user_cohort_ids is not None else None
         all_docs = []
         seen_sources = set()
@@ -958,7 +958,7 @@ Génère une explication détaillée à la première personne de la technique co
         results: List[Document] = []
 
         # 1. Video annotations collection.
-        user_cohort_ids = state.get("user_cohort_ids") or []
+        user_cohort_ids = state.get("user_cohort_ids")
         cohort_filter = build_cohort_filter(user_cohort_ids) if user_cohort_ids is not None else None
         if has_annotation_docs:
             annotation_results = self.similarity_search(query, k=5, cohort_filter=cohort_filter)
@@ -1058,7 +1058,7 @@ Génère une explication détaillée à la première personne de la technique co
         has_annotation_docs = bool(vector_data.get("ids"))
 
         annotation_results: List[Document] = []
-        user_cohort_ids = state.get("user_cohort_ids") or []
+        user_cohort_ids = state.get("user_cohort_ids")
         cohort_filter = build_cohort_filter(user_cohort_ids) if user_cohort_ids is not None else None
 
         # 1. Video annotations.
@@ -1100,7 +1100,7 @@ Génère une explication détaillée à la première personne de la technique co
         logger.info(f"State at retrieve: {state}")
 
         if has_documents:
-            user_cohort_ids = state.get("user_cohort_ids") or []
+            user_cohort_ids = state.get("user_cohort_ids")
             cohort_filter = build_cohort_filter(user_cohort_ids) if user_cohort_ids is not None else None
             retrieved_docs = self.similarity_search(
                 str(state.get("messages")[-1].content), cohort_filter=cohort_filter
@@ -1246,7 +1246,7 @@ Enhanced Query (respond with ONLY the enhanced query, no explanations):"""
 
             # Perform retrieval with enhanced query
             # Use k=1 to get only the most relevant document
-            user_cohort_ids = state.get("user_cohort_ids") or []
+            user_cohort_ids = state.get("user_cohort_ids")
             cohort_filter = build_cohort_filter(user_cohort_ids) if user_cohort_ids is not None else None
             retrieved_docs = self.similarity_search(enhanced_query, k=15, cohort_filter=cohort_filter)
 
