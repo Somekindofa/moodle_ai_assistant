@@ -368,7 +368,7 @@ class MoodleAIAssistantPipeline:
         try:
             from langchain_core.messages import HumanMessage
 
-            # Resolve silo scope — raises on DB failure (caught below → 503)
+            # Resolve silo scope — inner catch yields error JSON-line and returns early on DB failure
             user_cohort_ids: list[int] = []
             enrolled_course_ids: list[str] = []
             if user_id and user_id > 0:
