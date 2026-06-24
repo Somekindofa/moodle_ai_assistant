@@ -64,15 +64,17 @@ class SiloService:
         """Return Moodle cohort IDs the user belongs to."""
         cached, ts = self._cohort_cache.get(user_id, (None, 0.0))
         if cached is not None and (time.time() - ts) < self._cache_ttl:
-            return cached
+            return list(cached)
 
-        conn = self._connect()
+        conn = None
         try:
+            conn = self._connect()
             with conn.cursor() as cur:
                 cur.execute(_COHORT_QUERY, (user_id,))
                 rows = cur.fetchall()
         finally:
-            conn.close()
+            if conn is not None:
+                conn.close()
 
         result = [row[0] for row in rows]
         self._cohort_cache[user_id] = (result, time.time())
@@ -83,15 +85,17 @@ class SiloService:
         """Return active Moodle course IDs the user is enrolled in."""
         cached, ts = self._course_cache.get(user_id, (None, 0.0))
         if cached is not None and (time.time() - ts) < self._cache_ttl:
-            return cached
+            return list(cached)
 
-        conn = self._connect()
+        conn = None
         try:
+            conn = self._connect()
             with conn.cursor() as cur:
                 cur.execute(_ENROL_QUERY, (user_id,))
                 rows = cur.fetchall()
         finally:
-            conn.close()
+            if conn is not None:
+                conn.close()
 
         result = [str(row[0]) for row in rows]
         self._course_cache[user_id] = (result, time.time())

@@ -102,3 +102,10 @@ def test_get_allowed_cohorts_raises_on_db_error():
     with patch("services.silo_service.pymysql.connect", side_effect=Exception("DB down")):
         with pytest.raises(Exception, match="DB down"):
             svc.get_allowed_cohorts(1)
+
+
+def test_get_enrolled_course_ids_raises_on_db_error():
+    svc = _make_service()
+    with patch("services.silo_service.pymysql.connect", side_effect=Exception("DB down")):
+        with pytest.raises(Exception, match="DB down"):
+            svc.get_enrolled_course_ids(1)
