@@ -373,8 +373,8 @@ class MoodleAIAssistantPipeline:
             enrolled_course_ids: list[str] = []
             if user_id and user_id > 0:
                 try:
-                    user_cohort_ids = self.silo_service.get_allowed_cohorts(user_id)
-                    enrolled_course_ids = self.silo_service.get_enrolled_course_ids(user_id)
+                    user_cohort_ids = await asyncio.to_thread(self.silo_service.get_allowed_cohorts, user_id)
+                    enrolled_course_ids = await asyncio.to_thread(self.silo_service.get_enrolled_course_ids, user_id)
                 except Exception as e:
                     logger.error(f"SiloService failed for user {user_id}: {e}")
                     yield json.dumps({"event": "error", "data": "Service temporarily unavailable"}) + "\n"
