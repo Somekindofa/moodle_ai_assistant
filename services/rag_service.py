@@ -968,10 +968,12 @@ Génère une explication détaillée à la première personne de la technique co
 
         # 2. Course collections — priority course gets k=6, all others k=1.
         if self.course_rag_service:
+            enrolled_course_ids = state.get("enrolled_course_ids")
             course_results = self.course_rag_service.similarity_search_all_courses(
                 query,
                 k_per_course=1,
                 priority_course_id=course_id,
+                allowed_course_ids=enrolled_course_ids,
             )
             results = self._merge_dedup(results, course_results)
         elif course_id:
@@ -1068,10 +1070,12 @@ Génère une explication détaillée à la première personne de la technique co
         # 2. Course collections.
         course_results: List[Document] = []
         if self.course_rag_service:
+            enrolled_course_ids = state.get("enrolled_course_ids")
             course_results = self.course_rag_service.similarity_search_all_courses(
                 refined_query,
                 k_per_course=1,
                 priority_course_id=course_id,
+                allowed_course_ids=enrolled_course_ids,
             )
 
         results = self._merge_dedup(annotation_results, course_results)
