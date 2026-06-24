@@ -19,6 +19,7 @@ class ChatRequest(BaseModel):
     course_id: Optional[str] = Field(None, max_length=20)
     is_first_message: bool = False         # True on first message — triggers title generation
     disable_rerank: bool = False           # Ablation flag: skip cross-encoder reranking when True
+    user_id: Optional[int] = None          # NEW — validated by chat_proxy.php
 
 
 class SystemStatus(BaseModel):

@@ -45,6 +45,7 @@ async def generate_simplified_stream(
     course_id: Optional[str] = None,
     is_first_message: bool = False,
     disable_rerank: bool = False,
+    user_id: Optional[int] = None,         # NEW
 ) -> AsyncGenerator[str, None]:
     """Stream the RAG pipeline response as JSON-lines.
 
@@ -64,6 +65,7 @@ async def generate_simplified_stream(
         course_id=course_id,
         is_first_message=is_first_message,
         disable_rerank=disable_rerank,
+        user_id=user_id,                   # NEW
     ):
         yield line
 
@@ -90,10 +92,10 @@ async def get_system_status():
 
 @router.post("/chat")
 async def chat_stream(request: ChatRequest):
-    """
-    Streaming chat endpoint - streams JSON lines as the RAG pipeline produces them.
-    Each line is a JSON object: video_metadata event, message event, or [DONE].
-    """
+    """Streaming chat — requires a validated user_id from chat_proxy.php."""
+    if not request.user_id or request.user_id <= 0:
+        raise HTTPException(status_code=403, detail="user_id required")
+
     return StreamingResponse(
         generate_simplified_stream(
             request.message,
@@ -102,6 +104,7 @@ async def chat_stream(request: ChatRequest):
             request.course_id,
             request.is_first_message,
             request.disable_rerank,
+            user_id=request.user_id,        # NEW
         ),
         media_type="text/plain",
         headers={"X-Accel-Buffering": "no"},

@@ -18,6 +18,7 @@ from services.course_rag_service import CourseRAGService
 from services.document_service import DocumentProcessingService
 from services.graph_service import ConversationGraphService
 from services.annotation_service import AnnotationService
+from services.silo_service import SiloService
 
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,7 @@ class MoodleAIAssistantPipeline:
 
         self.document_service = DocumentProcessingService(self.config_manager)
         self.graph_service = ConversationGraphService(self.rag_service)
+        self.silo_service = SiloService()
 
         # Auto-load documents from Documents folder if it exists
         self._auto_load_documents()
@@ -344,6 +346,7 @@ class MoodleAIAssistantPipeline:
         course_id: Optional[str] = None,
         is_first_message: bool = False,
         disable_rerank: bool = False,
+        user_id: Optional[int] = None,     # NEW
     ):
         """Async generator that streams the full response as JSON-lines events.
 
@@ -364,6 +367,19 @@ class MoodleAIAssistantPipeline:
 
         try:
             from langchain_core.messages import HumanMessage
+
+            # Resolve silo scope — raises on DB failure (caught below → 503)
+            user_cohort_ids: list[int] = []
+            enrolled_course_ids: list[str] = []
+            if user_id and user_id > 0:
+                try:
+                    user_cohort_ids = self.silo_service.get_allowed_cohorts(user_id)
+                    enrolled_course_ids = self.silo_service.get_enrolled_course_ids(user_id)
+                except Exception as e:
+                    logger.error(f"SiloService failed for user {user_id}: {e}")
+                    yield json.dumps({"event": "error", "data": "Service temporarily unavailable"}) + "\n"
+                    yield json.dumps({"content": "[DONE]"}) + "\n"
+                    return
 
             # --- Pre-LLM topic classifier ---
             is_in_domain = await self._classify_in_domain(message)
@@ -395,6 +411,8 @@ class MoodleAIAssistantPipeline:
                 "enhanced_query": None,
                 "query_variants": [],
                 "route": None,
+                "user_cohort_ids": user_cohort_ids,           # NEW
+                "enrolled_course_ids": enrolled_course_ids,   # NEW
             }
 
             # --- PRF step 1: initial retrieval ---
