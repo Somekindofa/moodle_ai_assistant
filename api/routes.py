@@ -168,7 +168,23 @@ async def resync_project_annotations(request: ResyncProjectRequest):
     try:
         project_name = request.project_name
 
-        # 1. Find all existing ChromaDB docs for this project
+        # 1. Fetch annotations from SQLite BEFORE deleting ChromaDB
+        annotations = pipeline.annotation_service.get_completed_annotations(
+            include_extended=True
+        )
+        project_annotations = [
+            a for a in annotations if (a.get("project_name") or "unknown") == project_name
+        ]
+
+        if not project_annotations:
+            return {
+                "status": "ok",
+                "documents_resynced": 0,
+                "project_name": project_name,
+                "allowed_cohort_id": request.allowed_cohort_id,
+            }
+
+        # 2. Delete existing ChromaDB docs for this project (after fetch succeeds)
         existing = pipeline.rag_service.vector_store.get(
             where={"project_name": project_name}
         )
@@ -178,20 +194,11 @@ async def resync_project_annotations(request: ResyncProjectRequest):
                 f"resync: deleted {len(existing['ids'])} docs for project '{project_name}'"
             )
 
-        # 2. Fetch annotations from SQLite and re-ingest with new cohort metadata
-        annotations = pipeline.annotation_service.get_completed_annotations(
-            include_extended=True
-        )
+        # 3. Inject the new cohort_id into each annotation (safe copy, no mutation)
         project_annotations = [
-            a for a in annotations if (a.get("project_name") or "unknown") == project_name
+            {**ann, "allowed_cohort_id": request.allowed_cohort_id}
+            for ann in project_annotations
         ]
-
-        if not project_annotations:
-            return {"status": "ok", "documents_resynced": 0, "project_name": project_name}
-
-        # Inject the new cohort_id into each annotation before converting
-        for ann in project_annotations:
-            ann["allowed_cohort_id"] = request.allowed_cohort_id
 
         docs = []
         for ann in project_annotations:
