@@ -527,8 +527,9 @@ class CourseRAGService:
         query: str,
         k_per_course: int = 1,
         priority_course_id: Optional[str] = None,
+        allowed_course_ids: Optional[list] = None,
     ) -> List[Document]:
-        """Query all populated course collections with a single embedding API call.
+        """Query course collections the user is enrolled in.
 
         Embeds the query once, then searches every course collection using the
         pre-computed vector via the raw ChromaDB API.  This replaces N sequential
@@ -536,12 +537,22 @@ class CourseRAGService:
         from O(N × embed_time) to O(embed_time + N × vector_search_time).
 
         The priority course gets k=6 results; all others get k_per_course results.
+
+        If ``allowed_course_ids`` is provided, only those collections are queried.
         """
         all_docs: List[Document] = []
         course_ids = self._enumerate_populated_courses()
         if not course_ids:
             logger.info("similarity_search_all_courses: no populated courses found")
             return all_docs
+
+        # Apply enrolment filter
+        if allowed_course_ids is not None:
+            allowed_set = set(str(cid) for cid in allowed_course_ids)
+            course_ids = [cid for cid in course_ids if cid in allowed_set]
+            if not course_ids:
+                logger.info("similarity_search_all_courses: user enrolled in no indexed courses")
+                return all_docs
 
         # Embed once and reuse across all collections
         try:
@@ -566,8 +577,7 @@ class CourseRAGService:
         all_docs = priority_docs + other_docs
         logger.info(
             f"similarity_search_all_courses: {len(all_docs)} docs across "
-            f"{len(course_ids)} courses (priority={priority_course_id}, "
-            f"priority_docs={len(priority_docs)}, other_docs={len(other_docs)})"
+            f"{len(course_ids)} courses (priority={priority_course_id})"
         )
         return all_docs
 

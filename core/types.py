@@ -24,3 +24,5 @@ class ConversationState(MessagesState):
     selected_domain: Optional[str]         # Domain focus selected by the user (e.g. "Ganterie")
     course_id: Optional[str]              # Moodle course ID — enables per-course collection query
     refined_query: Optional[str]           # PRF-reformulated query (set by refine_query_prf node)
+    user_cohort_ids: Optional[List[int]]   # NEW — from SiloService: cohort IDs the user belongs to
+    enrolled_course_ids: Optional[List[str]]  # NEW — from SiloService: course IDs the user is enrolled in

@@ -19,6 +19,7 @@ class ChatRequest(BaseModel):
     course_id: Optional[str] = Field(None, max_length=20)
     is_first_message: bool = False         # True on first message — triggers title generation
     disable_rerank: bool = False           # Ablation flag: skip cross-encoder reranking when True
+    user_id: Optional[int] = None          # NEW — validated by chat_proxy.php
 
 
 class SystemStatus(BaseModel):
@@ -67,6 +68,7 @@ class AnnotationIngestRequest(BaseModel):
     source_type: str = "local"
     project_name: str = "unknown"
     audio_filepath: str = ""
+    allowed_cohort_id: Optional[int] = None          # None = open access
 
 
 class CourseModuleIngestRequest(BaseModel):
@@ -97,7 +99,7 @@ class CourseDeleteRequest(BaseModel):
 
 class VideoMetadata(BaseModel):
     """Video metadata for streaming and display."""
-    
+
     video_id: str
     filename: str
     filepath: str
@@ -107,3 +109,9 @@ class VideoMetadata(BaseModel):
     video_url: str
     annotation_id: Optional[int] = None
     project_name: Optional[str] = None
+
+
+class ResyncProjectRequest(BaseModel):
+    """Payload for re-tagging a project's ChromaDB documents with a new cohort."""
+    project_name: str = Field(..., max_length=255)
+    allowed_cohort_id: Optional[int] = None   # None = open access

@@ -73,16 +73,17 @@ class AnnotationService:
             v.source_type,
             v.batch_position,
             p.name as project_name,
-            p.description as project_description
+            p.description as project_description,
+            p.allowed_cohort_id
         FROM annotations a
         JOIN videos v ON a.video_id = v.id
         LEFT JOIN projects p ON v.project_id = p.id
         WHERE a.transcription_status = 'completed'
         """
-        
+
         if include_extended:
             query += " AND a.extended_transcript_status = 'completed'"
-        
+
         query += " ORDER BY a.created_at DESC"
         
         try:
@@ -129,17 +130,18 @@ class AnnotationService:
             v.source_type,
             v.batch_position,
             p.name as project_name,
-            p.description as project_description
+            p.description as project_description,
+            p.allowed_cohort_id
         FROM annotations a
         JOIN videos v ON a.video_id = v.id
         LEFT JOIN projects p ON v.project_id = p.id
         WHERE a.transcription_status = 'completed'
         AND a.updated_at > ?
         """
-        
+
         if include_extended:
             query += " AND a.extended_transcript_status = 'completed'"
-        
+
         query += " ORDER BY a.updated_at ASC"
         
         try:
@@ -192,7 +194,10 @@ class AnnotationService:
             "source_type": annotation["source_type"] or "unknown",
             "project_name": annotation.get("project_name") or "unknown",
             "annotation_created_at": annotation["annotation_created_at"] or "",
-            "type": "video_annotation"
+            "type": "video_annotation",
+            # Silo fields — cohort_id=-1 and open_access=True mean visible to all
+            "cohort_id": annotation.get("allowed_cohort_id") if annotation.get("allowed_cohort_id") is not None else -1,
+            "open_access": annotation.get("allowed_cohort_id") is None,
         }
         
         # Document 1: Raw transcription

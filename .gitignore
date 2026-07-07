@@ -12,3 +12,4 @@ client_example.py
 .vscode/
 *test*
 *.md
+!TROUBLESHOOT.md

@@ -18,6 +18,7 @@ from api.models import (
     CourseModuleIngestRequest,
     CourseModuleDeleteRequest,
     CourseDeleteRequest,
+    ResyncProjectRequest,
 )
 from pipeline import MoodleAIAssistantPipeline
 from config.settings import ConfigurationManager
@@ -45,6 +46,7 @@ async def generate_simplified_stream(
     course_id: Optional[str] = None,
     is_first_message: bool = False,
     disable_rerank: bool = False,
+    user_id: Optional[int] = None,         # NEW
 ) -> AsyncGenerator[str, None]:
     """Stream the RAG pipeline response as JSON-lines.
 
@@ -64,6 +66,7 @@ async def generate_simplified_stream(
         course_id=course_id,
         is_first_message=is_first_message,
         disable_rerank=disable_rerank,
+        user_id=user_id,                   # NEW
     ):
         yield line
 
@@ -90,10 +93,10 @@ async def get_system_status():
 
 @router.post("/chat")
 async def chat_stream(request: ChatRequest):
-    """
-    Streaming chat endpoint - streams JSON lines as the RAG pipeline produces them.
-    Each line is a JSON object: video_metadata event, message event, or [DONE].
-    """
+    """Streaming chat — requires a validated user_id from chat_proxy.php."""
+    if not request.user_id or request.user_id <= 0:
+        raise HTTPException(status_code=403, detail="user_id required")
+
     return StreamingResponse(
         generate_simplified_stream(
             request.message,
@@ -102,6 +105,7 @@ async def chat_stream(request: ChatRequest):
             request.course_id,
             request.is_first_message,
             request.disable_rerank,
+            user_id=request.user_id,        # NEW
         ),
         media_type="text/plain",
         headers={"X-Accel-Buffering": "no"},
@@ -130,6 +134,7 @@ async def ingest_annotation(request: AnnotationIngestRequest):
             "source_type":      request.source_type,
             "project_name":     request.project_name,
             "audio_filepath":   request.audio_filepath,
+            "allowed_cohort_id": request.allowed_cohort_id,   # None = open access
             # extended_transcript not available yet at transcription time
             "extended_transcript": None,
         }
@@ -150,6 +155,69 @@ async def ingest_annotation(request: AnnotationIngestRequest):
         }
 
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/resync-project-annotations")
+async def resync_project_annotations(request: ResyncProjectRequest):
+    """Delete and re-ingest all ChromaDB documents for a project with updated cohort metadata.
+
+    Called automatically by the video elicitation backend when an expert
+    changes the allowed_cohort_id on an existing project.
+    """
+    try:
+        project_name = request.project_name
+
+        # 1. Fetch annotations from SQLite BEFORE deleting ChromaDB
+        annotations = pipeline.annotation_service.get_completed_annotations(
+            include_extended=True
+        )
+        project_annotations = [
+            a for a in annotations if (a.get("project_name") or "unknown") == project_name
+        ]
+
+        if not project_annotations:
+            return {
+                "status": "ok",
+                "documents_resynced": 0,
+                "project_name": project_name,
+                "allowed_cohort_id": request.allowed_cohort_id,
+            }
+
+        # 2. Delete existing ChromaDB docs for this project (after fetch succeeds)
+        existing = pipeline.rag_service.vector_store.get(
+            where={"project_name": project_name}
+        )
+        if existing and existing.get("ids"):
+            pipeline.rag_service.vector_store.delete(ids=existing["ids"])
+            logger.info(
+                f"resync: deleted {len(existing['ids'])} docs for project '{project_name}'"
+            )
+
+        # 3. Inject the new cohort_id into each annotation (safe copy, no mutation)
+        project_annotations = [
+            {**ann, "allowed_cohort_id": request.allowed_cohort_id}
+            for ann in project_annotations
+        ]
+
+        docs = []
+        for ann in project_annotations:
+            docs.extend(
+                pipeline.annotation_service.annotation_to_documents(ann, use_extended=True)
+            )
+
+        if docs:
+            pipeline.rag_service.add_documents(docs)
+
+        return {
+            "status": "ok",
+            "documents_resynced": len(docs),
+            "project_name": project_name,
+            "allowed_cohort_id": request.allowed_cohort_id,
+        }
+
+    except Exception as e:
+        logger.error(f"resync-project-annotations failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
