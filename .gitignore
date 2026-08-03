@@ -13,3 +13,4 @@ client_example.py
 *test*
 *.md
 !TROUBLESHOOT.md
+!CLAUDE.md
