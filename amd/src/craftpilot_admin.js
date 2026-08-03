@@ -68,27 +68,45 @@ function initReingestButton(url) {
             const cls = d.type === 'error' ? 'text-danger'
                       : d.type === 'info'  ? 'text-muted'
                       :                      'text-success';
-            const prefix = (d.done != null && d.total != null)
-                         ? `<span class="text-muted">${d.done}/${d.total}</span> `
-                         : '';
-            progress.innerHTML += `<div class="${cls}">${prefix}${d.message ?? ''}</div>`;
-            progress.scrollTop  = progress.scrollHeight;
+
+            // Built with DOM APIs, never innerHTML: d.message embeds
+            // teacher-controlled course and module names (see
+            // reingest_all.php), which would otherwise execute as markup
+            // in the site administrator's browser.
+            const row = document.createElement('div');
+            row.className = cls;
+            if (d.done != null && d.total != null) {
+                const counter = document.createElement('span');
+                counter.className   = 'text-muted';
+                counter.textContent = `${d.done}/${d.total} `;
+                row.appendChild(counter);
+            }
+            row.appendChild(document.createTextNode(d.message ?? ''));
+            progress.appendChild(row);
+            progress.scrollTop = progress.scrollHeight;
         });
 
         es.addEventListener('done', e => {
             const d = JSON.parse(e.data);
             es.close();
             btn.disabled = false;
-            progress.innerHTML +=
-                `<div class="alert alert-success mt-2">Done — ${d.done} indexed, ` +
-                `${d.skipped} skipped, ${d.errors} errors.</div>`;
+
+            const summary = document.createElement('div');
+            summary.className   = 'alert alert-success mt-2';
+            summary.textContent =
+                `Done — ${d.done} indexed, ${d.skipped} skipped, ${d.errors} errors.`;
+            progress.appendChild(summary);
             progress.scrollTop = progress.scrollHeight;
         });
 
         es.onerror = () => {
             es.close();
             btn.disabled = false;
-            progress.innerHTML += '<div class="alert alert-danger mt-2">Connection lost.</div>';
+
+            const err = document.createElement('div');
+            err.className   = 'alert alert-danger mt-2';
+            err.textContent = 'Connection lost.';
+            progress.appendChild(err);
         };
     });
 }
