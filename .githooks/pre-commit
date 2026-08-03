@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Blocks commits that introduce key-shaped strings.
+# Enable once per clone:  git config core.hooksPath .githooks
+set -euo pipefail
+
+GITLEAKS="${GITLEAKS_BIN:-$(command -v gitleaks || echo /usr/local/bin/gitleaks)}"
+
+if [ ! -x "$GITLEAKS" ]; then
+    echo "WARNING: gitleaks not found - secret scan SKIPPED."
+    echo "  Install: https://github.com/gitleaks/gitleaks/releases"
+    exit 0
+fi
+
+echo "gitleaks: scanning staged changes..."
+if ! "$GITLEAKS" protect --staged --redact --verbose; then
+    echo ""
+    echo "COMMIT BLOCKED: possible secret detected."
+    echo "  False positive? Add an inline '# gitleaks:allow' or use .gitleaksignore."
+    echo "  Override (use sparingly): git commit --no-verify"
+    exit 1
+fi

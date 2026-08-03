@@ -1,0 +1,187 @@
+{{!
+    CraftPilot chat interface — floating panel with sidebar, sources, and input.
+    Injected site-wide via local_craftpilot_before_footer().
+
+    @template local_craftpilot/chat_interface
+    @copyright 2026
+    @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+
+    @var object $context
+    @property int $courseid    Moodle course ID (0 on dashboard/frontpage — retrieval hint only)
+}}
+
+{{! ── Chat wrapper (always anchored at bottom-right) ──────── }}
+<div
+    id="cp-wrapper"
+    class="cp-wrapper"
+    data-courseid="{{courseid}}"
+>
+
+    {{! ── Toggle pill tab (first child = sits on top of the panel) }}
+    <button
+        id="cp-toggle"
+        class="cp-toggle-pill"
+        aria-label="{{#str}}openchat, local_craftpilot{{/str}}"
+        aria-expanded="false"
+        aria-controls="cp-chat-body"
+    >
+        <span class="cp-toggle-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+        </span>
+        <span class="cp-toggle-label">Ask CraftPilot</span>
+    </button>
+
+    {{! ── Chat body (collapses max-height to hide/show) ──────── }}
+    <div id="cp-chat-body" class="cp-chat-body" aria-hidden="true">
+
+        {{! ── Conversations sidebar ───────────────────────── }}
+        <div id="cp-sidebar" class="cp-sidebar" aria-label="Conversations">
+
+            <div class="cp-sidebar-header">
+                <span class="cp-sidebar-title">Conversations</span>
+                <button
+                    id="cp-new-conv"
+                    class="cp-new-conv-btn"
+                    aria-label="New conversation"
+                    title="New conversation"
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5"  y1="12" x2="19" y2="12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div id="cp-conv-list" class="cp-conv-list" role="list" aria-label="Conversation list"></div>
+
+        </div>{{! end .cp-sidebar }}
+
+        {{! ── Main panel ──────────────────────────────────── }}
+        <div id="cp-panel" class="cp-panel">
+
+            {{! Panel header }}
+            <div class="cp-panel-header">
+
+                <button
+                    id="cp-sidebar-toggle"
+                    class="cp-icon-btn"
+                    aria-label="Toggle conversations"
+                    title="Conversations"
+                >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <line x1="3"  y1="6"  x2="21" y2="6"/>
+                        <line x1="3"  y1="12" x2="16" y2="12"/>
+                        <line x1="3"  y1="18" x2="21" y2="18"/>
+                    </svg>
+                </button>
+
+                <span id="cp-conv-title" class="cp-panel-title">CraftPilot</span>
+
+                <button
+                    id="cp-close"
+                    class="cp-icon-btn"
+                    aria-label="Close chat"
+                    title="Close"
+                >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <line x1="18" y1="6"  x2="6"  y2="18"/>
+                        <line x1="6"  y1="6"  x2="18" y2="18"/>
+                    </svg>
+                </button>
+
+            </div>{{! end .cp-panel-header }}
+
+            {{! Messages area }}
+            <div
+                id="cp-messages"
+                class="cp-messages"
+                role="log"
+                aria-live="polite"
+                aria-label="Chat messages"
+            >
+                <div class="cp-empty-state" id="cp-empty-state">
+                    <svg class="cp-empty-icon" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="1.5">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <p class="cp-empty-title">Ready to assist</p>
+                    <p class="cp-empty-sub">Ask a question about this content</p>
+                </div>
+            </div>
+
+            {{! Sources section — collapsible, above input }}
+            <div id="cp-sources" class="cp-sources" aria-label="Retrieved sources">
+
+                <button
+                    id="cp-sources-header"
+                    class="cp-sources-header"
+                    aria-expanded="false"
+                    aria-controls="cp-sources-scroll"
+                >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                    </svg>
+                    <span class="cp-sources-label">Sources</span>
+                    <span id="cp-sources-count" class="cp-sources-count">0</span>
+                    <svg class="cp-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <polyline points="18 15 12 9 6 15"/>
+                    </svg>
+                </button>
+
+                <div
+                    id="cp-sources-scroll"
+                    class="cp-sources-scroll"
+                    role="list"
+                    aria-label="Source files"
+                ></div>
+
+            </div>{{! end .cp-sources }}
+
+            {{! Input area }}
+            <div class="cp-input-area">
+
+                {{! Domain selector — focus the LLM on a specific craft domain }}
+                <div id="cp-domain-bar" class="cp-domain-bar" role="group" aria-label="Choisir un domaine">
+                    <button class="cp-domain-btn" data-domain="Soufflerie de verre" title="Focus sur la soufflerie de verre">Soufflerie de verre</button>
+                    <button class="cp-domain-btn" data-domain="Scellerie nautique" title="Focus sur la scellerie nautique">Scellerie nautique</button>
+                    <button class="cp-domain-btn" data-domain="Ganterie" title="Focus sur la ganterie">Ganterie</button>
+                </div>
+
+                <div class="cp-input-row">
+                    <textarea
+                        id="cp-input"
+                        class="cp-input"
+                        placeholder="{{#str}}promptplaceholder, local_craftpilot{{/str}}"
+                        rows="1"
+                        aria-label="{{#str}}promptplaceholder, local_craftpilot{{/str}}"
+                    ></textarea>
+                    <button
+                        id="cp-send"
+                        class="cp-send-btn"
+                        aria-label="{{#str}}send, local_craftpilot{{/str}}"
+                        title="Send"
+                    >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="22" y1="2"  x2="11" y2="13"/>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+        </div>{{! end .cp-panel }}
+
+    </div>{{! end .cp-chat-body }}
+
+</div>{{! end .cp-wrapper }}

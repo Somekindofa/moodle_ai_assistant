@@ -1,0 +1,49 @@
+# Node dependencies — 41MB of the 42MB tree. Restore with `npm install`.
+node_modules/
+
+# Local Claude Code permission config — machine-specific, grants shell perms
+.claude/settings.local.json
+
+# Secrets / environment
+.env
+.env.*
+*.pem
+*.key
+.npmrc
+.pypirc
+
+# Database dumps — user conversation data lives in MariaDB and must NEVER
+# be committed. No tooling here produces these today; this is a guard rail.
+*.sql
+*.dump
+*.csv
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Moodle / build cruft
+*.orig
+*.rej
+behat.yml
+phpunit.xml
+
+# ---------------------------------------------------------------------------
+# NOTE: amd/build/*.min.js IS COMMITTED ON PURPOSE. Do not add it here.
+#
+# Moodle serves amd/build/ directly at runtime with no deploy-time build step,
+# and amd/build/dompurify.min.js is vendored from node_modules with NO
+# amd/src counterpart — `grunt babel` will not regenerate it. Ignoring
+# amd/build/ would lose that file on a fresh clone and break XSS
+# sanitization in the chat UI.
+# ---------------------------------------------------------------------------
