@@ -2,6 +2,9 @@
 	"folders": [
 		{
 			"path": "."
+		},
+		{
+			"path": "../video_elicitation_annotation_tool"
 		}
 	],
 	"settings": {
