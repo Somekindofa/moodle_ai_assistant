@@ -249,7 +249,7 @@ The running Moodle plugin is **`local_craftpilot`** (a "local" plugin), NOT `mod
 |---|---|---|
 | Plugin type | `local` | `mod` |
 | Path | `/var/www/html/public/local/craftpilot/` | `/var/www/html/public/mod/craftpilot/` |
-| Git repo | `github.com/Somekindofa/moodle-local-craftpilot` (private) | `moodle-plugin-ai` — **archived, read-only** |
+| Git repo | this repo, `plugin/` (formerly `moodle-local-craftpilot`, now archived) | `moodle-plugin-ai` — **archived, read-only** |
 | JS source | `amd/src/chat_interface.js` (1296 lines) | `amd/src/chat_interface.js` (1409 lines) |
 | Build command | `cd /var/www/html/public/local/craftpilot && npx grunt babel` | (irrelevant) |
 | Proxy URL | `/local/craftpilot/chat_proxy.php` | `/mod/craftpilot/chat_proxy.php` |
@@ -261,41 +261,45 @@ cd /var/www/html/public/local/craftpilot && npx grunt babel
 php /var/www/html/admin/cli/purge_caches.php
 ```
 
-### Repo split (2026-08-03)
+### Repo history: split (2026-08-03), then re-merged (2026-08-06)
 
-The Moodle plugin is **not** part of this backend repo. It has its own:
+The Moodle plugin now lives **inside this repo**, at `plugin/`. It was a
+separate private repo (`moodle-local-craftpilot`) for three days; that repo
+had only 3 commits and was never independently released, so the split just
+added a two-PR-per-feature tax with no offsetting benefit. It's now archived
+on GitHub (not deleted) — its history was merged into `plugin/` here via
+`git merge -s ours --no-commit --allow-unrelated-histories` + `git read-tree
+--prefix=plugin/`, so `git log plugin/` still shows its original commits.
 
-| Half | Repo | Path |
-|---|---|---|
-| Python backend | `moodle_ai_assistant` (this repo) | `/opt/craftpilot_backend` |
-| Moodle plugin | `moodle-local-craftpilot` (private) | `/var/www/html/public/local/craftpilot` |
+**The live path is a synced copy, not a git checkout.**
+`/var/www/html/public/local/craftpilot` is **not** version-controlled
+itself — same pattern as `local_videoelicit` below. Edit `plugin/` in this
+repo, then sync and commit:
 
-The plugin directory is a git checkout in place — commit and push from it
-directly. A change spanning both halves needs a PR in each repo.
+```bash
+rsync -a --delete --exclude=node_modules --exclude=.claude \
+  plugin/ /var/www/html/public/local/craftpilot/
+php /var/www/html/admin/cli/purge_caches.php
+git add plugin/ && git commit -m "..."
+```
 
 Two consequences worth knowing:
 
-- **`amd/build/*.min.js` is committed on purpose.** Moodle serves it directly
-  with no deploy-time build step, and `amd/build/dompurify.min.js` is vendored
-  from `node_modules` with no `amd/src` counterpart — `grunt babel` will not
-  regenerate it. Ignoring `amd/build/` breaks XSS sanitization on a fresh clone.
-- **The gitleaks hook is versioned** at `.githooks/pre-commit` in the plugin
-  repo. Each clone must run `git config core.hooksPath .githooks` once; Git
-  does not install hooks automatically.
+- **`plugin/amd/build/*.min.js` is committed on purpose.** Moodle serves it
+  directly with no deploy-time build step, and
+  `plugin/amd/build/dompurify.min.js` is vendored from `node_modules` with
+  no `amd/src` counterpart — `grunt babel` will not regenerate it. Losing it
+  breaks XSS sanitization.
+- **The gitleaks hook now applies repo-wide.** The old plugin-only
+  `.githooks/pre-commit` merged in under `plugin/.githooks/` — this repo's
+  root hook (`core.hooksPath`) is what actually runs; the nested one is
+  inert, kept only because it's part of the preserved history.
 
-⚠️ **`main` of this repo still contains a stale `local_craftpilot/` copy.**
-PR #19 (`chore/sync-craftpilot-moodle-plugin-from-prod`, commit `27a2642`)
-was merged on 2026-07-30, adding 45 plugin files under `local_craftpilot/`.
-The 2026-08-03 split superseded that approach, but the directory was never
-removed.
-
-It is **dead weight, not the source of truth** — the live plugin is the
-standalone repo. Nothing reads `local_craftpilot/` any more: the deploy
-scripts were rewritten to `git pull` the plugin repo in place, so this copy
-is never synced anywhere. It should be deleted from `main` (`git rm -r
-local_craftpilot/`) to prevent someone editing it and expecting an effect.
-Left in place pending a decision, since removing it is a destructive change
-to a shared branch.
+⚠️ **A second, older `local_craftpilot/` copy (no `plugin/` prefix) was
+removed in the same session** (was added by PR #19 on 2026-07-30, dead
+weight even before the 2026-08-03 split — see git history if you need it).
+Don't confuse it with the current `plugin/` folder if you're reading old
+commits.
 
 The old preprod/staging workflow (feature branch → preprod → PR review →
 promote-to-prod script) was deliberately retired in favor of editing the
