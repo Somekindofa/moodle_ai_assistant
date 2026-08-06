@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="local/craftpilot/db" VERSION="20260303" COMMENT="XMLDB file for Moodle local_craftpilot">
+  <TABLES>
+    <TABLE NAME="local_craftpilot_conv" COMMENT="Stores conversation metadata for each user (site-wide, not per-instance)">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="conversation_id" TYPE="char" LENGTH="255" NOTNULL="true"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" COMMENT="Moodle course ID used as retrieval hint (0 = no course context)"/>
+        <FIELD NAME="title" TYPE="char" LENGTH="255" NOTNULL="true"/>
+        <FIELD NAME="created_time" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="last_updated" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="is_active" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1"/>
+        <FIELD NAME="metadata" TYPE="text" NOTNULL="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="userid_key" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="conversation_id_unique" UNIQUE="true" FIELDS="conversation_id"/>
+        <INDEX NAME="userid_active" UNIQUE="false" FIELDS="userid, is_active"/>
+        <INDEX NAME="userid_last_updated" UNIQUE="false" FIELDS="userid, last_updated"/>
+        <INDEX NAME="userid_courseid" UNIQUE="false" FIELDS="userid, courseid"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_craftpilot_msg" COMMENT="Stores individual messages within conversations">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="conversation_id" TYPE="char" LENGTH="255" NOTNULL="true"/>
+        <FIELD NAME="message_type" TYPE="char" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="content" TYPE="text" NOTNULL="true"/>
+        <FIELD NAME="created_time" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="sequence_number" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="metadata" TYPE="text" NOTNULL="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="conversation_fk" TYPE="foreign" FIELDS="conversation_id" REFTABLE="local_craftpilot_conv" REFFIELDS="conversation_id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="conv_sequence" UNIQUE="false" FIELDS="conversation_id, sequence_number"/>
+        <INDEX NAME="conv_time" UNIQUE="false" FIELDS="conversation_id, created_time"/>
+        <INDEX NAME="message_type_idx" UNIQUE="false" FIELDS="message_type"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_craftpilot_cm_index" COMMENT="Tracks which course modules have been indexed in ChromaDB and their content hashes">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="course_id" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="content_hash" TYPE="char" LENGTH="32" NOTNULL="true"/>
+        <FIELD NAME="last_indexed" TYPE="int" LENGTH="10" NOTNULL="true"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="cmid_unique" TYPE="unique" FIELDS="cmid"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="course_id" UNIQUE="false" FIELDS="course_id"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_craftpilot_testrun" COMMENT="Metadata for each RAG test bench run">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="run_uuid" TYPE="char" LENGTH="36" NOTNULL="true" COMMENT="Version-4 UUID identifying this run"/>
+        <FIELD NAME="created_time" TYPE="int" LENGTH="10" NOTNULL="true" COMMENT="Unix timestamp of run start"/>
+        <FIELD NAME="question_count" TYPE="int" LENGTH="5" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="flagged_count" TYPE="int" LENGTH="5" NOTNULL="true" DEFAULT="0" COMMENT="Cached count; updated on each flag toggle"/>
+        <FIELD NAME="notes" TYPE="text" NOTNULL="false" COMMENT="Optional free-text notes at run level"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="run_uuid_unique" UNIQUE="true" FIELDS="run_uuid"/>
+        <INDEX NAME="created_time_idx" UNIQUE="false" FIELDS="created_time"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_craftpilot_testresult" COMMENT="Per-question result records within a test run">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="run_id" TYPE="int" LENGTH="10" NOTNULL="true" COMMENT="FK to local_craftpilot_testrun.id"/>
+        <FIELD NAME="question_index" TYPE="int" LENGTH="5" NOTNULL="true" COMMENT="0-based position in the fixed question list"/>
+        <FIELD NAME="question_text" TYPE="text" NOTNULL="true"/>
+        <FIELD NAME="generated_text" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="retrieved_sources" TYPE="text" NOTNULL="false" COMMENT="JSON blob: {videos:[...], documents:[...]}"/>
+        <FIELD NAME="refined_query" TYPE="text" NOTNULL="false" COMMENT="PRF-refined query string if backend exposes it"/>
+        <FIELD NAME="execution_time_ms" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="flagged" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="notes" TYPE="text" NOTNULL="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="run_fk" TYPE="foreign" FIELDS="run_id" REFTABLE="local_craftpilot_testrun" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="run_question_unique" UNIQUE="true" FIELDS="run_id, question_index"/>
+        <INDEX NAME="flagged_idx" UNIQUE="false" FIELDS="flagged"/>
+      </INDEXES>
+    </TABLE>
+  </TABLES>
+</XMLDB>
