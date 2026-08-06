@@ -297,8 +297,13 @@ local_craftpilot/`) to prevent someone editing it and expecting an effect.
 Left in place pending a decision, since removing it is a destructive change
 to a shared branch.
 
-Deploy scripts live at `/home/claude-runner/preprod-migration/deploy/`;
-the workflow is documented in `/var/www/html/public/DEV_WORKFLOW.md`.
+The old preprod/staging workflow (feature branch → preprod → PR review →
+promote-to-prod script) was deliberately retired in favor of editing the
+live server's git checkouts directly and restarting the affected service —
+see `/var/www/html/public/DEV_HANDOFF.md`. The old deploy/promote scripts
+still exist at `/home/claude-runner/preprod-migration/deploy/` and the
+preprod VM itself hasn't been torn down, but neither is part of the current
+process; nothing runs them anymore.
 
 ---
 
