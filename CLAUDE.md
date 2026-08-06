@@ -269,7 +269,16 @@ had only 3 commits and was never independently released, so the split just
 added a two-PR-per-feature tax with no offsetting benefit. It's now archived
 on GitHub (not deleted) — its history was merged into `plugin/` here via
 `git merge -s ours --no-commit --allow-unrelated-histories` + `git read-tree
---prefix=plugin/`, so `git log plugin/` still shows its original commits.
+--prefix=plugin/`.
+
+**To see the plugin's pre-merge commits**, plain `git log plugin/` won't
+show them — this wasn't a real `git subtree` (not installed, no sudo to add
+it), so git's pathspec history-simplification doesn't trace the directory
+rename across the merge. The original commits are still fully preserved
+and reachable, just via a different command:
+```bash
+git log plugin-merge-2026-08-06 --oneline   # tag on the pre-merge tip
+```
 
 **The live path is a synced copy, not a git checkout.**
 `/var/www/html/public/local/craftpilot` is **not** version-controlled
