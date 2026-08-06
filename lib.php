@@ -29,7 +29,7 @@ defined('MOODLE_INTERNAL') || die();
  * @return string HTML to append before </body>
  */
 function local_craftpilot_before_footer(): string {
-    global $OUTPUT, $PAGE;
+    global $OUTPUT, $PAGE, $USER;
 
     if (!isloggedin() || isguestuser()) {
         return '';
@@ -48,6 +48,7 @@ function local_craftpilot_before_footer(): string {
     $PAGE->requires->js_call_amd('local_craftpilot/chat_interface', 'init', [
         $courseid,
         $proxyurl,
+        (int) $USER->id,
     ]);
 
     return $OUTPUT->render_from_template('local_craftpilot/chat_interface', [

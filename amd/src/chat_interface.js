@@ -19,6 +19,7 @@ import DOMPurify from 'local_craftpilot/dompurify';
 const state = {
     courseId:      null,   // retrieval hint; 0 = no course context
     chatProxyUrl:  null,   // set from PHP via init()
+    userId:        0,      // set from PHP via init() — $USER->id
     currentConvId:    null,
     currentConvTitle: 'CraftPilot',
     conversations: [],
@@ -47,9 +48,10 @@ const dom = {};
 /* ============================================================
    PUBLIC INIT (AMD entry point)
    ============================================================ */
-export const init = (moduleCourseId, chatProxyUrl) => {
+export const init = (moduleCourseId, chatProxyUrl, userId) => {
     state.courseId     = moduleCourseId || 0;
     state.chatProxyUrl = chatProxyUrl || '/local/craftpilot/chat_proxy.php';
+    state.userId       = userId || 0;
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', setup);
@@ -1091,7 +1093,7 @@ const streamFromBackend = (userMessage, isFirstMessage = false) => {
         conversation_thread_id: state.currentConvId,
         is_first_message: isFirstMessage,
         sesskey: (window.M && window.M.cfg) ? window.M.cfg.sesskey : '',
-        user_id: (window.M && window.M.cfg) ? window.M.cfg.userid : 0,
+        user_id: state.userId,
     };
     if (state.selectedDomain) {
         payload.selected_domain = state.selectedDomain;
