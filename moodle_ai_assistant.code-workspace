@@ -5,6 +5,12 @@
 		},
 		{
 			"path": "../video_elicitation_annotation_tool"
+		},
+		{
+			"path": "/opt/craftpilot_backend"
+		},
+		{
+			"path": "/var/www/html/public"
 		}
 	],
 	"settings": {
