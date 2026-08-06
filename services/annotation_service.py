@@ -1,10 +1,19 @@
-"""Service for managing video annotation database operations."""
+"""Service for managing video annotation database operations.
+
+Video annotation data was migrated out of the standalone SQLite database into
+Moodle's own MariaDB (local_videoelicit plugin tables) on 2026-02-19 — see
+/opt/video_elicitation_annotation_tool/START_HERE_DATABASE_MIGRATION.md. This
+service reads from the live mdl_local_videoelicit_* tables directly; the old
+SQLite file is stale and no longer written to.
+"""
 
 import logging
-import sqlite3
+import os
 from typing import List, Dict, Any, Optional
-from pathlib import Path
 from datetime import datetime
+
+import pymysql
+import pymysql.cursors
 
 from langchain_core.documents.base import Document
 
@@ -15,148 +24,113 @@ logger = logging.getLogger(__name__)
 
 
 class AnnotationService:
-    """Service for reading and managing video annotations from SQLite."""
+    """Service for reading video annotations from Moodle's MariaDB."""
+
+    _BASE_QUERY = """
+        SELECT
+            a.id AS annotation_id,
+            a.videoid AS video_id,
+            a.starttime AS start_time,
+            a.endtime AS end_time,
+            a.audiofilepath AS audio_filepath,
+            a.transcription,
+            a.transcriptionstatus AS transcription_status,
+            a.craft,
+            a.task,
+            a.timecreated AS annotation_created_at,
+            a.timemodified AS annotation_updated_at,
+            v.filename AS video_filename,
+            v.filepath AS video_filepath,
+            v.duration AS video_duration,
+            v.source_type,
+            p.name AS project_name,
+            p.description AS project_description
+        FROM mdl_local_videoelicit_annotations a
+        JOIN mdl_local_videoelicit_videos v ON a.videoid = v.id
+        LEFT JOIN mdl_local_videoelicit_projects p ON v.projectid = p.id
+        WHERE a.transcriptionstatus = 'completed'
+    """
 
     def __init__(
-        self, 
+        self,
         config_manager: ConfigurationManager,
-        db_path: str = "chroma_langchain_db/elicitations_db/annotations.db"
+        db_host: str = "localhost",
+        db_user: str = "moodleuser",
+        db_name: str = "moodle",
     ):
         self.config_manager = config_manager
-        self.db_path = db_path
-        self._ensure_database_exists()
+        self.db_host = db_host
+        self.db_user = db_user
+        self.db_name = db_name
+        self.db_password = os.getenv("MOODLE_DB_PASSWORD", "")
+        if not self.db_password:
+            logger.warning("MOODLE_DB_PASSWORD not set — annotation queries will fail")
 
-    def _ensure_database_exists(self) -> None:
-        """Check if database exists and is accessible."""
-        if not Path(self.db_path).exists():
-            logger.warning(f"Annotation database not found at {self.db_path}")
-        else:
-            logger.info(f"Connected to annotation database at {self.db_path}")
+    def get_connection(self) -> pymysql.connections.Connection:
+        """Get a MariaDB connection with dict-row cursors."""
+        return pymysql.connect(
+            host=self.db_host,
+            user=self.db_user,
+            password=self.db_password,
+            database=self.db_name,
+            cursorclass=pymysql.cursors.DictCursor,
+        )
 
-    def get_connection(self) -> sqlite3.Connection:
-        """Get database connection."""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row  # Enable column access by name
-        return conn
+    @staticmethod
+    def _to_iso(unix_ts: Optional[int]) -> str:
+        return datetime.fromtimestamp(unix_ts).isoformat() if unix_ts else ""
 
     def get_completed_annotations(
-        self, 
-        include_extended: bool = True
+        self,
+        include_extended: bool = True,  # kept for interface compatibility — no extended-transcript column in this schema
     ) -> List[Dict[str, Any]]:
-        """
-        Fetch all completed annotations with video metadata.
-        
-        Args:
-            include_extended: Whether to include extended transcripts
-            
-        Returns:
-            List of annotation dictionaries with video metadata
-        """
-        query = """
-        SELECT 
-            a.id as annotation_id,
-            a.video_id,
-            a.start_time,
-            a.end_time,
-            a.audio_filename,
-            a.audio_filepath,
-            a.transcription,
-            a.transcription_status,
-            a.extended_transcript,
-            a.extended_transcript_status,
-            a.feedback,
-            a.created_at as annotation_created_at,
-            a.updated_at as annotation_updated_at,
-            v.filename as video_filename,
-            v.filepath as video_filepath,
-            v.duration as video_duration,
-            v.source_type,
-            v.batch_position,
-            p.name as project_name,
-            p.description as project_description,
-            p.allowed_cohort_id
-        FROM annotations a
-        JOIN videos v ON a.video_id = v.id
-        LEFT JOIN projects p ON v.project_id = p.id
-        WHERE a.transcription_status = 'completed'
-        """
+        """Fetch all completed annotations with video metadata."""
+        query = self._BASE_QUERY + " ORDER BY a.timecreated DESC"
 
-        if include_extended:
-            query += " AND a.extended_transcript_status = 'completed'"
-
-        query += " ORDER BY a.created_at DESC"
-        
         try:
             conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute(query)
-            
-            annotations = []
-            for row in cursor.fetchall():
-                annotations.append(dict(row))
-            
-            conn.close()
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute(query)
+                    annotations = cursor.fetchall()
+            finally:
+                conn.close()
+
+            for a in annotations:
+                a["annotation_created_at"] = self._to_iso(a["annotation_created_at"])
+                a["annotation_updated_at"] = self._to_iso(a["annotation_updated_at"])
+
             logger.info(f"Retrieved {len(annotations)} completed annotations")
             return annotations
-            
+
         except Exception as e:
             logger.error(f"Failed to fetch annotations: {str(e)}")
             return []
 
     def get_annotations_since(
-        self, 
+        self,
         timestamp: datetime,
-        include_extended: bool = True
+        include_extended: bool = True,
     ) -> List[Dict[str, Any]]:
         """Get annotations updated since a specific timestamp."""
-        query = """
-        SELECT 
-            a.id as annotation_id,
-            a.video_id,
-            a.start_time,
-            a.end_time,
-            a.audio_filename,
-            a.audio_filepath,
-            a.transcription,
-            a.transcription_status,
-            a.extended_transcript,
-            a.extended_transcript_status,
-            a.feedback,
-            a.created_at as annotation_created_at,
-            a.updated_at as annotation_updated_at,
-            v.filename as video_filename,
-            v.filepath as video_filepath,
-            v.duration as video_duration,
-            v.source_type,
-            v.batch_position,
-            p.name as project_name,
-            p.description as project_description,
-            p.allowed_cohort_id
-        FROM annotations a
-        JOIN videos v ON a.video_id = v.id
-        LEFT JOIN projects p ON v.project_id = p.id
-        WHERE a.transcription_status = 'completed'
-        AND a.updated_at > ?
-        """
+        query = self._BASE_QUERY + " AND a.timemodified > %s ORDER BY a.timemodified ASC"
 
-        if include_extended:
-            query += " AND a.extended_transcript_status = 'completed'"
-
-        query += " ORDER BY a.updated_at ASC"
-        
         try:
             conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute(query, (timestamp.isoformat(),))
-            
-            annotations = []
-            for row in cursor.fetchall():
-                annotations.append(dict(row))
-            
-            conn.close()
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute(query, (int(timestamp.timestamp()),))
+                    annotations = cursor.fetchall()
+            finally:
+                conn.close()
+
+            for a in annotations:
+                a["annotation_created_at"] = self._to_iso(a["annotation_created_at"])
+                a["annotation_updated_at"] = self._to_iso(a["annotation_updated_at"])
+
             logger.info(f"Retrieved {len(annotations)} annotations since {timestamp}")
             return annotations
-            
+
         except Exception as e:
             logger.error(f"Failed to fetch annotations since {timestamp}: {str(e)}")
             return []
@@ -164,28 +138,24 @@ class AnnotationService:
     def annotation_to_documents(
         self,
         annotation: Dict[str, Any],
-        use_extended: bool = True
+        use_extended: bool = True,  # unused — this schema has no extended-transcript field
     ) -> List[Document]:
         """
-        Convert annotation to LangChain Document objects.
-        
-        Creates separate documents for transcription and extended transcript if available.
-        
-        Args:
-            annotation: Annotation dictionary from database
-            use_extended: Whether to create document for extended transcript
-            
-        Returns:
-            List of Document objects (1-2 documents per annotation)
+        Convert an annotation row into a LangChain Document.
+
+        The new schema dropped the LLM-enhanced "extended transcript" concept, so
+        this always produces at most one raw-transcript document per annotation.
         """
-        documents = []
-        
-        # Base metadata shared by both documents
-        # Filter out None values as ChromaDB only accepts str, int, float, bool
-        base_metadata = {
+        if not annotation.get("transcription"):
+            return []
+
+        video_filename = annotation.get("video_filename") or "unknown.mp4"
+        annotation_id = annotation.get("annotation_id") or 0
+
+        metadata = {
             "annotation_id": annotation["annotation_id"],
             "video_id": annotation["video_id"],
-            "video_filename": annotation["video_filename"] or "unknown.mp4",
+            "video_filename": video_filename,
             "video_filepath": annotation["video_filepath"] or "",
             "start_time": float(annotation["start_time"]) if annotation["start_time"] is not None else 0.0,
             "end_time": float(annotation["end_time"]) if annotation["end_time"] is not None else 0.0,
@@ -193,80 +163,52 @@ class AnnotationService:
             "audio_filepath": annotation["audio_filepath"] or "",
             "source_type": annotation["source_type"] or "unknown",
             "project_name": annotation.get("project_name") or "unknown",
+            "craft": annotation.get("craft") or "",
+            "task": annotation.get("task") or "",
             "annotation_created_at": annotation["annotation_created_at"] or "",
             "type": "video_annotation",
-            # Silo fields — cohort_id=-1 and open_access=True mean visible to all
-            "cohort_id": annotation.get("allowed_cohort_id") if annotation.get("allowed_cohort_id") is not None else -1,
-            "open_access": annotation.get("allowed_cohort_id") is None,
+            "transcript_type": "raw",
+            "source": f"{video_filename}#{annotation_id}_raw",
+            # Silo fields — the new schema has no per-project cohort restriction,
+            # so every annotation is open-access (matches the prior default).
+            "cohort_id": -1,
+            "open_access": True,
         }
-        
-        # Document 1: Raw transcription
-        if annotation.get("transcription"):
-            transcription_metadata = base_metadata.copy()
-            transcription_metadata["transcript_type"] = "raw"
-            # Ensure source field has no None values
-            video_filename = annotation.get("video_filename") or "unknown.mp4"
-            annotation_id = annotation.get("annotation_id") or 0
-            transcription_metadata["source"] = f"{video_filename}#{annotation_id}_raw"
-            
-            documents.append(Document(
-                page_content=annotation["transcription"],
-                metadata=transcription_metadata
-            ))
-        
-        # Document 2: Extended transcript (LLM-enhanced)
-        if use_extended and annotation.get("extended_transcript"):
-            extended_metadata = base_metadata.copy()
-            extended_metadata["transcript_type"] = "extended"
-            # Ensure source field has no None values
-            video_filename = annotation.get("video_filename") or "unknown.mp4"
-            annotation_id = annotation.get("annotation_id") or 0
-            extended_metadata["source"] = f"{video_filename}#{annotation_id}_extended"
-            
-            documents.append(Document(
-                page_content=annotation["extended_transcript"],
-                metadata=extended_metadata
-            ))
-        
-        return documents
+
+        return [Document(page_content=annotation["transcription"], metadata=metadata)]
 
     def get_annotation_stats(self) -> Dict[str, Any]:
-        """Get statistics about annotations in database."""
+        """Get statistics about annotations in the database."""
         try:
             conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            stats = {}
-            
-            # Total annotations
-            cursor.execute("SELECT COUNT(*) FROM annotations")
-            stats["total_annotations"] = cursor.fetchone()[0]
-            
-            # Completed transcriptions
-            cursor.execute(
-                "SELECT COUNT(*) FROM annotations WHERE transcription_status = 'completed'"
-            )
-            stats["completed_transcriptions"] = cursor.fetchone()[0]
-            
-            # Completed extended transcripts
-            cursor.execute(
-                "SELECT COUNT(*) FROM annotations WHERE extended_transcript_status = 'completed'"
-            )
-            stats["completed_extended"] = cursor.fetchone()[0]
-            
-            # Total videos
-            cursor.execute("SELECT COUNT(*) FROM videos")
-            stats["total_videos"] = cursor.fetchone()[0]
-            
-            # Videos with annotations
-            cursor.execute(
-                "SELECT COUNT(DISTINCT video_id) FROM annotations"
-            )
-            stats["videos_with_annotations"] = cursor.fetchone()[0]
-            
-            conn.close()
+            try:
+                with conn.cursor() as cursor:
+                    stats: Dict[str, Any] = {}
+
+                    cursor.execute("SELECT COUNT(*) AS c FROM mdl_local_videoelicit_annotations")
+                    stats["total_annotations"] = cursor.fetchone()["c"]
+
+                    cursor.execute(
+                        "SELECT COUNT(*) AS c FROM mdl_local_videoelicit_annotations "
+                        "WHERE transcriptionstatus = 'completed'"
+                    )
+                    stats["completed_transcriptions"] = cursor.fetchone()["c"]
+
+                    # No extended-transcript concept in this schema.
+                    stats["completed_extended"] = 0
+
+                    cursor.execute("SELECT COUNT(*) AS c FROM mdl_local_videoelicit_videos")
+                    stats["total_videos"] = cursor.fetchone()["c"]
+
+                    cursor.execute(
+                        "SELECT COUNT(DISTINCT videoid) AS c FROM mdl_local_videoelicit_annotations"
+                    )
+                    stats["videos_with_annotations"] = cursor.fetchone()["c"]
+            finally:
+                conn.close()
+
             return stats
-            
+
         except Exception as e:
             logger.error(f"Failed to get annotation stats: {str(e)}")
             return {}

@@ -104,7 +104,7 @@ class MoodleAIAssistantPipeline:
             stats = self.annotation_service.get_annotation_stats()
             logger.info(f"Annotation database stats: {stats}")
 
-            if stats.get("completed_extended", 0) > 0:
+            if stats.get("completed_transcriptions", 0) > 0:
                 count = self.rag_service.sync_annotations_to_vector_store(
                     use_extended=False,  # Use raw transcripts only
                     clear_existing=False
