@@ -302,21 +302,11 @@ the workflow is documented in `/var/www/html/public/DEV_WORKFLOW.md`.
 
 ---
 
-## Conversation Isolation Bugs — Fixed (March 2026)
+## Historical incident notes
 
-All fixes are in `/var/www/html/public/local/craftpilot/amd/src/chat_interface.js`.
-
-**Root causes and fixes:**
-
-| Bug | Root cause | Fix |
-|-----|-----------|-----|
-| New conversation shows old history | `createConversation` only cleared DOM inside async `.then()` — a race window let old content appear | Moved all state/DOM resets (messages clear, sources clear, `showReady`) **before** the AJAX call (sync); AJAX is now fire-and-forget |
-| Sources appear on wrong conversation | `addSource` wrote to a shared `state.sources` array with no ownership tracking | `addSource` now accepts an `ownerConvId` parameter; it silently drops the source if `ownerConvId !== state.currentConvId` |
-| Sources lost on conversation switch | No per-conversation save/restore mechanism | Replaced `convSources` dict with `convStates` + `getConvState(id)` helper; `selectConversation` saves outgoing sources and restores incoming ones |
-| Old history loads into new conversation | `loadMessages` AJAX could resolve after the user switched away | Guard at top of `.then()`: `if (String(convId) !== String(state.currentConvId)) return;` |
-| Stream writes to wrong conversation | `state.currentConvId` was read live inside a long-running stream closure | Capture `const streamConvId = state.currentConvId` once at the top of `streamFromBackend`; all inner references use `streamConvId` |
-| Stream response arrives after switch | No staleness check at the start of the `.then((res)=>` handler | Checks `streamConvId !== state.currentConvId`; cancels the response body and calls `finishStreaming()` |
-| `clearSources()` left ghost cards visible | Empty-items path only toggled CSS classes; never cleared `dom.sourcesScroll.innerHTML` | Added `dom.sourcesScroll.innerHTML = ''` in the empty path of `setSources` |
+- Conversation isolation bugs (Mar 2026) — see `docs/incidents/conversation-isolation-2026-03.md`
+- Video streaming perf bugs (Apr 2026) — see `docs/incidents/video-streaming-perf-2026-04.md`
+- Security fixes summary — see `docs/incidents/security-fixes.md`
 
 ---
 
@@ -550,29 +540,6 @@ The `local_craftpilot_get_user_credentials` AJAX method still exists in `service
 
 ---
 
-## Video Streaming — Performance Bugs (April 2026)
-
-This bug has surfaced twice. Symptom: video takes a long time to start playing and buffers repeatedly mid-playback.
-
-### Root Causes and Fixes
-
-All fixes are in `api/routes.py`.
-
-| # | Scope | Root cause | Fix |
-|---|-------|-----------|-----|
-| 1 | All videos | `_get_video_path()` called synchronously from async route — on cache miss it does a full scan of all ChromaDB documents (`get_vector_store_data()` iterates every metadata record), blocking the uvicorn event loop | Added `_get_video_path_async()` which runs the scan in a thread via `run_in_executor` |
-| 2 | WebDAV videos | HEAD request to OwnCloud on **every** Range request (browser sends 10–30 per video) | Added `_video_size_cache: dict[str, int]` — HEAD is done once per video ID, result reused |
-| 3 | WebDAV videos | `httpx.AsyncClient(timeout=60)` cuts off large videos mid-stream | Changed to `httpx.Timeout(connect=10.0, read=None)` — no read timeout |
-| 4 | WebDAV videos | No `Content-Length` on initial (non-Range) response — browser can't show seek bar or buffer progressively | `Content-Length` now always included when file size is known |
-
-### Key Invariants to Preserve
-
-- `_video_cache` (filepath by video_id) and `_video_size_cache` (file size by video_id) are module-level in-process dicts. They are **not** invalidated on video deletion — a server restart clears them. That is acceptable.
-- `_get_video_path()` must remain a plain `def` (not async) because it is also called from synchronous contexts. The async wrapper `_get_video_path_async()` is what the route uses.
-- The WebDAV branch is entered when `not os.path.isabs(video_path)` — a relative path means the file lives on OwnCloud, not local disk. Local-disk files are served directly via `aiofiles` with proper range support; they do not go through `httpx`.
-
----
-
 ## Status Hints Streaming — Architecture (June 2026)
 
 ### Problem: PHP-FPM buffering → 504 timeout
@@ -623,17 +590,4 @@ Added to `stream_generate`:
 
 ## Security Issues — Fixed
 
-| # | Severity | Issue | Fix location |
-|---|----------|-------|--------------|
-| 1 | CRITICAL | Hardcoded MySQL password `M00dl3` in source | `routes.py`, `export_to_owncloud.py`, `eval/01_seed_annotations.py` → `os.getenv("MOODLE_DB_PASSWORD")` |
-| 2 | CRITICAL | No authentication on any backend endpoint | `server.py` — `require_internal_token` middleware + `X-Internal-Token` header |
-| 3 | CRITICAL | Missing CSRF on `chat_proxy.php` | `chat_proxy.php` — `confirm_sesskey()` on JSON body `sesskey` field |
-| 4 | HIGH | CORS wildcard + `allow_credentials=True` | `server.py` — restricted to `127.0.0.1`/`localhost`, credentials disabled |
-| 5 | HIGH | `innerHTML` on unsanitized LLM output | `chat_interface.js` — DOMPurify added to `renderMarkdown()` |
-| 6 | HIGH | Plaintext API key storage (`local_craftpilot_keys`) | Table dropped; Fireworks integration removed entirely |
-| 7 | MEDIUM | Unbounded user input on `/api/chat` | `api/models.py` — Pydantic `Field(max_length=...)` on all string inputs |
-| 8 | MEDIUM | Video path traversal (partial) | `routes.py` — allowlist of permitted directories |
-| 9 | MEDIUM | `PARAM_RAW` on message content in external API | `manage_messages.php` — changed to `PARAM_CLEANHTML` |
-| 10 | LOW | Partial API key logged at startup | `config/settings.py` — logs key name only |
-| 11 | LOW | User-controlled byte offset in `log_tail.php` | Clamped to `[-1, filesize]` |
-| 12 | LOW | cURL error detail exposed to browser | `chat_proxy.php` — generic message only |
+See `docs/incidents/security-fixes.md` for the full table (12 items, CRITICAL → LOW, with fix locations).
