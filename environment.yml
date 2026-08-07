@@ -6,7 +6,6 @@ dependencies:
   - python
   - langsmith
   - langchain
-  - langchain-fireworks
   - langchain-huggingface
   - langchain-community
   - langchain-core
@@ -25,4 +24,12 @@ dependencies:
   - python-dotenv
   - typing_extensions
 
-prefix: /home/takbas/miniconda3/envs/moodle_backend
+# NOTE: the langchain/langgraph packages above are deliberately left unpinned in
+# this file but MUST NOT be resolved fresh — newer releases have breaking API
+# changes this code depends on. Before rebuilding, snapshot the working versions:
+#   conda list -n moodle_backend | grep -iE 'langchain|langgraph'
+# and pin to those. See DEV_HANDOFF.md section 8.
+#
+# The live env is at /root/miniconda3/envs/moodle_backend (see the systemd unit
+# craftpilot-backend.service). A `prefix:` line was removed here because conda
+# export writes the *exporting* machine's path, which misleads readers.
