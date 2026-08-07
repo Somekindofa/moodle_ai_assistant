@@ -330,6 +330,7 @@ async def stream_video(video_id: str, request: Request):
     # Security: Prevent path traversal and enforce allowlisted directories
     _ALLOWED_VIDEO_DIRS = [
         Path("/opt/video_elicitation_annotation_tool").resolve(),
+        Path("/var/video_uploads").resolve(),
         Path("/var/www/html").resolve(),
         Path("/tmp").resolve(),
     ]
