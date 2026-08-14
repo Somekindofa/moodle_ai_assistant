@@ -205,6 +205,28 @@ anywhere in docs or git** — they live solely in
 `claude-runner` — see §6). Ask whoever holds root for the value; never
 paste it into a transcript, commit, or doc.
 
+**Where to read the traces**
+
+| | |
+|---|---|
+| URL | **<https://eu.smith.langchain.com/>** — the **EU** instance |
+| Account | `aimove.caor@minesparis.psl.eu` |
+| Sign-in | **"Continue with GitHub"** — *not* email + password |
+| Project | `Craftpilot` |
+
+⚠️ **Two things here trip people up.**
+
+1. **Sign in with GitHub, not a password.** The account has no LangSmith
+   password of its own; it exists only through the GitHub identity attached
+   to `aimove.caor@minesparis.psl.eu`. Trying to reset a password will not
+   get you in.
+2. **It must be the EU instance.** LangSmith's EU and US deployments are
+   separate systems with separate accounts. Signing in at the default
+   `smith.langchain.com` creates a *different, empty* account and shows no
+   traces — the data is not missing, you are simply on the wrong instance.
+   This must match `LANGSMITH_ENDPOINT` in `.env`
+   (`https://eu.api.smith.langchain.com`).
+
 **Migrated 2026-08-14.** Tracing was **re-pointed to the `aimove.caor`
 LangSmith account, not disabled** — `LANGSMITH_TRACING` stays `true`.
 Verified end-to-end: runs `stream_response` and `ChatOpenAI` landed in
