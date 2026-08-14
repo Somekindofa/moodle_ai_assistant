@@ -335,9 +335,33 @@ Three secrets must be internally consistent across multiple files:
    backend. Lives in: `/etc/httpd/conf.d/moodle-ssl.conf` (header
    `X-Internal-Token`), craftpilot's `.env` as `INTERNAL_API_TOKEN`,
    and the Moodle DB config `local_craftpilot/internal_api_token`.
-3. **Database password** — the `moodleuser` MariaDB account. Lives in:
-   `config.php` (`$CFG->dbpass`) and both apps' `.env` as
-   `MOODLE_DB_PASSWORD`.
+3. **Database password** — the `moodleuser` MariaDB account. Lives in
+   **three** files: `config.php` (`$CFG->dbpass`) and *both* apps' `.env`
+   as `MOODLE_DB_PASSWORD`.
+
+   ⚠️ The two `.env` copies are easy to miss, and missing them fails
+   **quietly**: Moodle keeps working, both `/api/health` endpoints keep
+   returning 200, and nothing is logged — but annotation storage, the
+   cohort/silo filtering and the annotations dashboard all break, because
+   only those code paths touch the Moodle DB. Verify all three after any
+   rotation (prints pass/fail, never the value):
+
+   ```bash
+   /root/miniconda3/envs/moodle_backend/bin/python - <<'PY'
+   import os, subprocess, dotenv
+   for label, path in [("craftpilot",  "/opt/craftpilot_backend/.env"),
+                       ("videoelicit", "/opt/video_elicitation_annotation_tool/.env")]:
+       pw = dotenv.dotenv_values(path).get("MOODLE_DB_PASSWORD")
+       r = subprocess.run(["mysql","-u","moodleuser","moodle","-e","SELECT 1;"],
+                          env=dict(os.environ, MYSQL_PWD=pw or ""),
+                          capture_output=True, text=True)
+       print(label, "->", "OK" if r.returncode == 0 else "FAILS")
+   PY
+   ```
+
+   In a `.env`, wrap the value in **single** quotes. python-dotenv expands
+   `$VAR` inside double-quoted values, which would silently corrupt any
+   password containing `$`.
 
 `.env` files are root-owned, mode 600, and ACL-blocked from
 `claude-runner`. If you're inside a Claude session and need a value,
@@ -357,7 +381,7 @@ to rotate it. **Names and locations only — never write a value here.**
 | GitHub push auth | per-repo **deploy keys** on the server | `~/.ssh/` + remotes | Generate a new key, add it as a repo Deploy key with write access, swap the remote, verify a push, *then* remove the old one |
 | `MOODLE_JWT_SECRET` | server-local | Moodle setting `local_videoelicit/jwt_secret` **and** videoelicit `.env` | Generate 64 random chars, set in both, restart `videoelicit-backend`. If the Moodle setting is ever blank, `jwt_helper.php` silently falls back to an insecure default — check it is populated. |
 | `INTERNAL_API_TOKEN` | server-local | Apache `moodle-ssl.conf`, craftpilot `.env`, Moodle DB `local_craftpilot/internal_api_token` | All **three** together, then `httpd -t && systemctl reload httpd` and restart the backend. Miss one and chat 401s. |
-| `MOODLE_DB_PASSWORD` | server-local | `config.php` (`$CFG->dbpass`) + **both** `.env` files | Change in MariaDB first, then all three files, then restart both backends |
+| `MOODLE_DB_PASSWORD` | server-local | `config.php` (`$CFG->dbpass`) + **both** `.env` files | **Three files, always.** Change in MariaDB first, then all three, then restart both backends. Rotated 2026-08-14. |
 | WebDAV service account | *(cleared — see below)* | Moodle settings `local_videoelicit/webdav_*` | Unused: all production videos are `source_type = uploaded`. If you re-enable it, provision a real **service account**, never a person's login. |
 
 **If a value is lost:** everything except Infomaniak and LangSmith is
