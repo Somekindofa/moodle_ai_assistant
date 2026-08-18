@@ -130,6 +130,7 @@ class MoodleAIAssistantPipeline:
         try:
             return self.graph_service.build_conversation_graph(
                 functions=[
+                    "detect_and_translate_query",
                     "retrieve_initial",
                     "refine_query_prf",
                     "retrieve_final_dual",
@@ -413,7 +414,16 @@ class MoodleAIAssistantPipeline:
                 "route": None,
                 "user_cohort_ids": user_cohort_ids,           # NEW
                 "enrolled_course_ids": enrolled_course_ids,   # NEW
+                "query_language": None,           # NEW
+                "search_query": None,              # NEW
             }
+
+            # --- Step 0: language detection + translation ---
+            if self.rag_service.config.enable_cross_lingual_detection:
+                result = await asyncio.to_thread(self.rag_service.detect_and_translate_query, state)
+                state.update(result)
+                if state.get("query_language") and state["query_language"] != "fr":
+                    yield json.dumps({"event": "status", "data": "Traduction de la question…"}) + "\n"
 
             # --- PRF step 1: initial retrieval ---
             yield json.dumps({"event": "status", "data": "Recherche dans la base de connaissances…"}) + "\n"
