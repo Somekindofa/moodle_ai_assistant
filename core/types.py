@@ -26,3 +26,5 @@ class ConversationState(MessagesState):
     refined_query: Optional[str]           # PRF-reformulated query (set by refine_query_prf node)
     user_cohort_ids: Optional[List[int]]   # NEW — from SiloService: cohort IDs the user belongs to
     enrolled_course_ids: Optional[List[str]]  # NEW — from SiloService: course IDs the user is enrolled in
+    query_language: Optional[str]          # NEW — ISO code detected for the raw query; "fr" is default/fallback
+    search_query: Optional[str]            # NEW — French text used for embedding/retrieval (set by detect_and_translate_query)
