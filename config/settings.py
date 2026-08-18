@@ -57,6 +57,15 @@ class RAGConfig:
     # Cohere scores are calibrated probabilities in [0,1]; BGE scores are raw
     # logits where 0.0 is the threshold.  Keep thresholds separate.
     remote_reranker_score_threshold: float = 0.1
+    # Cross-lingual query handling — see docs/superpowers/specs/2026-08-18-cross-lingual-retrieval-design.md
+    enable_cross_lingual_detection: bool = field(
+        default_factory=lambda: os.getenv("ENABLE_CROSS_LINGUAL_DETECTION", "true").lower() == "true"
+    )
+    # py3langid confidence below this defaults to "fr" rather than guessing —
+    # biased toward the safe direction (never spuriously mistranslate real French).
+    langid_confidence_threshold: float = 0.5
+    # Queries shorter than this (chars) default to "fr" — langid is unreliable on short text.
+    min_langid_chars: int = 12
 
 
 @dataclass
