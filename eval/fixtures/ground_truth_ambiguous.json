@@ -1,0 +1,12 @@
+[
+  {"qid": "amb_1", "query": "ok", "expected_language": "fr"},
+  {"qid": "amb_2", "query": "merci", "expected_language": "fr"},
+  {"qid": "amb_3", "query": "flamme", "expected_language": "fr"},
+  {"qid": "amb_4", "query": "verre", "expected_language": "fr"},
+  {"qid": "amb_5", "query": "oui", "expected_language": "fr"},
+  {"qid": "amb_6", "query": "biseau ?", "expected_language": "fr"},
+  {"qid": "amb_7", "query": "et la molette ?", "expected_language": "fr"},
+  {"qid": "amb_8", "query": "pourquoi ça casse", "expected_language": "fr"},
+  {"qid": "amb_9", "query": "comment ça marche", "expected_language": "fr"},
+  {"qid": "amb_10", "query": "combien de temps", "expected_language": "fr"}
+]

@@ -104,6 +104,28 @@ def run_config_b(rag, query):
     return final_docs, refined_query, initial_context
 
 
+def run_config_d(rag, query):
+    """Config D: translate-first — detect_and_translate_query -> retrieve_initial
+    -> refine_query_prf -> retrieve_final_dual."""
+    state = make_state(query)
+
+    s0 = rag.detect_and_translate_query(state)
+    state0 = {**state, **s0}
+
+    s1 = rag.retrieve_initial(state0)
+    initial_context = s1.get('context', [])
+
+    state2 = {**state0, **s1}
+    s2 = rag.refine_query_prf(state2)
+    refined_query = s2.get('refined_query', query)
+
+    state3 = {**state2, **s2}
+    s3 = rag.retrieve_final_dual(state3)
+    final_docs = s3.get('context', [])
+
+    return final_docs, refined_query, initial_context
+
+
 def extract_ids_from_docs(docs):
     ids = []
     for doc in docs:
@@ -198,7 +220,7 @@ def run_config(config_name, rag, ground_truth, retrieval_fn):
 
         try:
             extra = retrieval_fn(rag, query)
-            if config_name == 'B':
+            if config_name in ('B', 'D'):
                 docs, refined_query, initial_context = extra
                 initial_context_sources = [d.metadata.get('source') for d in initial_context]
             else:
@@ -218,7 +240,7 @@ def run_config(config_name, rag, ground_truth, retrieval_fn):
 
         retrieved_ids = extract_ids_from_docs(docs)
         retrieved_sources = [d.metadata.get('source') for d in docs]
-        refined_lang = guess_language(refined_query) if config_name == 'B' else None
+        refined_lang = guess_language(refined_query) if config_name in ('B', 'D') else None
 
         if register == 'adversarial':
             result = {
@@ -291,10 +313,16 @@ def main():
         json.dump(results_b, f, ensure_ascii=False, indent=2)
     print("Saved config_b_en_results.json")
 
+    results_d = run_config('D', rag, ground_truth, lambda rag, q: run_config_d(rag, q))
+    with open(os.path.join(RESULTS_DIR, 'config_d_en_results.json'), 'w', encoding='utf-8') as f:
+        json.dump(results_d, f, ensure_ascii=False, indent=2)
+    print("Saved config_d_en_results.json")
+
     fr_a = load_fr_baseline('a')
     fr_b = load_fr_baseline('b')
     en_a = results_a['aggregate']
     en_b = results_b['aggregate']
+    en_d = results_d['aggregate']
 
     def fmt(v):
         return f"{v:.4f}"
@@ -323,6 +351,8 @@ def main():
     print("-" * 88)
     print(row("FR - B (PRF)", fr_b))
     print(row("EN - B (PRF)", en_b))
+    print("-" * 88)
+    print(row("EN - D (translate)", en_d))
     print("=" * 88)
     print(f"(n={en_a.get('n_queries',0)} non-adversarial queries per language)")
 
