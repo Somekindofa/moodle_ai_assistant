@@ -286,8 +286,8 @@ class RAGService:
         """
         try:
             import py3langid as langid
-            identifier = langid.LanguageIdentifier.from_modelstring(
-                langid.model, norm_probs=True
+            identifier = langid.langid.LanguageIdentifier.from_pickled_model(
+                langid.langid.MODEL_FILE, norm_probs=True
             )
             logger.info("py3langid initialized (normalized probabilities)")
             return identifier
