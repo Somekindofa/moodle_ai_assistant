@@ -1,0 +1,1220 @@
+{
+  "per_query": [
+    {
+      "qid": "ann17_expert_1",
+      "query": "How can I determine the optimal flame intensity for glassblowing?",
+      "register": "expert",
+      "retrieved_ids": [
+        22,
+        23,
+        35
+      ],
+      "retrieved_sources": [
+        "Loic_biseauDroit.mov#22_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ],
+      "relevant_ids": [
+        17
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Comment ajuster la trace de feutre et le biseau pour optimiser l'intensité de la flamme lors du travail du verre ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Loic_biseauDroit.mov#22_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ]
+    },
+    {
+      "qid": "ann17_expert_2",
+      "query": "How does electric arc ignition work, and what role does it play in controlling the flame?",
+      "register": "expert",
+      "retrieved_ids": [
+        35,
+        36,
+        56
+      ],
+      "retrieved_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video_20260323_151325_903.mp4#36_raw",
+        "1 pouce droit.mp4#56_raw"
+      ],
+      "relevant_ids": [
+        17
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Comment le filage de fils supérieurs et le passage dans les ressorts contrôlent-ils l'amorçage par arc électrique et la régulation de la flamme ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video Project 2.mp4#70_raw",
+        "Video_20260323_151325_903.mp4#36_raw"
+      ]
+    },
+    {
+      "qid": "ann17_expert_3",
+      "query": "Why is it necessary to pass gas through the torch after lighting the flame?",
+      "register": "expert",
+      "retrieved_ids": [
+        35,
+        36,
+        68
+      ],
+      "retrieved_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video_20260323_151325_903.mp4#36_raw",
+        "Video Project 2.mp4#68_raw"
+      ],
+      "relevant_ids": [
+        17
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Pourquoi faut-il faire passer le fil dans le trou et suivre le passage dans le ressort après avoir allumé la flamme ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video Project 2.mp4#70_raw",
+        "Video_20260323_151325_903.mp4#36_raw"
+      ]
+    },
+    {
+      "qid": "ann17_novice_1",
+      "query": "Why is the flame yellow and orange at first, and how do I make it turn blue?",
+      "register": "novice",
+      "retrieved_ids": [
+        35,
+        70,
+        23
+      ],
+      "retrieved_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video Project 2.mp4#70_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw"
+      ],
+      "relevant_ids": [
+        17
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Pourquoi la flamme est-elle initialement jaune et orange, et comment modifier sa teinte pour obtenir une couleur bleue ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video Project 2.mp4#70_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw"
+      ]
+    },
+    {
+      "qid": "ann17_novice_2",
+      "query": "Why is it important to lower the flame intensity in order to control it?",
+      "register": "novice",
+      "retrieved_ids": [
+        23,
+        22,
+        68
+      ],
+      "retrieved_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video Project 2.mp4#68_raw"
+      ],
+      "relevant_ids": [
+        17
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Pourquoi réduire l'intensité du biseau oblique permet-il de maîtriser le travail du verre ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video Project 2.mp4#70_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw"
+      ]
+    },
+    {
+      "qid": "ann17_novice_3",
+      "query": "Why do you hear a little pop when you light the torch with a lighter?",
+      "register": "novice",
+      "retrieved_ids": [
+        35,
+        65,
+        70
+      ],
+      "retrieved_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video Project 2.mp4#65_raw",
+        "Video Project 2.mp4#70_raw"
+      ],
+      "relevant_ids": [
+        17
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Pourquoi un bruit de détente se produit-il lors du déclenchement d'un dispositif par un allumeur ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video Project 2.mp4#70_raw",
+        "Video_20260323_151325_903.mp4#36_raw"
+      ]
+    },
+    {
+      "qid": "ann21_expert_1",
+      "query": "What type of gas is used to soften the torch flame and turn it blue?",
+      "register": "expert",
+      "retrieved_ids": [
+        23,
+        22,
+        35
+      ],
+      "retrieved_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ],
+      "relevant_ids": [
+        21
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Quel gaz d'oxydation permet d'obtenir un biseau oblique lors du travail du verre en modifiant la teinte de la flamme vers le bleu ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video Project 2.mp4#70_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw"
+      ]
+    },
+    {
+      "qid": "ann21_expert_2",
+      "query": "How can I control the flame precisely to avoid sudden jolts when using the adjustment knob?",
+      "register": "expert",
+      "retrieved_ids": [
+        35,
+        36,
+        56
+      ],
+      "retrieved_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video_20260323_151325_903.mp4#36_raw",
+        "1 pouce droit.mp4#56_raw"
+      ],
+      "relevant_ids": [
+        21
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Comment procéder au réglage de l'ajustement pour maîtriser la flamme et éviter les à-coups lors du passage du fil dans les ressorts et les trous de la machine ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video Project 2.mp4#70_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw"
+      ]
+    },
+    {
+      "qid": "ann21_expert_3",
+      "query": "What precautions should be taken when using the electric arc tool with the right hand, to avoid a sudden jolt?",
+      "register": "expert",
+      "retrieved_ids": [
+        35,
+        56,
+        65
+      ],
+      "retrieved_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "1 pouce droit.mp4#56_raw",
+        "Video Project 2.mp4#65_raw"
+      ],
+      "relevant_ids": [
+        21
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Quelles précautions prendre lors de l'utilisation de l'outil à arc électrique avec la main droite pour éviter une décharge soudaine ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video Project 2.mp4#70_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw"
+      ]
+    },
+    {
+      "qid": "ann21_novice_1",
+      "query": "Why do I need to turn this little knob?",
+      "register": "novice",
+      "retrieved_ids": [
+        35,
+        36,
+        70
+      ],
+      "retrieved_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video_20260323_151325_903.mp4#36_raw",
+        "Video Project 2.mp4#70_raw"
+      ],
+      "relevant_ids": [
+        21
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Pourquoi dois-je actionner ce petit bouton afin d'effectuer le passage du fil dans le trou et de libérer les ressorts ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video Project 2.mp4#70_raw",
+        "Video_20260323_151325_903.mp4#36_raw"
+      ]
+    },
+    {
+      "qid": "ann21_novice_2",
+      "query": "How can I keep my flame from turning too yellow?",
+      "register": "novice",
+      "retrieved_ids": [
+        35,
+        36,
+        70
+      ],
+      "retrieved_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video_20260323_151325_903.mp4#36_raw",
+        "Video Project 2.mp4#70_raw"
+      ],
+      "relevant_ids": [
+        21
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Comment éviter que la couleur de la flamme devienne trop jaune lors de l'opération de filage des fils supérieurs ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video Project 2.mp4#70_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw"
+      ]
+    },
+    {
+      "qid": "ann21_novice_3",
+      "query": "What am I supposed to do with my left hand while working with the torch?",
+      "register": "novice",
+      "retrieved_ids": [
+        35,
+        36,
+        56
+      ],
+      "retrieved_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video_20260323_151325_903.mp4#36_raw",
+        "1 pouce droit.mp4#56_raw"
+      ],
+      "relevant_ids": [
+        21
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Comment positionner ma main gauche lors de l'utilisation du dispositif de filage pour passer le fil dans les ressorts et suivre le schéma de la machine ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Video_20260323_151325_903.mp4#36_raw"
+      ]
+    },
+    {
+      "qid": "ann22_expert_1",
+      "query": "How can I visually check that a bevel is even while glassblowing?",
+      "register": "expert",
+      "retrieved_ids": [
+        23,
+        22,
+        35
+      ],
+      "retrieved_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ],
+      "relevant_ids": [
+        22
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.3333,
+      "p_at_5": 0.2,
+      "r_at_1": 0.0,
+      "r_at_3": 1.0,
+      "r_at_5": 1.0,
+      "map": 0.5,
+      "refined_query": "Comment vérifier l'uniformité d'un biseau en cours de travail sur la meule lors du soufflage du verre ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video Project 2.mp4#70_raw"
+      ]
+    },
+    {
+      "qid": "ann22_expert_2",
+      "query": "What role does the feel of pressure play when working on the grinding wheel?",
+      "register": "expert",
+      "retrieved_ids": [
+        68,
+        22,
+        23
+      ],
+      "retrieved_sources": [
+        "Video Project 2.mp4#68_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw"
+      ],
+      "relevant_ids": [
+        22
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.3333,
+      "p_at_5": 0.2,
+      "r_at_1": 0.0,
+      "r_at_3": 1.0,
+      "r_at_5": 1.0,
+      "map": 0.5,
+      "refined_query": "Quel est l'impact de la pression exercée lors de l'affûtage sur la meule ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw"
+      ]
+    },
+    {
+      "qid": "ann22_expert_3",
+      "query": "Why is it important to maintain steady breathing while working on the grinding wheel?",
+      "register": "expert",
+      "retrieved_ids": [
+        22,
+        23,
+        35
+      ],
+      "retrieved_sources": [
+        "Loic_biseauDroit.mov#22_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ],
+      "relevant_ids": [
+        22
+      ],
+      "p_at_1": 1.0,
+      "p_at_3": 0.3333,
+      "p_at_5": 0.2,
+      "r_at_1": 1.0,
+      "r_at_3": 1.0,
+      "r_at_5": 1.0,
+      "map": 1.0,
+      "refined_query": "Pourquoi le maintien d'une respiration régulière est-il essentiel lors du travail sur la meule ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ]
+    },
+    {
+      "qid": "ann22_novice_1",
+      "query": "Why does my glass fall while I'm blowing it?",
+      "register": "novice",
+      "retrieved_ids": [
+        23,
+        22,
+        35
+      ],
+      "retrieved_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ],
+      "relevant_ids": [
+        22
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.3333,
+      "p_at_5": 0.2,
+      "r_at_1": 0.0,
+      "r_at_3": 1.0,
+      "r_at_5": 1.0,
+      "map": 0.5,
+      "refined_query": "Pourquoi mon verre se déséquilibre lors de l'opération de centrage sur la meule et du travail du biseau ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ]
+    },
+    {
+      "qid": "ann22_novice_2",
+      "query": "How can I tell if my bevel is even?",
+      "register": "novice",
+      "retrieved_ids": [
+        23,
+        22,
+        35
+      ],
+      "retrieved_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ],
+      "relevant_ids": [
+        22
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.3333,
+      "p_at_5": 0.2,
+      "r_at_1": 0.0,
+      "r_at_3": 1.0,
+      "r_at_5": 1.0,
+      "map": 0.5,
+      "refined_query": "Comment vérifier l'équilibre de mon biseau oblique en me référant aux tracés et à l'arête de la meule ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Video Project 2.mp4#70_raw",
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw"
+      ]
+    },
+    {
+      "qid": "ann22_novice_3",
+      "query": "Why do I have to hold my breath while cutting the bevel?",
+      "register": "novice",
+      "retrieved_ids": [
+        22,
+        23,
+        63
+      ],
+      "retrieved_sources": [
+        "Loic_biseauDroit.mov#22_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "2 montage fourchette index droit.mp4#63_raw"
+      ],
+      "relevant_ids": [
+        22
+      ],
+      "p_at_1": 1.0,
+      "p_at_3": 0.3333,
+      "p_at_5": 0.2,
+      "r_at_1": 1.0,
+      "r_at_3": 1.0,
+      "r_at_5": 1.0,
+      "map": 1.0,
+      "refined_query": "Pourquoi dois-je retenir ma respiration lors de l'affûtage du biseau sur la meule en piquant au centre des traces de feutre et en effectuant des aller-retours ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Loic_biseauDroit.mov#22_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Video Project 2.mp4#70_raw"
+      ]
+    },
+    {
+      "qid": "ann23_expert_1",
+      "query": "What is the difference between a straight bevel and an oblique bevel in glassblowing technique?",
+      "register": "expert",
+      "retrieved_ids": [
+        23,
+        22,
+        35
+      ],
+      "retrieved_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ],
+      "relevant_ids": [
+        23
+      ],
+      "p_at_1": 1.0,
+      "p_at_3": 0.3333,
+      "p_at_5": 0.2,
+      "r_at_1": 1.0,
+      "r_at_3": 1.0,
+      "r_at_5": 1.0,
+      "map": 1.0,
+      "refined_query": "Quelle est la différence entre un biseau droit et un biseau oblique dans la technique du soufflage de verre ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ]
+    },
+    {
+      "qid": "ann23_expert_2",
+      "query": "How do you make a clean bevel in glassblowing?",
+      "register": "expert",
+      "retrieved_ids": [
+        23,
+        22,
+        35
+      ],
+      "retrieved_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ],
+      "relevant_ids": [
+        23
+      ],
+      "p_at_1": 1.0,
+      "p_at_3": 0.3333,
+      "p_at_5": 0.2,
+      "r_at_1": 1.0,
+      "r_at_3": 1.0,
+      "r_at_5": 1.0,
+      "map": 1.0,
+      "refined_query": "Comment réaliser un biseau oblique propre lors du travail de la meule en soufflage de verre ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ]
+    },
+    {
+      "qid": "ann23_expert_3",
+      "query": "What common pitfalls do beginners run into in glassblowing, and how can they be avoided?",
+      "register": "expert",
+      "retrieved_ids": [
+        23,
+        22,
+        35
+      ],
+      "retrieved_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ],
+      "relevant_ids": [
+        23
+      ],
+      "p_at_1": 1.0,
+      "p_at_3": 0.3333,
+      "p_at_5": 0.2,
+      "r_at_1": 1.0,
+      "r_at_3": 1.0,
+      "r_at_5": 1.0,
+      "map": 1.0,
+      "refined_query": "Quels sont les écueils courants rencontrés lors du travail de la meule et du biseau, ainsi que les méthodes pour les éviter dans le processus de verre soufflé ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Loic_biseauDroit.mov#22_raw"
+      ]
+    },
+    {
+      "qid": "ann23_novice_1",
+      "query": "Why does my glass move when I handle it?",
+      "register": "novice",
+      "retrieved_ids": [
+        23,
+        22,
+        35
+      ],
+      "retrieved_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ],
+      "relevant_ids": [
+        23
+      ],
+      "p_at_1": 1.0,
+      "p_at_3": 0.3333,
+      "p_at_5": 0.2,
+      "r_at_1": 1.0,
+      "r_at_3": 1.0,
+      "r_at_5": 1.0,
+      "map": 1.0,
+      "refined_query": "Pourquoi le verre se déplace-t-il lors de son usinage sur la meule ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Video Project 2.mp4#70_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw"
+      ]
+    },
+    {
+      "qid": "ann23_novice_2",
+      "query": "Why isn't my bevel even?",
+      "register": "novice",
+      "retrieved_ids": [
+        23,
+        22,
+        35
+      ],
+      "retrieved_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ],
+      "relevant_ids": [
+        23
+      ],
+      "p_at_1": 1.0,
+      "p_at_3": 0.3333,
+      "p_at_5": 0.2,
+      "r_at_1": 1.0,
+      "r_at_3": 1.0,
+      "r_at_5": 1.0,
+      "map": 1.0,
+      "refined_query": "Pourquoi mon biseau oblique n'est-il pas régulier lors de l'affûtage sur la meule ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Video Project 2.mp4#70_raw",
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw"
+      ]
+    },
+    {
+      "qid": "ann23_novice_3",
+      "query": "Why do I hear different sounds while I'm working the glass?",
+      "register": "novice",
+      "retrieved_ids": [
+        23,
+        22,
+        35
+      ],
+      "retrieved_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ],
+      "relevant_ids": [
+        23
+      ],
+      "p_at_1": 1.0,
+      "p_at_3": 0.3333,
+      "p_at_5": 0.2,
+      "r_at_1": 1.0,
+      "r_at_3": 1.0,
+      "r_at_5": 1.0,
+      "map": 1.0,
+      "refined_query": "Pourquoi observe-t-on des sons distincts lors du travail du biseau sur la meule et des mouvements d'aller-retour ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ]
+    },
+    {
+      "qid": "course83_1",
+      "query": "What are the main steps for setting up a glassblowing exhibition in a museum?",
+      "register": "expert",
+      "retrieved_ids": [
+        23,
+        22,
+        35
+      ],
+      "retrieved_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ],
+      "relevant_ids": [
+        "course_83_module_1186_chunk_0"
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Quelles sont les étapes principales pour organiser une exposition de verre soufflé dans un musée, incluant le travail du biseau, le piquage au centre des tracés et le filage des fils supérieurs ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ]
+    },
+    {
+      "qid": "course83_2",
+      "query": "What tools and equipment are needed for glassblowing in a museum installation context?",
+      "register": "expert",
+      "retrieved_ids": [
+        23,
+        22,
+        35
+      ],
+      "retrieved_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ],
+      "relevant_ids": [
+        "course_83_module_1186_chunk_0"
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Quels outils et équipements sont nécessaires pour le travail du biseau oblique et le filage de fils supérieurs lors d'une installation en verre soufflé dans un contexte muséal ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ]
+    },
+    {
+      "qid": "course83_3",
+      "query": "How can the glassblowing process be showcased in a museum exhibition using photos and videos?",
+      "register": "expert",
+      "retrieved_ids": [
+        35,
+        22,
+        63
+      ],
+      "retrieved_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "2 montage fourchette index droit.mp4#63_raw"
+      ],
+      "relevant_ids": [
+        "course_83_module_1186_chunk_0"
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Comment mettre en valeur le processus du piquage et du biseau au centre des tracés de feutre, ainsi que le filage de fils supérieurs, à travers des images et vidéos dans une exposition muséale ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Loic_biseauDroit.mov#22_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ]
+    },
+    {
+      "qid": "course83_4",
+      "query": "What is the gesture operation model (GOM) in the context of glassblowing?",
+      "register": "expert",
+      "retrieved_ids": [
+        23,
+        22,
+        63
+      ],
+      "retrieved_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "2 montage fourchette index droit.mp4#63_raw"
+      ],
+      "relevant_ids": [
+        "course_83_module_1187_chunk_0"
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Comment le modèle d'opération gestuelle (GOM) s'applique-t-il aux techniques de centrage et de piquage sur la meule dans le travail du verre ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ]
+    },
+    {
+      "qid": "course83_5",
+      "query": "How does the GOM help illustrate analysis results in glassblowing?",
+      "register": "expert",
+      "retrieved_ids": [
+        23,
+        22,
+        35
+      ],
+      "retrieved_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ],
+      "relevant_ids": [
+        "course_83_module_1187_chunk_0"
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Comment le biseau oblique permet-il d'illustrer les résultats de l'analyse lors du travail du verre au centre des tracés et des aller-retours de haut en bas jusqu'à la mise en pointe ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ]
+    },
+    {
+      "qid": "course83_6",
+      "query": "What is the advantage of using the GOM to present glassblowing results?",
+      "register": "expert",
+      "retrieved_ids": [
+        35,
+        23,
+        22
+      ],
+      "retrieved_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw"
+      ],
+      "relevant_ids": [
+        "course_83_module_1187_chunk_0"
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Quel est l'avantage d'utiliser le biseau oblique pour présenter les résultats du travail de la meule lors du filage des fils supérieurs ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video Project 2.mp4#70_raw"
+      ]
+    },
+    {
+      "qid": "course83_7",
+      "query": "Who invented glassblowing?",
+      "register": "expert",
+      "retrieved_ids": [
+        35,
+        23,
+        22
+      ],
+      "retrieved_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw"
+      ],
+      "relevant_ids": [
+        "course_83_module_1195_chunk_0"
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Qui a développé la technique du filage de fils supérieurs et du travail sur la meule pour piquer le verre ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ]
+    },
+    {
+      "qid": "course83_8",
+      "query": "What technique is used to blow glass?",
+      "register": "expert",
+      "retrieved_ids": [
+        22,
+        23,
+        63
+      ],
+      "retrieved_sources": [
+        "Loic_biseauDroit.mov#22_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "2 montage fourchette index droit.mp4#63_raw"
+      ],
+      "relevant_ids": [
+        "course_83_module_1195_chunk_0"
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Quelle technique de mise en forme du verre consiste à se positionner au centre des tracés sur la meule pour réaliser des aller-retours de haut en bas afin de venir mettre en pointe au croisement des traces de feutre ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ]
+    },
+    {
+      "qid": "course83_9",
+      "query": "What shapes did the earliest glassblown works produce?",
+      "register": "expert",
+      "retrieved_ids": [
+        23,
+        22,
+        35
+      ],
+      "retrieved_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ],
+      "relevant_ids": [
+        "course_83_module_1195_chunk_0"
+      ],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Quelles formes produisaient les premières œuvres réalisées par soufflage du verre ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video_20260323_151325_903.mp4#35_raw"
+      ]
+    },
+    {
+      "qid": "adv_1",
+      "query": "What is the capital of Japan?",
+      "register": "adversarial",
+      "retrieved_ids": [
+        35,
+        65,
+        36
+      ],
+      "retrieved_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video Project 2.mp4#65_raw",
+        "Video_20260323_151325_903.mp4#36_raw"
+      ],
+      "relevant_ids": [],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Quel est le point de référence géographique principal du pays où l'on effectue un filage de fils supérieurs et un burinage de mallette ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video Project 2.mp4#70_raw",
+        "Video Project 2.mp4#65_raw"
+      ]
+    },
+    {
+      "qid": "adv_2",
+      "query": "How do you repair a diesel car?",
+      "register": "adversarial",
+      "retrieved_ids": [
+        35,
+        36,
+        65
+      ],
+      "retrieved_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video_20260323_151325_903.mp4#36_raw",
+        "Video Project 2.mp4#65_raw"
+      ],
+      "relevant_ids": [],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Comment procéder au passage des fils supérieurs dans les ressorts et effectuer un clic vers le haut pour le remontage du système ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Video Project 2.mp4#70_raw",
+        "Video_20260323_151325_903.mp4#36_raw"
+      ]
+    },
+    {
+      "qid": "adv_3",
+      "query": "blue tuesday rotation glass why",
+      "register": "adversarial",
+      "retrieved_ids": [
+        23,
+        22,
+        63
+      ],
+      "retrieved_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "2 montage fourchette index droit.mp4#63_raw"
+      ],
+      "relevant_ids": [],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Rotation du verre sur la meule pour le biseau droit et le biseau oblique, positionnement au centre des tracés et technique d'aller-retour.",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Loic_biseauOblique.mov.mp4#23_raw",
+        "Loic_biseauDroit.mov#22_raw",
+        "Video Project 2.mp4#70_raw"
+      ]
+    },
+    {
+      "qid": "adv_4",
+      "query": "How do you carve marble with a cold chisel?",
+      "register": "adversarial",
+      "retrieved_ids": [
+        65,
+        67,
+        68
+      ],
+      "retrieved_sources": [
+        "Video Project 2.mp4#65_raw",
+        "Video Project 2.mp4#67_raw",
+        "Video Project 2.mp4#68_raw"
+      ],
+      "relevant_ids": [],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Comment procéder au taille de marbre à l'aide d'un burin froid et d'un maillet ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Video Project 2.mp4#65_raw",
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Loic_biseauOblique.mov.mp4#23_raw"
+      ]
+    },
+    {
+      "qid": "adv_5",
+      "query": "What is the melting temperature of stainless steel?",
+      "register": "adversarial",
+      "retrieved_ids": [
+        35,
+        64,
+        65
+      ],
+      "retrieved_sources": [
+        "Video_20260323_151325_903.mp4#35_raw",
+        "1 pouce droit.mp4#64_raw",
+        "Video Project 2.mp4#65_raw"
+      ],
+      "relevant_ids": [],
+      "p_at_1": 0.0,
+      "p_at_3": 0.0,
+      "p_at_5": 0.0,
+      "r_at_1": 0.0,
+      "r_at_3": 0.0,
+      "r_at_5": 0.0,
+      "map": 0.0,
+      "refined_query": "Quelle est la température de fusion du acier inoxydable ?",
+      "refined_query_lang": "fr",
+      "initial_context_sources": [
+        "Video Project 2.mp4#70_raw",
+        "Video_20260323_151325_903.mp4#35_raw",
+        "Loic_biseauDroit.mov#22_raw"
+      ]
+    }
+  ],
+  "aggregate": {
+    "p_at_1": 0.2424,
+    "r_at_1": 0.2424,
+    "p_at_3": 0.1212,
+    "r_at_3": 0.3636,
+    "p_at_5": 0.0727,
+    "r_at_5": 0.3636,
+    "map": 0.303,
+    "n_queries": 33
+  }
+}
