@@ -55,6 +55,7 @@ class RAGService:
         self.vector_store = self._initialize_vector_store()
         self.llm = self._initialize_llm()
         self.cross_encoder = self._initialize_cross_encoder()
+        self._langid = self._initialize_langid()
         self.annotation_service = annotation_service  # Optional dependency
         self.course_rag_service = course_rag_service  # Optional — per-course collections
 
@@ -144,13 +145,23 @@ class RAGService:
         ]
         history_text = "\n".join(history_lines) if history_lines else "(début de conversation)"
 
+        query_language = state.get("query_language")
+        if query_language and query_language != "fr":
+            system_prompt = self.system_prompt.replace(
+                "- Répondez TOUJOURS en français correct et soigné, sans fautes d'orthographe ni de grammaire.\n",
+                "- Répondez TOUJOURS dans la même langue que la question de l'apprenti "
+                "(ci-dessous), avec une orthographe et une grammaire soignées.\n",
+            )
+        else:
+            system_prompt = self.system_prompt
+
         if self.system_prompt and self.user_template:
             user_text = self.user_template.format(
                 history=history_text,
                 context=context_data,
                 query=query,
             )
-            return [SystemMessage(content=self.system_prompt), HumanMessage(content=user_text)]
+            return [SystemMessage(content=system_prompt), HumanMessage(content=user_text)]
 
         # Fallback: legacy hub template returns a StringPromptValue
         if self.prompt_template:
@@ -264,6 +275,25 @@ class RAGService:
         except Exception as e:
             logger.error(f"Failed to load cross-encoder ({e})")
             raise
+
+    def _initialize_langid(self):
+        """Load py3langid with a normalized-probability identifier.
+
+        The bare module-level `py3langid.classify()` returns unnormalized
+        log-probabilities, not a usable [0, 1] confidence — the
+        LanguageIdentifier instance with norm_probs=True is required for the
+        confidence threshold in detect_and_translate_query to mean anything.
+        """
+        try:
+            import py3langid as langid
+            identifier = langid.LanguageIdentifier.from_modelstring(
+                langid.model, norm_probs=True
+            )
+            logger.info("py3langid initialized (normalized probabilities)")
+            return identifier
+        except Exception as e:
+            logger.error(f"py3langid initialization failed: {e} — cross-lingual detection disabled")
+            return None
 
     def add_documents(self, documents: List[Document]) -> None:
         """Add documents to the vector store."""
@@ -940,6 +970,64 @@ Génère une explication détaillée à la première personne de la technique co
     # = 4 850 tok, leaving a comfortable margin).
     MAX_CONTEXT_DOCS = 8
 
+    @traceable(name="detect_and_translate_query", run_type="chain")
+    def detect_and_translate_query(self, state: ConversationState) -> Dict[str, Any]:
+        """Pipeline step 0 — language detection + French translation.
+
+        French queries (the common case) pass through untouched with zero LLM
+        calls. Non-French queries get one LLM translation call so every
+        downstream retrieval node can keep embedding French text — the corpus
+        and refine_query_prf's prompt are both French-only, so this reuses
+        that already-tuned pipeline instead of asking it to also handle
+        translation.
+
+        Every failure path (langid unavailable, low confidence, short query,
+        translation error) degrades to {"query_language": "fr",
+        "search_query": <original>} — i.e. today's existing behavior.
+        """
+        original_query = str(state["messages"][-1].content)
+
+        if self._langid is None:
+            return {"query_language": "fr", "search_query": original_query}
+
+        lang, confidence = self._langid.classify(original_query)
+
+        if (
+            lang == "fr"
+            or confidence < self.config.langid_confidence_threshold
+            or len(original_query) < self.config.min_langid_chars
+        ):
+            return {"query_language": "fr", "search_query": original_query}
+
+        search_query = original_query
+        try:
+            translate_prompt = (
+                "Traduis la question suivante en français, en conservant tout son sens "
+                "technique et son intention.\n\n"
+                f'Question originale ({lang}) :\n"{original_query}"\n\n'
+                "Réponds avec UNIQUEMENT la traduction française, sans explication."
+            )
+            response = self.llm.invoke(translate_prompt)
+            if isinstance(response.content, str):
+                translated = response.content.strip()
+            elif isinstance(response.content, list):
+                translated = " ".join(str(item) for item in response.content).strip()
+            else:
+                translated = str(response.content).strip()
+
+            if translated:
+                search_query = translated
+                logger.info(f"detect_and_translate_query: [{lang}] '{original_query}' -> '{translated}'")
+            else:
+                logger.warning("detect_and_translate_query: empty translation — using original query")
+        except Exception as e:
+            logger.error(f"detect_and_translate_query: translation failed: {e} — using original query")
+
+        # query_language is trusted independently of translation success — a
+        # failed translation shouldn't also force a French-language answer to
+        # a question we know was asked in another language.
+        return {"query_language": lang, "search_query": search_query}
+
     @traceable(name="retrieve_initial", run_type="retriever")
     def retrieve_initial(self, state: ConversationState) -> Dict[str, Any]:
         """PRF step 1 — first-pass retrieval with the raw user query.
@@ -952,7 +1040,7 @@ Génère une explication détaillée à la première personne de la technique co
         vector_data = self.get_vector_store_data()
         has_annotation_docs = bool(vector_data.get("ids"))
 
-        query = str(state.get("messages")[-1].content)
+        query = state.get("search_query") or str(state.get("messages")[-1].content)
         course_id = state.get("course_id")
 
         results: List[Document] = []
@@ -997,7 +1085,7 @@ Génère une explication détaillée à la première personne de la technique co
         parametric knowledge.  Falls back to original query if no context or
         no LLM is available.
         """
-        original_query = str(state.get("messages")[-1].content)
+        original_query = state.get("search_query") or str(state.get("messages")[-1].content)
         context_docs = state.get("context", [])
 
         if not context_docs or not self.llm:
@@ -1053,7 +1141,11 @@ Génère une explication détaillée à la première personne de la technique co
         state["context"] with the final candidate set.  Relevance filtering is
         handled downstream by the cross-encoder rerank node.
         """
-        refined_query = state.get("refined_query") or str(state.get("messages")[-1].content)
+        refined_query = (
+            state.get("refined_query")
+            or state.get("search_query")
+            or str(state.get("messages")[-1].content)
+        )
         course_id = state.get("course_id")
 
         vector_data = self.get_vector_store_data()
