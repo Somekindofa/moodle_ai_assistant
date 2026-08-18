@@ -19,6 +19,30 @@ def _state(query):
     return {"messages": [HumanMessage(content=query)]}
 
 
+# ── real py3langid, not mocked — every other test below mocks svc._langid
+# directly, which would happily pass even if _initialize_langid itself used
+# a nonexistent API and silently returned None in production. This test
+# exercises the actual library to catch exactly that class of bug.
+
+def test_initialize_langid_returns_a_working_real_identifier():
+    svc = _make_service()
+
+    assert svc._langid is not None, (
+        "_initialize_langid() returned None — check for an API mismatch "
+        "with the installed py3langid version"
+    )
+
+    en_lang, en_conf = svc._langid.classify("How do you blow glass?")
+    fr_lang, fr_conf = svc._langid.classify("Comment souffler le verre ?")
+
+    assert en_lang == "en"
+    assert fr_lang == "fr"
+    # norm_probs=True must be in effect — raw log-probs are unbounded and
+    # would fail these range checks.
+    assert 0.0 <= float(en_conf) <= 1.0
+    assert 0.0 <= float(fr_conf) <= 1.0
+
+
 def test_french_query_passes_through_with_no_llm_call():
     svc = _make_service()
     svc._langid = MagicMock()
