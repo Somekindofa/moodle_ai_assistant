@@ -106,6 +106,43 @@ def test_translation_failure_is_counted_and_chunk_is_not_updated():
     collection.update_documents.assert_not_called()
 
 
+def test_throttle_sleeps_only_after_real_translation_attempts():
+    svc = _make_service()
+    svc._translation_llm = MagicMock()
+    svc._langid = MagicMock()
+    # chunk 1: French (no LLM call), chunk 2: English (real translation attempt)
+    svc._langid.classify.side_effect = [("fr", 0.95), ("en", 0.95)]
+    svc._translation_llm.invoke.return_value = MagicMock(content="traduit")
+    collection = _collection(
+        ["1", "2"],
+        ["Portez des lunettes en tout temps", "Wear goggles at all times"],
+        [{}, {}],
+    )
+    svc._get_collection = MagicMock(return_value=collection)
+
+    with patch("services.course_rag_service.time.sleep") as mock_sleep:
+        stats = svc.backfill_translations("1", _rag_config(), throttle_seconds=0.3)
+
+    assert stats["unchanged_french"] == 1
+    assert stats["translated"] == 1
+    mock_sleep.assert_called_once_with(0.3)
+
+
+def test_throttle_defaults_to_no_delay():
+    svc = _make_service()
+    svc._translation_llm = MagicMock()
+    svc._langid = MagicMock()
+    svc._langid.classify.return_value = ("en", 0.95)
+    svc._translation_llm.invoke.return_value = MagicMock(content="traduit")
+    collection = _collection(["1"], ["Wear goggles at all times"], [{}])
+    svc._get_collection = MagicMock(return_value=collection)
+
+    with patch("services.course_rag_service.time.sleep") as mock_sleep:
+        svc.backfill_translations("1", _rag_config())
+
+    mock_sleep.assert_not_called()
+
+
 def test_updates_are_batched_at_99():
     svc = _make_service()
     svc._translation_llm = MagicMock()

@@ -93,6 +93,55 @@ def test_translate_to_french_returns_none_on_exception():
     assert translation_service.translate_to_french("some prompt", llm) is None
 
 
+def test_translate_to_french_default_does_not_retry():
+    llm = MagicMock()
+    llm.invoke.side_effect = Exception("Error code: 429 - rate_limit_exceeded")
+
+    assert translation_service.translate_to_french("some prompt", llm) is None
+    llm.invoke.assert_called_once()
+
+
+def test_translate_to_french_retries_on_rate_limit_and_succeeds():
+    llm = MagicMock()
+    success = MagicMock()
+    success.content = "Comment souffler le verre ?"
+    llm.invoke.side_effect = [
+        Exception("Error code: 429 - rate_limit_exceeded"),
+        Exception("Error code: 429 - rate_limit_exceeded"),
+        success,
+    ]
+
+    with patch("services.translation_service.time.sleep") as mock_sleep:
+        result = translation_service.translate_to_french("some prompt", llm, max_retries=3)
+
+    assert result == "Comment souffler le verre ?"
+    assert llm.invoke.call_count == 3
+    assert mock_sleep.call_count == 2
+
+
+def test_translate_to_french_gives_up_after_max_retries_on_persistent_rate_limit():
+    llm = MagicMock()
+    llm.invoke.side_effect = Exception("Error code: 429 - rate_limit_exceeded")
+
+    with patch("services.translation_service.time.sleep"):
+        result = translation_service.translate_to_french("some prompt", llm, max_retries=3)
+
+    assert result is None
+    assert llm.invoke.call_count == 4  # initial attempt + 3 retries
+
+
+def test_translate_to_french_does_not_retry_non_rate_limit_errors_even_with_retries_allowed():
+    llm = MagicMock()
+    llm.invoke.side_effect = Exception("API timeout")
+
+    with patch("services.translation_service.time.sleep") as mock_sleep:
+        result = translation_service.translate_to_french("some prompt", llm, max_retries=3)
+
+    assert result is None
+    llm.invoke.assert_called_once()
+    mock_sleep.assert_not_called()
+
+
 def test_translate_to_french_returns_none_on_empty_response():
     llm = MagicMock()
     response = MagicMock()

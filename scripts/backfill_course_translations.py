@@ -67,7 +67,7 @@ def main():
 
     for i, cid in enumerate(course_ids):
         start = time.time()
-        stats = course_rag.backfill_translations(cid, rag_config)
+        stats = course_rag.backfill_translations(cid, rag_config, throttle_seconds=0.3)
         elapsed = time.time() - start
 
         for k in totals:

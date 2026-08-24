@@ -4,6 +4,7 @@ import base64
 import io
 import logging
 import re
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from langchain_chroma import Chroma
@@ -449,7 +450,7 @@ class CourseRAGService:
         out: List[Document] = []
         for chunk in chunks:
             prompt = translation_service.build_chunk_translation_prompt(chunk.page_content, source_lang)
-            translated = translation_service.translate_to_french(prompt, self._translation_llm)
+            translated = translation_service.translate_to_french(prompt, self._translation_llm, max_retries=2)
             new_meta = {**chunk.metadata, "source_language": source_lang}
             if translated:
                 new_meta["original_text"] = chunk.page_content
@@ -458,7 +459,9 @@ class CourseRAGService:
                 out.append(Document(page_content=chunk.page_content, metadata=new_meta))
         return out
 
-    def backfill_translations(self, course_id: str, rag_config: Any) -> Dict[str, int]:
+    def backfill_translations(
+        self, course_id: str, rag_config: Any, throttle_seconds: float = 0.0
+    ) -> Dict[str, int]:
         """Translate any chunk in this course's collection that predates the
         ingestion-translation feature (no `source_language` metadata key) to
         French, in place.
@@ -470,6 +473,14 @@ class CourseRAGService:
         interrupted run can simply be invoked again. Uses ChromaDB's
         update_documents to replace page_content and re-embed in place,
         without touching chunk IDs or any other metadata.
+
+        `throttle_seconds`, applied after every real translation attempt
+        (not after skips), paces bulk runs to stay under Infomaniak's rate
+        limit in the first place — retries alone (see translation_service.
+        translate_to_french) recover from a 429 but don't prevent triggering
+        one across thousands of back-to-back calls. Defaults to 0 so tests
+        and any other caller stay fast; the backfill script passes a
+        non-zero value explicitly.
         """
         stats = {"total": 0, "already_tagged": 0, "translated": 0, "unchanged_french": 0, "failed": 0}
         if self._translation_llm is None:
@@ -499,7 +510,9 @@ class CourseRAGService:
                 continue
 
             prompt = translation_service.build_chunk_translation_prompt(text, source_lang)
-            translated = translation_service.translate_to_french(prompt, self._translation_llm)
+            translated = translation_service.translate_to_french(prompt, self._translation_llm, max_retries=5)
+            if throttle_seconds:
+                time.sleep(throttle_seconds)
             if not translated:
                 stats["failed"] += 1
                 continue

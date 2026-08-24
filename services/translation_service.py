@@ -12,6 +12,7 @@ services.course_rag_service — importable by all three without a cycle.
 """
 
 import logging
+import time
 from typing import Any, Optional, Tuple
 
 from langchain_openai import ChatOpenAI
@@ -96,19 +97,39 @@ def extract_text(response: Any) -> str:
     return str(response.content).strip()
 
 
-def translate_to_french(prompt: str, llm: ChatOpenAI) -> Optional[str]:
+def translate_to_french(prompt: str, llm: ChatOpenAI, max_retries: int = 0) -> Optional[str]:
     """Invoke `llm` with `prompt`, returning the translated text or None.
 
     Never raises — every failure (API error, empty response) degrades to
     None so callers can fall back to the original, untranslated text.
+
+    `max_retries` defaults to 0 — a single ephemeral query-side translation
+    shouldn't add retry latency to a live request. Bulk/sequential callers
+    (course chunk translation, the backfill script) pass a higher value,
+    since firing many calls back-to-back is exactly what triggers Infomaniak's
+    rate limit — a rate-limited call retries with exponential backoff
+    (5s, 10s, 20s, ...); any other error fails immediately, same as before.
     """
-    try:
-        response = llm.invoke(prompt)
-        text = extract_text(response)
-        return text or None
-    except Exception as e:
-        logger.error(f"translate_to_french: translation failed: {e}")
-        return None
+    delay = 5.0
+    attempt = 0
+    while True:
+        try:
+            response = llm.invoke(prompt)
+            text = extract_text(response)
+            return text or None
+        except Exception as e:
+            is_rate_limited = "429" in str(e) or "rate_limit" in str(e).lower()
+            if is_rate_limited and attempt < max_retries:
+                attempt += 1
+                logger.warning(
+                    f"translate_to_french: rate limited, retrying in {delay:.0f}s "
+                    f"(attempt {attempt}/{max_retries})"
+                )
+                time.sleep(delay)
+                delay *= 2
+                continue
+            logger.error(f"translate_to_french: translation failed: {e}")
+            return None
 
 
 def build_query_translation_prompt(original_query: str, source_lang: str) -> str:
