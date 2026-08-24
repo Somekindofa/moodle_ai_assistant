@@ -122,6 +122,53 @@ The codebase already contained a textbook PRF implementation in `services/rag_se
 
 ---
 
+## Cross-Lingual Query Detection (August 2026)
+
+### Feature
+
+`detect_and_translate_query` (`services/rag_service.py:974`) is pipeline
+step 0, run before `retrieve_initial`. Non-French queries — detected via
+`py3langid`, gated by `langid_confidence_threshold` and `min_langid_chars`
+in `config/settings.py` — get one LLM translation call into French before
+entering the PRF pipeline, so every downstream node keeps embedding French
+text against the French-only corpus. French queries pass through with zero
+LLM calls. Every failure path (langid unavailable, low confidence, short
+query, translation error) degrades to French pass-through — i.e. today's
+pre-fix behavior, never a hard failure.
+
+### Running the cross-lingual eval
+
+```bash
+cd /opt/craftpilot_backend
+PYTHONNOUSERSITE=1 /root/miniconda3/envs/moodle_backend/bin/python eval/09_cross_lingual_eval.py
+```
+
+- `PYTHONNOUSERSITE=1` is required — without it, user-site-packages can
+  shadow the conda env's correct package versions.
+- Must use the conda env's own interpreter, not plain `python3` — the
+  system Python has an incompatible `langchain` and can't import this
+  codebase at all.
+- Compares Config A (raw), B (PRF only), D (translate-first + PRF) MAP on
+  the same 33 EN queries against the FR baseline (`04_evaluate_retrieval.py`
+  results on disk).
+
+### Eval debugging pattern: diff per-query, not just aggregate MAP
+
+When two eval configs show a suspicious aggregate delta,
+`eval/results/config_*_results.json` stores full per-query detail
+(`retrieved_sources`, `initial_context_sources`, `refined_query`) — diff
+these directly instead of trusting the summary table. A −0.06 MAP
+regression between two configs turned out to trace to only 5/33 queries; 4
+were a non-deterministic rank-order tie-break between two near-duplicate
+corpus videos (`biseauDroit` vs `biseauOblique`), not a logic bug.
+`llm_temperature = 0.4` (`config/settings.py:44`) means both the
+translation and PRF-refinement LLM calls are non-deterministic, so this
+eval is inherently noisy — rerun before trusting a single MAP delta,
+especially when the ground-truth set concentrates several queries on
+near-duplicate documents.
+
+---
+
 ## Course Content Ingestion Pipeline
 
 ### Moodle Event Observer
