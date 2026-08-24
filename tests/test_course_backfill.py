@@ -143,6 +143,43 @@ def test_throttle_defaults_to_no_delay():
     mock_sleep.assert_not_called()
 
 
+def test_on_progress_called_once_per_chunk_in_order_with_running_stats():
+    svc = _make_service()
+    svc._translation_llm = MagicMock()
+    svc._langid = MagicMock()
+    svc._langid.classify.side_effect = [("fr", 0.95), ("en", 0.95)]
+    svc._translation_llm.invoke.return_value = MagicMock(content="traduit")
+    collection = _collection(
+        ["1", "2"],
+        ["Portez des lunettes en tout temps", "Wear goggles at all times"],
+        [{}, {}],
+    )
+    svc._get_collection = MagicMock(return_value=collection)
+
+    calls = []
+    svc.backfill_translations("1", _rag_config(), on_progress=lambda idx, total, stats: calls.append((idx, total, dict(stats))))
+
+    assert len(calls) == 2
+    assert calls[0][:2] == (1, 2)
+    assert calls[1][:2] == (2, 2)
+    # running stats reflect state as of that chunk, not the final totals
+    assert calls[0][2]["unchanged_french"] == 1
+    assert calls[0][2]["translated"] == 0
+    assert calls[1][2]["translated"] == 1
+
+
+def test_on_progress_defaults_to_none_and_is_optional():
+    svc = _make_service()
+    svc._translation_llm = MagicMock()
+    svc._langid = MagicMock()
+    svc._langid.classify.return_value = ("fr", 0.95)
+    collection = _collection(["1"], ["Portez des lunettes en tout temps"], [{}])
+    svc._get_collection = MagicMock(return_value=collection)
+
+    # must not raise when on_progress is omitted
+    svc.backfill_translations("1", _rag_config())
+
+
 def test_updates_are_batched_at_99():
     svc = _make_service()
     svc._translation_llm = MagicMock()

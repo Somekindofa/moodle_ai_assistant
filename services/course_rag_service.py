@@ -460,7 +460,8 @@ class CourseRAGService:
         return out
 
     def backfill_translations(
-        self, course_id: str, rag_config: Any, throttle_seconds: float = 0.0
+        self, course_id: str, rag_config: Any, throttle_seconds: float = 0.0,
+        on_progress: Optional[Any] = None,
     ) -> Dict[str, int]:
         """Translate any chunk in this course's collection that predates the
         ingestion-translation feature (no `source_language` metadata key) to
@@ -481,6 +482,11 @@ class CourseRAGService:
         one across thousands of back-to-back calls. Defaults to 0 so tests
         and any other caller stay fast; the backfill script passes a
         non-zero value explicitly.
+
+        `on_progress(idx, total, stats)`, if given, is called once per chunk
+        examined (idx is 1-based, stats is the running tally so far) — a
+        collection with thousands of chunks can otherwise run for a long
+        time with no visible output at all.
         """
         stats = {"total": 0, "already_tagged": 0, "translated": 0, "unchanged_french": 0, "failed": 0}
         if self._translation_llm is None:
@@ -496,31 +502,33 @@ class CourseRAGService:
         update_ids: List[str] = []
         update_docs: List[Document] = []
 
-        for doc_id, text, meta in zip(ids, documents, metadatas):
+        for idx, (doc_id, text, meta) in enumerate(zip(ids, documents, metadatas), start=1):
             if meta.get("source_language"):
                 stats["already_tagged"] += 1
-                continue
+            else:
+                source_lang, should_translate = translation_service.decide_translation(
+                    text or "", self._langid,
+                    rag_config.langid_confidence_threshold, rag_config.min_langid_chars,
+                )
+                if not should_translate:
+                    stats["unchanged_french"] += 1
+                else:
+                    prompt = translation_service.build_chunk_translation_prompt(text, source_lang)
+                    translated = translation_service.translate_to_french(
+                        prompt, self._translation_llm, max_retries=5
+                    )
+                    if throttle_seconds:
+                        time.sleep(throttle_seconds)
+                    if not translated:
+                        stats["failed"] += 1
+                    else:
+                        new_meta = {**meta, "source_language": source_lang, "original_text": text}
+                        update_ids.append(doc_id)
+                        update_docs.append(Document(page_content=translated, metadata=new_meta))
+                        stats["translated"] += 1
 
-            source_lang, should_translate = translation_service.decide_translation(
-                text or "", self._langid,
-                rag_config.langid_confidence_threshold, rag_config.min_langid_chars,
-            )
-            if not should_translate:
-                stats["unchanged_french"] += 1
-                continue
-
-            prompt = translation_service.build_chunk_translation_prompt(text, source_lang)
-            translated = translation_service.translate_to_french(prompt, self._translation_llm, max_retries=5)
-            if throttle_seconds:
-                time.sleep(throttle_seconds)
-            if not translated:
-                stats["failed"] += 1
-                continue
-
-            new_meta = {**meta, "source_language": source_lang, "original_text": text}
-            update_ids.append(doc_id)
-            update_docs.append(Document(page_content=translated, metadata=new_meta))
-            stats["translated"] += 1
+            if on_progress:
+                on_progress(idx, stats["total"], stats)
 
         batch_size = 99
         for i in range(0, len(update_ids), batch_size):

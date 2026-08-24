@@ -64,10 +64,23 @@ def main():
     print(f"Found {len(course_ids)} populated course collections\n")
 
     totals = {"total": 0, "already_tagged": 0, "translated": 0, "unchanged_french": 0, "failed": 0}
+    PROGRESS_EVERY = 10
+
+    def make_progress_printer(course_label):
+        def _on_progress(idx, total, stats):
+            if idx % PROGRESS_EVERY == 0 or idx == total:
+                print(f"    course_{course_label}: {idx}/{total} examined — "
+                      f"translated={stats['translated']} failed={stats['failed']} "
+                      f"already_done={stats['already_tagged']} french={stats['unchanged_french']}",
+                      flush=True)
+        return _on_progress
 
     for i, cid in enumerate(course_ids):
+        print(f"[{i+1}/{len(course_ids)}] course_{cid}: starting...", flush=True)
         start = time.time()
-        stats = course_rag.backfill_translations(cid, rag_config, throttle_seconds=0.3)
+        stats = course_rag.backfill_translations(
+            cid, rag_config, throttle_seconds=0.3, on_progress=make_progress_printer(cid),
+        )
         elapsed = time.time() - start
 
         for k in totals:
