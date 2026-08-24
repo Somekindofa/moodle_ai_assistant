@@ -1,0 +1,83 @@
+[
+  {
+    "qid": "xling_ann9001_fr_query",
+    "query": "Pourquoi met-on la pièce dans le four de recuisson juste après l'avoir terminée ?",
+    "register": "expert",
+    "source": "annotation",
+    "query_language": "fr",
+    "relevant_annotation_ids": [9001],
+    "note": "English-verbalized annotation (annealing) must retrieve for a French query."
+  },
+  {
+    "qid": "xling_ann9002_fr_query",
+    "query": "Comment souffle-t-on doucement dans la canne pour créer une petite bulle d'air ?",
+    "register": "expert",
+    "source": "annotation",
+    "query_language": "fr",
+    "relevant_annotation_ids": [9002],
+    "note": "Greek-verbalized annotation (inflating) must retrieve for a French query."
+  },
+  {
+    "qid": "xling_ann9003_fr_query",
+    "query": "Comment applique-t-on le pigment coloré en poudre sur le verre encore chaud ?",
+    "register": "expert",
+    "source": "annotation",
+    "query_language": "fr",
+    "relevant_annotation_ids": [9003],
+    "note": "Already-French annotation (pigment) — control case."
+  },
+  {
+    "qid": "xling_ann9004_fr_query",
+    "query": "Comment cueille-t-on une boule de verre en fusion avec la canne ?",
+    "register": "expert",
+    "source": "annotation",
+    "query_language": "fr",
+    "relevant_annotation_ids": [9004],
+    "note": "English-verbalized annotation (gathering) must retrieve for a French query."
+  },
+  {
+    "qid": "xling_ann9001_en_query",
+    "query": "Why does the piece go straight into the annealing kiln right after it's finished?",
+    "register": "expert",
+    "source": "annotation",
+    "query_language": "en",
+    "relevant_annotation_ids": [9001],
+    "note": "Existing Config D path (translate query to French) against a corpus that now also contains freshly-translated non-French-origin documents — confirms the two features compose."
+  },
+  {
+    "qid": "xling_course9901_fr_query",
+    "query": "Pourquoi doit-on porter des lunettes de protection teintées devant un four verrier ?",
+    "register": "expert",
+    "source": "course_content",
+    "query_language": "fr",
+    "relevant_course_sources": ["course_9901_module_9911_chunk_0"],
+    "note": "English-authored course module (furnace safety / goggles) must retrieve for a French query."
+  },
+  {
+    "qid": "xling_course9902_fr_query",
+    "query": "Comment nettoie-t-on le jack et les pinces après une session de travail ?",
+    "register": "expert",
+    "source": "course_content",
+    "query_language": "fr",
+    "relevant_course_sources": ["course_9902_module_9921_chunk_0"],
+    "note": "Already-French course module (tool cleaning) — control case."
+  },
+  {
+    "qid": "xling_course9903_fr_query",
+    "query": "Pourquoi une pièce épaisse a-t-elle besoin d'un cycle de refroidissement plus lent qu'une pièce fine ?",
+    "register": "expert",
+    "source": "course_content",
+    "query_language": "fr",
+    "relevant_course_sources": ["course_9903_module_9931_chunk_0"],
+    "note": "English-authored course module (annealing schedule) must retrieve for a French query — deliberately topic-adjacent to annotation 9001 to test discrimination, not just presence."
+  },
+  {
+    "qid": "xling_course9904_fr_query",
+    "query": "Pourquoi ne faut-il jamais toucher le verre juste après l'avoir sorti du four de recuisson ?",
+    "register": "expert",
+    "source": "course_content",
+    "query_language": "fr",
+    "relevant_course_sources": ["course_9904_module_9941_chunk_0"],
+    "note": "Greek-authored course module (post-kiln handling) must retrieve for a French query."
+  }
+]

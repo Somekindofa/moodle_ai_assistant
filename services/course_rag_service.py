@@ -10,6 +10,9 @@ from langchain_chroma import Chroma
 from langchain_core.documents.base import Document
 from langchain_openai import OpenAIEmbeddings
 
+from config.settings import ConfigurationManager
+from services import translation_service
+
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────
@@ -308,12 +311,23 @@ class CourseRAGService:
         self,
         embeddings: OpenAIEmbeddings,
         persist_directory: str,
+        config_manager: Optional[ConfigurationManager] = None,
     ) -> None:
         self.embeddings = embeddings
         self.persist_directory = persist_directory
+        self.config_manager = config_manager
         self.chunker = SemanticChunker()
         # Cache open Chroma collection handles keyed by course_id string
         self._collections: Dict[str, Chroma] = {}
+
+        self._langid = translation_service.load_langid() if config_manager else None
+        self._translation_llm = None
+        if config_manager:
+            try:
+                self._translation_llm = translation_service.build_translation_llm(config_manager)
+            except Exception as e:
+                logger.error(f"Failed to initialize translation LLM: {e} — ingestion translation disabled")
+
         logger.info("CourseRAGService initialized")
 
     # ── Collection management ─────────────────────────────────────
@@ -394,6 +408,9 @@ class CourseRAGService:
             logger.info(f"No chunks produced for module {module_id}")
             return 0
 
+        rag_config = self.config_manager.get_config().rag if self.config_manager else None
+        chunks = self._translate_chunks_if_needed(chunks, rag_config)
+
         collection = self._get_collection(course_id)
         # Infomaniak embedding API accepts at most 99 items per call.
         batch_size = 99
@@ -403,6 +420,100 @@ class CourseRAGService:
             f"Indexed {len(chunks)} chunks for course {course_id} / module {module_id}"
         )
         return len(chunks)
+
+    def _translate_chunks_if_needed(
+        self, chunks: List[Document], rag_config: Optional[Any]
+    ) -> List[Document]:
+        """Translate every chunk of a non-French module to French.
+
+        Language is detected once, from the module's first chunk — not per
+        chunk — since a module is authored in one language. `page_content`
+        (which already includes the heading breadcrumb baked in by
+        SemanticChunker) is translated; `metadata["heading_path"]` is left
+        untouched, since it's surfaced to the frontend as a citation/
+        navigation breadcrumb back to the actual Moodle course structure,
+        not used for retrieval.
+        """
+        if not chunks or rag_config is None or not rag_config.enable_ingestion_translation:
+            return chunks
+        if self._translation_llm is None:
+            return chunks
+
+        source_lang, should_translate = translation_service.decide_translation(
+            chunks[0].page_content, self._langid,
+            rag_config.langid_confidence_threshold, rag_config.min_langid_chars,
+        )
+        if not should_translate:
+            return chunks
+
+        out: List[Document] = []
+        for chunk in chunks:
+            prompt = translation_service.build_chunk_translation_prompt(chunk.page_content, source_lang)
+            translated = translation_service.translate_to_french(prompt, self._translation_llm)
+            new_meta = {**chunk.metadata, "source_language": source_lang}
+            if translated:
+                new_meta["original_text"] = chunk.page_content
+                out.append(Document(page_content=translated, metadata=new_meta))
+            else:
+                out.append(Document(page_content=chunk.page_content, metadata=new_meta))
+        return out
+
+    def backfill_translations(self, course_id: str, rag_config: Any) -> Dict[str, int]:
+        """Translate any chunk in this course's collection that predates the
+        ingestion-translation feature (no `source_language` metadata key) to
+        French, in place.
+
+        Safe to re-run: chunks already tagged with `source_language`
+        (translated, or confirmed French — a French chunk keeps no key, same
+        convention as _translate_chunks_if_needed, so it's re-checked but
+        never re-translated) are the only ones skipped outright, so an
+        interrupted run can simply be invoked again. Uses ChromaDB's
+        update_documents to replace page_content and re-embed in place,
+        without touching chunk IDs or any other metadata.
+        """
+        stats = {"total": 0, "already_tagged": 0, "translated": 0, "unchanged_french": 0, "failed": 0}
+        if self._translation_llm is None:
+            return stats
+
+        collection = self._get_collection(course_id)
+        data = collection.get()
+        ids = data.get("ids", [])
+        documents = data.get("documents", [])
+        metadatas = data.get("metadatas", [])
+        stats["total"] = len(ids)
+
+        update_ids: List[str] = []
+        update_docs: List[Document] = []
+
+        for doc_id, text, meta in zip(ids, documents, metadatas):
+            if meta.get("source_language"):
+                stats["already_tagged"] += 1
+                continue
+
+            source_lang, should_translate = translation_service.decide_translation(
+                text or "", self._langid,
+                rag_config.langid_confidence_threshold, rag_config.min_langid_chars,
+            )
+            if not should_translate:
+                stats["unchanged_french"] += 1
+                continue
+
+            prompt = translation_service.build_chunk_translation_prompt(text, source_lang)
+            translated = translation_service.translate_to_french(prompt, self._translation_llm)
+            if not translated:
+                stats["failed"] += 1
+                continue
+
+            new_meta = {**meta, "source_language": source_lang, "original_text": text}
+            update_ids.append(doc_id)
+            update_docs.append(Document(page_content=translated, metadata=new_meta))
+            stats["translated"] += 1
+
+        batch_size = 99
+        for i in range(0, len(update_ids), batch_size):
+            collection.update_documents(update_ids[i:i + batch_size], update_docs[i:i + batch_size])
+
+        return stats
 
     def delete_module(self, course_id: str, module_id: str) -> int:
         """Remove all chunks belonging to a module from the course collection.

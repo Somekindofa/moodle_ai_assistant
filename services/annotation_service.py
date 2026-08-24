@@ -18,6 +18,7 @@ import pymysql.cursors
 from langchain_core.documents.base import Document
 
 from config.settings import ConfigurationManager
+from services import translation_service
 
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ class AnnotationService:
             a.audiofilepath AS audio_filepath,
             a.transcription,
             a.transcriptionstatus AS transcription_status,
+            a.language AS language,
             a.craft,
             a.task,
             a.timecreated AS annotation_created_at,
@@ -65,6 +67,13 @@ class AnnotationService:
         self.db_password = os.getenv("MOODLE_DB_PASSWORD", "")
         if not self.db_password:
             logger.warning("MOODLE_DB_PASSWORD not set — annotation queries will fail")
+
+        self._langid = translation_service.load_langid()
+        try:
+            self._translation_llm = translation_service.build_translation_llm(config_manager)
+        except Exception as e:
+            logger.error(f"Failed to initialize translation LLM: {e} — ingestion translation disabled")
+            self._translation_llm = None
 
     def get_connection(self) -> pymysql.connections.Connection:
         """Get a MariaDB connection with dict-row cursors."""
@@ -152,6 +161,31 @@ class AnnotationService:
         video_filename = annotation.get("video_filename") or "unknown.mp4"
         annotation_id = annotation.get("annotation_id") or 0
 
+        page_content = annotation["transcription"]
+        source_language: Optional[str] = None
+        rag_config = self.config_manager.get_config().rag
+        if rag_config.enable_ingestion_translation and self._translation_llm is not None:
+            whisper_lang = annotation.get("language")
+            if whisper_lang:
+                should_translate = whisper_lang != "fr"
+                lang = whisper_lang
+            else:
+                # Whisper didn't tag it (nullable column, pre-migration row, or
+                # Whisper unsure) — detect it ourselves, same "unknown -> run
+                # langid" fallback used by the query-side node.
+                lang, should_translate = translation_service.decide_translation(
+                    page_content, self._langid,
+                    rag_config.langid_confidence_threshold, rag_config.min_langid_chars,
+                )
+            if should_translate:
+                prompt = translation_service.build_transcript_translation_prompt(page_content, lang)
+                translated = translation_service.translate_to_french(prompt, self._translation_llm)
+                source_language = lang
+                if translated:
+                    page_content = translated
+                # else: translation failed — index untranslated, but
+                # source_language is still tagged for a later retry.
+
         metadata = {
             "annotation_id": annotation["annotation_id"],
             "video_id": annotation["video_id"],
@@ -174,8 +208,12 @@ class AnnotationService:
             "cohort_id": -1,
             "open_access": True,
         }
+        if source_language:
+            metadata["source_language"] = source_language
+            if page_content != annotation["transcription"]:
+                metadata["original_transcription"] = annotation["transcription"]
 
-        return [Document(page_content=annotation["transcription"], metadata=metadata)]
+        return [Document(page_content=page_content, metadata=metadata)]
 
     def get_annotation_stats(self) -> Dict[str, Any]:
         """Get statistics about annotations in the database."""

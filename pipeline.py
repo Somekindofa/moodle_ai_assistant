@@ -50,6 +50,7 @@ class MoodleAIAssistantPipeline:
         self.course_rag_service = CourseRAGService(
             embeddings=self.rag_service.embeddings,
             persist_directory=self.rag_service.config.persist_directory,
+            config_manager=self.config_manager,
         )
         # Inject course_rag_service into rag_service for PRF dual-collection retrieval
         self.rag_service.course_rag_service = self.course_rag_service

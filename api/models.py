@@ -69,6 +69,7 @@ class AnnotationIngestRequest(BaseModel):
     project_name: str = "unknown"
     audio_filepath: str = ""
     allowed_cohort_id: Optional[int] = None          # None = open access
+    language: Optional[str] = None                   # ISO 639-1 code detected by Whisper
 
 
 class CourseModuleIngestRequest(BaseModel):

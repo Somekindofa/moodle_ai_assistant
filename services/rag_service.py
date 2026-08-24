@@ -17,6 +17,7 @@ from sentence_transformers import CrossEncoder
 
 from config.settings import ConfigurationManager
 from services.reranker_service import InfomaniakReranker
+from services import translation_service
 from core.types import ConversationState
 
 
@@ -277,23 +278,8 @@ class RAGService:
             raise
 
     def _initialize_langid(self):
-        """Load py3langid with a normalized-probability identifier.
-
-        The bare module-level `py3langid.classify()` returns unnormalized
-        log-probabilities, not a usable [0, 1] confidence — the
-        LanguageIdentifier instance with norm_probs=True is required for the
-        confidence threshold in detect_and_translate_query to mean anything.
-        """
-        try:
-            import py3langid as langid
-            identifier = langid.langid.LanguageIdentifier.from_pickled_model(
-                langid.langid.MODEL_FILE, norm_probs=True
-            )
-            logger.info("py3langid initialized (normalized probabilities)")
-            return identifier
-        except Exception as e:
-            logger.error(f"py3langid initialization failed: {e} — cross-lingual detection disabled")
-            return None
+        """Load py3langid — see services.translation_service.load_langid."""
+        return translation_service.load_langid()
 
     def add_documents(self, documents: List[Document]) -> None:
         """Add documents to the vector store."""
@@ -987,46 +973,24 @@ Génère une explication détaillée à la première personne de la technique co
         """
         original_query = str(state["messages"][-1].content)
 
-        if self._langid is None:
+        lang, should_translate = translation_service.decide_translation(
+            original_query, self._langid,
+            self.config.langid_confidence_threshold, self.config.min_langid_chars,
+        )
+        if not should_translate:
             return {"query_language": "fr", "search_query": original_query}
 
-        lang, confidence = self._langid.classify(original_query)
-
-        if (
-            lang == "fr"
-            or confidence < self.config.langid_confidence_threshold
-            or len(original_query) < self.config.min_langid_chars
-        ):
-            return {"query_language": "fr", "search_query": original_query}
-
-        search_query = original_query
-        try:
-            translate_prompt = (
-                "Traduis la question suivante en français, en conservant tout son sens "
-                "technique et son intention.\n\n"
-                f'Question originale ({lang}) :\n"{original_query}"\n\n'
-                "Réponds avec UNIQUEMENT la traduction française, sans explication."
-            )
-            response = self.llm.invoke(translate_prompt)
-            if isinstance(response.content, str):
-                translated = response.content.strip()
-            elif isinstance(response.content, list):
-                translated = " ".join(str(item) for item in response.content).strip()
-            else:
-                translated = str(response.content).strip()
-
-            if translated:
-                search_query = translated
-                logger.info(f"detect_and_translate_query: [{lang}] '{original_query}' -> '{translated}'")
-            else:
-                logger.warning("detect_and_translate_query: empty translation — using original query")
-        except Exception as e:
-            logger.error(f"detect_and_translate_query: translation failed: {e} — using original query")
+        prompt = translation_service.build_query_translation_prompt(original_query, lang)
+        translated = translation_service.translate_to_french(prompt, self.llm)
+        if translated:
+            logger.info(f"detect_and_translate_query: [{lang}] '{original_query}' -> '{translated}'")
+        else:
+            logger.warning("detect_and_translate_query: empty translation — using original query")
 
         # query_language is trusted independently of translation success — a
         # failed translation shouldn't also force a French-language answer to
         # a question we know was asked in another language.
-        return {"query_language": lang, "search_query": search_query}
+        return {"query_language": lang, "search_query": translated or original_query}
 
     @traceable(name="retrieve_initial", run_type="retriever")
     def retrieve_initial(self, state: ConversationState) -> Dict[str, Any]:

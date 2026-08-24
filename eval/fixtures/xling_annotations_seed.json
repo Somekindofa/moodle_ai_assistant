@@ -1,0 +1,58 @@
+[
+  {
+    "annotation_id": 9001,
+    "video_id": 9001,
+    "video_filename": "seed_annealing_en.mp4",
+    "video_filepath": "/videos/seed_annealing_en.mp4",
+    "start_time": 0.0,
+    "end_time": 12.0,
+    "audio_filepath": "",
+    "source_type": "local",
+    "project_name": "xling_seed",
+    "annotation_created_at": "2026-08-24",
+    "transcription": "Once the piece is finished I put it straight into the annealing kiln, because cooling glass too quickly builds up internal stress and it will crack days later without any warning.",
+    "language": "en"
+  },
+  {
+    "annotation_id": 9002,
+    "video_id": 9002,
+    "video_filename": "seed_inflating_el.mp4",
+    "video_filepath": "/videos/seed_inflating_el.mp4",
+    "start_time": 0.0,
+    "end_time": 10.0,
+    "audio_filepath": "",
+    "source_type": "local",
+    "project_name": "xling_seed",
+    "annotation_created_at": "2026-08-24",
+    "transcription": "Φυσάω απαλά μέσα από τον σωλήνα για να δημιουργήσω μια μικρή φυσαλίδα αέρα στο κέντρο του λιωμένου γυαλιού, χωρίς ποτέ να φυσήξω πολύ δυνατά.",
+    "language": "el"
+  },
+  {
+    "annotation_id": 9003,
+    "video_id": 9003,
+    "video_filename": "seed_pigment_fr.mp4",
+    "video_filepath": "/videos/seed_pigment_fr.mp4",
+    "start_time": 0.0,
+    "end_time": 11.0,
+    "audio_filepath": "",
+    "source_type": "local",
+    "project_name": "xling_seed",
+    "annotation_created_at": "2026-08-24",
+    "transcription": "J'applique le pigment coloré en poudre sur le verre encore chaud, en le roulant sur la plaque métallique pour que la couleur adhère uniformément à la surface.",
+    "language": "fr"
+  },
+  {
+    "annotation_id": 9004,
+    "video_id": 9004,
+    "video_filename": "seed_gathering_en.mp4",
+    "video_filepath": "/videos/seed_gathering_en.mp4",
+    "start_time": 0.0,
+    "end_time": 9.0,
+    "audio_filepath": "",
+    "source_type": "local",
+    "project_name": "xling_seed",
+    "annotation_created_at": "2026-08-24",
+    "transcription": "I dip the end of the blowpipe into the furnace and rotate it continuously to gather a smooth, even ball of molten glass before pulling it back out.",
+    "language": "en"
+  }
+]

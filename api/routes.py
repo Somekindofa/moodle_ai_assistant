@@ -135,6 +135,7 @@ async def ingest_annotation(request: AnnotationIngestRequest):
             "project_name":     request.project_name,
             "audio_filepath":   request.audio_filepath,
             "allowed_cohort_id": request.allowed_cohort_id,   # None = open access
+            "language":         request.language,
             # extended_transcript not available yet at transcription time
             "extended_transcript": None,
         }

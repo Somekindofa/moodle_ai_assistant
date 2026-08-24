@@ -66,6 +66,14 @@ class RAGConfig:
     langid_confidence_threshold: float = 0.5
     # Queries shorter than this (chars) default to "fr" — langid is unreliable on short text.
     min_langid_chars: int = 12
+    # Cross-lingual CORPUS ingestion (annotations + course content) — separate
+    # kill-switch from enable_cross_lingual_detection so query-side and
+    # ingestion-side translation can each be disabled independently in
+    # production (ingestion-side failures risk polluting permanently-stored
+    # vectors, a different blast radius than one degraded query).
+    enable_ingestion_translation: bool = field(
+        default_factory=lambda: os.getenv("ENABLE_INGESTION_TRANSLATION", "true").lower() == "true"
+    )
 
 
 @dataclass

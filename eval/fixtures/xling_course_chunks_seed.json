@@ -1,0 +1,34 @@
+[
+  {
+    "course_id": "9901",
+    "module_id": "9911",
+    "module_type": "page",
+    "module_name": "Glassblowing Safety (seed, EN)",
+    "section_name": "xling_seed",
+    "content_html": "<h2>Furnace safety</h2><p>Always wear tinted safety goggles when looking into the furnace, since the glowing glass emits intense infrared light that can damage your eyes over time.</p>"
+  },
+  {
+    "course_id": "9902",
+    "module_id": "9921",
+    "module_type": "page",
+    "module_name": "Sécurité du soufflage de verre (seed, FR)",
+    "section_name": "xling_seed",
+    "content_html": "<h2>Entretien des outils</h2><p>Nettoyez le jack et les pinces après chaque session avec une brosse métallique, car les résidus de verre durci peuvent rayer la pièce suivante.</p>"
+  },
+  {
+    "course_id": "9903",
+    "module_id": "9931",
+    "module_type": "page",
+    "module_name": "Glass Annealing Schedules (seed, EN)",
+    "section_name": "xling_seed",
+    "content_html": "<h2>Annealing schedule</h2><p>A thick sculptural piece needs a much slower cooling schedule than a thin blown vessel, or the temperature difference between the surface and the core will crack it overnight.</p>"
+  },
+  {
+    "course_id": "9904",
+    "module_id": "9941",
+    "module_type": "page",
+    "module_name": "Ασφάλεια Κλιβάνου (seed, EL)",
+    "section_name": "xling_seed",
+    "content_html": "<h2>Ασφάλεια κλιβάνου</h2><p>Ποτέ μην αγγίζετε το γυαλί αμέσως μετά την εξαγωγή του από τον κλίβανο ανόπτησης, καθώς μπορεί να παραμένει καυτό ακόμη κι αν έχει σκουρύνει οπτικά.</p>"
+  }
+]
