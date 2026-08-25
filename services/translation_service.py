@@ -84,6 +84,15 @@ def build_translation_llm(config_manager: ConfigurationManager) -> ChatOpenAI:
         openai_api_base=base_url,
         streaming=False,
         temperature=0,
+        # A stalled request with no timeout blocks forever and never raises
+        # — translate_to_french's own retry-with-backoff never even gets a
+        # chance to run. request_timeout=60 makes a stuck call fail fast
+        # instead; max_retries=0 disables the SDK's own hidden retry layer
+        # so translate_to_french's max_retries is the only one in effect —
+        # two independent retry layers would make total wait time
+        # unpredictable and compound with each other.
+        request_timeout=60,
+        max_retries=0,
         model_kwargs={"tool_choice": "none"},
     )
 

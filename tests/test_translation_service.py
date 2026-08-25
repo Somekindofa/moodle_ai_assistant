@@ -165,6 +165,34 @@ def test_build_translation_llm_uses_zero_temperature_and_no_streaming():
         assert kwargs["model"] == cm.get_config().rag.llm_model
 
 
+def test_build_translation_llm_sets_a_request_timeout():
+    # A hung request with no timeout blocks forever — worse, it never even
+    # raises, so translate_to_french's own retry-with-backoff never gets a
+    # chance to fire. Confirmed against a real overnight backfill run that
+    # hung for 30+ minutes on a single stalled call with zero timeout set.
+    cm = ConfigurationManager()
+
+    with patch("services.translation_service.ChatOpenAI") as MockChatOpenAI:
+        translation_service.build_translation_llm(cm)
+
+        _, kwargs = MockChatOpenAI.call_args
+        assert kwargs["request_timeout"] is not None
+        assert 0 < kwargs["request_timeout"] <= 120
+
+
+def test_build_translation_llm_disables_the_sdks_own_retry_layer():
+    # max_retries is owned entirely by translate_to_french's explicit,
+    # observable retry loop — a second, invisible retry layer inside the
+    # SDK just makes total wait time unpredictable and compounds with ours.
+    cm = ConfigurationManager()
+
+    with patch("services.translation_service.ChatOpenAI") as MockChatOpenAI:
+        translation_service.build_translation_llm(cm)
+
+        _, kwargs = MockChatOpenAI.call_args
+        assert kwargs["max_retries"] == 0
+
+
 # ── prompt builders ──
 
 def test_build_query_translation_prompt_matches_existing_query_prompt():
