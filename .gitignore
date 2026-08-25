@@ -3,6 +3,7 @@
 *.sqlite3
 *_db/
 logging*
+*.log
 __pycache__/
 tests/
 hello_world_*/
