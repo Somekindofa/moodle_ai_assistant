@@ -13,6 +13,7 @@ services.course_rag_service — importable by all three without a cycle.
 
 import logging
 import time
+from collections import Counter
 from typing import Any, Optional, Tuple
 
 from langchain_openai import ChatOpenAI
@@ -66,6 +67,23 @@ def decide_translation(
     return lang, True
 
 
+def is_degenerate_text(text: str, threshold: float = 0.3) -> bool:
+    """Detect OCR/text-extraction garbage that shouldn't be sent to an LLM.
+
+    Scanned PDF forms routinely extract as walls of repeated characters —
+    dot-leaders on blank fill-in lines (". . . . . . . .") being the case
+    that actually hung a backfill run: pathological input like this can
+    send a translation call into a slow, repetitive generation loop instead
+    of a normal quick response. Heuristic: if one character dominates more
+    than `threshold` of the non-whitespace content, it's not real prose.
+    """
+    stripped = "".join(ch for ch in text if not ch.isspace())
+    if not stripped:
+        return False
+    _, count = Counter(stripped).most_common(1)[0]
+    return (count / len(stripped)) > threshold
+
+
 def build_translation_llm(config_manager: ConfigurationManager) -> ChatOpenAI:
     """A second ChatOpenAI client dedicated to translation calls.
 
@@ -93,6 +111,7 @@ def build_translation_llm(config_manager: ConfigurationManager) -> ChatOpenAI:
         # unpredictable and compound with each other.
         request_timeout=60,
         max_retries=0,
+        max_tokens=1200,
         model_kwargs={"tool_choice": "none"},
     )
 

@@ -73,7 +73,10 @@ def main():
     course_ids = course_rag._enumerate_populated_courses()
     print(f"Found {len(course_ids)} populated course collections\n")
 
-    totals = {"total": 0, "already_tagged": 0, "translated": 0, "unchanged_french": 0, "failed": 0}
+    totals = {
+        "total": 0, "already_tagged": 0, "translated": 0,
+        "unchanged_french": 0, "failed": 0, "skipped_degenerate": 0,
+    }
     PROGRESS_EVERY = 10
 
     def make_progress_printer(course_label):
@@ -81,7 +84,8 @@ def main():
             if idx % PROGRESS_EVERY == 0 or idx == total:
                 print(f"    course_{course_label}: {idx}/{total} examined — "
                       f"translated={stats['translated']} failed={stats['failed']} "
-                      f"already_done={stats['already_tagged']} french={stats['unchanged_french']}",
+                      f"already_done={stats['already_tagged']} french={stats['unchanged_french']} "
+                      f"degenerate={stats['skipped_degenerate']}",
                       flush=True)
         return _on_progress
 
@@ -96,9 +100,10 @@ def main():
         for k in totals:
             totals[k] += stats[k]
 
-        if stats["translated"] or stats["failed"]:
+        if stats["translated"] or stats["failed"] or stats["skipped_degenerate"]:
             print(f"[{i+1}/{len(course_ids)}] course_{cid}: "
                   f"{stats['translated']} translated, {stats['failed']} failed, "
+                  f"{stats['skipped_degenerate']} skipped (OCR garbage), "
                   f"{stats['already_tagged']} already done, "
                   f"{stats['unchanged_french']} already French "
                   f"({elapsed:.1f}s)")
@@ -107,12 +112,18 @@ def main():
 
     print("\n" + "=" * 70)
     print(f"TOTAL: {totals['translated']} translated, {totals['failed']} failed, "
+          f"{totals['skipped_degenerate']} skipped (OCR garbage), "
           f"{totals['already_tagged']} already done, "
           f"{totals['unchanged_french']} already French, "
           f"{totals['total']} chunks examined across {len(course_ids)} collections")
     if totals["failed"]:
         print(f"\n{totals['failed']} chunks failed to translate (API errors) — "
               "safe to re-run this script, they were left untagged and will be retried.")
+    if totals["skipped_degenerate"]:
+        print(f"\n{totals['skipped_degenerate']} chunks were skipped as OCR/extraction "
+              "garbage (e.g. scanned form blank-lines) rather than real content — "
+              "worth a manual look at whether that source content belongs in the "
+              "corpus at all, translated or not.")
     print("=" * 70)
 
 

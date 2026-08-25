@@ -89,6 +89,25 @@ def test_language_detected_once_from_first_chunk_not_per_chunk():
     svc._langid.classify.assert_called_once()
 
 
+def test_degenerate_chunk_is_left_untranslated_without_calling_the_llm():
+    svc = _make_service()
+    svc._langid = MagicMock()
+    svc._langid.classify.return_value = ("en", 0.95)
+    svc._translation_llm = MagicMock()
+    svc._translation_llm.invoke.return_value = MagicMock(content="Portez des lunettes")
+
+    dot_leader_garbage = "Nom  " + ". . " * 200 + "MINES ParisTech"
+    chunks = _chunks("Wear goggles at all times", dot_leader_garbage)
+    result = svc._translate_chunks_if_needed(chunks, _rag_config())
+
+    # first (normal) chunk translates; second (degenerate) is passed through
+    # untouched, and never reaches the LLM.
+    assert result[0].page_content == "Portez des lunettes"
+    assert result[1].page_content == dot_leader_garbage
+    assert result[1].metadata == chunks[1].metadata
+    svc._translation_llm.invoke.assert_called_once()
+
+
 def test_heading_path_metadata_is_never_translated():
     svc = _make_service()
     svc._langid = MagicMock()

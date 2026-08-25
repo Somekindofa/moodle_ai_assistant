@@ -449,6 +449,11 @@ class CourseRAGService:
 
         out: List[Document] = []
         for chunk in chunks:
+            if translation_service.is_degenerate_text(chunk.page_content):
+                # OCR/text-extraction garbage (scanned form blank-lines etc.)
+                # — sending this to the LLM is what hung a live backfill run.
+                out.append(chunk)
+                continue
             prompt = translation_service.build_chunk_translation_prompt(chunk.page_content, source_lang)
             translated = translation_service.translate_to_french(prompt, self._translation_llm, max_retries=2)
             new_meta = {**chunk.metadata, "source_language": source_lang}
@@ -488,7 +493,10 @@ class CourseRAGService:
         collection with thousands of chunks can otherwise run for a long
         time with no visible output at all.
         """
-        stats = {"total": 0, "already_tagged": 0, "translated": 0, "unchanged_french": 0, "failed": 0}
+        stats = {
+            "total": 0, "already_tagged": 0, "translated": 0,
+            "unchanged_french": 0, "failed": 0, "skipped_degenerate": 0,
+        }
         if self._translation_llm is None:
             return stats
 
@@ -505,6 +513,10 @@ class CourseRAGService:
         for idx, (doc_id, text, meta) in enumerate(zip(ids, documents, metadatas), start=1):
             if meta.get("source_language"):
                 stats["already_tagged"] += 1
+            elif translation_service.is_degenerate_text(text or ""):
+                # OCR/text-extraction garbage (scanned form blank-lines etc.)
+                # — sending this to the LLM is what hung a live backfill run.
+                stats["skipped_degenerate"] += 1
             else:
                 source_lang, should_translate = translation_service.decide_translation(
                     text or "", self._langid,

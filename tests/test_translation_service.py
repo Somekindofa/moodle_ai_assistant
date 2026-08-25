@@ -151,6 +151,32 @@ def test_translate_to_french_returns_none_on_empty_response():
     assert translation_service.translate_to_french("some prompt", llm) is None
 
 
+# ── is_degenerate_text ──
+
+def test_is_degenerate_text_flags_dot_leader_ocr_garbage():
+    # Real example from a scanned consent-form PDF that hung the backfill —
+    # form blank-lines extracted as walls of ". . . . . . . ." repeated
+    # hundreds of times, not real prose.
+    text = "Nom  " + ". . " * 200 + "MINES ParisTech"
+    assert translation_service.is_degenerate_text(text) is True
+
+
+def test_is_degenerate_text_does_not_flag_normal_prose():
+    text = (
+        "D'abord, je chauffe le verre dans le four jusqu'à ce qu'il devienne "
+        "orange incandescent, puis je le façonne sur la table de marbre."
+    )
+    assert translation_service.is_degenerate_text(text) is False
+
+
+def test_is_degenerate_text_does_not_flag_short_normal_text():
+    assert translation_service.is_degenerate_text("Wear goggles at all times") is False
+
+
+def test_is_degenerate_text_handles_empty_string():
+    assert translation_service.is_degenerate_text("") is False
+
+
 # ── build_translation_llm ──
 
 def test_build_translation_llm_uses_zero_temperature_and_no_streaming():
@@ -178,6 +204,20 @@ def test_build_translation_llm_sets_a_request_timeout():
         _, kwargs = MockChatOpenAI.call_args
         assert kwargs["request_timeout"] is not None
         assert 0 < kwargs["request_timeout"] <= 120
+
+
+def test_build_translation_llm_caps_max_tokens():
+    # Defense-in-depth alongside is_degenerate_text: even if pathological
+    # input slips through, a capped response length bounds how long a
+    # single generation can run for.
+    cm = ConfigurationManager()
+
+    with patch("services.translation_service.ChatOpenAI") as MockChatOpenAI:
+        translation_service.build_translation_llm(cm)
+
+        _, kwargs = MockChatOpenAI.call_args
+        assert kwargs["max_tokens"] is not None
+        assert 0 < kwargs["max_tokens"] <= 2000
 
 
 def test_build_translation_llm_disables_the_sdks_own_retry_layer():

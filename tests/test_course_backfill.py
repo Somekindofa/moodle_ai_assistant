@@ -29,7 +29,28 @@ def test_no_translation_llm_returns_zero_stats_and_touches_nothing():
 
     stats = svc.backfill_translations("1", _rag_config())
 
-    assert stats == {"total": 0, "already_tagged": 0, "translated": 0, "unchanged_french": 0, "failed": 0}
+    assert stats == {
+        "total": 0, "already_tagged": 0, "translated": 0,
+        "unchanged_french": 0, "failed": 0, "skipped_degenerate": 0,
+    }
+    collection.update_documents.assert_not_called()
+
+
+def test_degenerate_ocr_garbage_is_skipped_without_calling_the_llm():
+    svc = _make_service()
+    svc._translation_llm = MagicMock()
+    svc._langid = MagicMock()
+    dot_leader_garbage = "Nom  " + ". . " * 200 + "MINES ParisTech"
+    collection = _collection(["1"], [dot_leader_garbage], [{}])
+    svc._get_collection = MagicMock(return_value=collection)
+
+    stats = svc.backfill_translations("1", _rag_config())
+
+    assert stats["skipped_degenerate"] == 1
+    assert stats["translated"] == 0
+    assert stats["failed"] == 0
+    svc._translation_llm.invoke.assert_not_called()
+    svc._langid.classify.assert_not_called()
     collection.update_documents.assert_not_called()
 
 
