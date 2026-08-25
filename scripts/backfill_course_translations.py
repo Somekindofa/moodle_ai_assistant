@@ -30,6 +30,16 @@ import logging
 os.chdir('/opt/craftpilot_backend')
 sys.path.insert(0, '/opt/craftpilot_backend')
 
+# Disable LangSmith tracing for this process BEFORE any LangChain/LangSmith
+# import — server.py's own comment notes LANGSMITH_TRACING is read at SDK
+# init time, so this must happen first. A one-off batch job firing ~9,000
+# LLM calls has no business being traced like a live user conversation; the
+# first backfill run burned through the account's whole monthly trace quota
+# and broke tracing on the LIVE server for the rest of the month as a side
+# effect. This only affects this script's process, not production.
+os.environ["LANGSMITH_TRACING"] = "false"
+os.environ["LANGCHAIN_TRACING_V2"] = "false"
+
 logging.basicConfig(level=logging.WARNING)
 
 from config.settings import ConfigurationManager
