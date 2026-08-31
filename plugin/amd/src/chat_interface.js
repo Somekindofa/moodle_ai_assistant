@@ -220,8 +220,15 @@ const buildSourceCard = (item) => {
     card.setAttribute('aria-label', (item.filename || item.type) + ' — click to open');
 
     if (item.type === 'video') {
+        // item.thumbnail is a data: URI JPEG generated server-side from the
+        // video's own frame at start_time — never user text, safe to embed
+        // directly (base64 alphabet can't contain HTML-breaking characters).
+        const thumbImg = item.thumbnail
+            ? '<img class="cp-card-thumb-img" src="' + item.thumbnail + '" alt="">'
+            : '';
         card.innerHTML =
             '<div class="cp-card-thumb">' +
+                thumbImg +
                 '<div class="cp-card-play">' +
                     '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">' +
                         '<path d="M8 5v14l11-7z"/>' +
@@ -1068,6 +1075,12 @@ const sendMessage = () => {
     dom.input.disabled   = true;
     dom.sendBtn.disabled = true;
 
+    // Capture this conversation's video cards before they're cleared below —
+    // sent to the backend as previous_sources so it can exclude already-shown
+    // videos and resolve ordinal references ("the second video") despite
+    // having no cross-turn memory of its own.
+    const previousSources = [...getConvState(state.currentConvId).sources];
+
     appendMessage('user', text, true);
     dom.input.value = '';
     autoResize();
@@ -1078,10 +1091,10 @@ const sendMessage = () => {
     const isFirst = state.isNewConv;
     state.isNewConv = false;
     saveMessage(state.currentConvId, 'user', text);
-    streamFromBackend(text, isFirst);
+    streamFromBackend(text, isFirst, previousSources);
 };
 
-const streamFromBackend = (userMessage, isFirstMessage = false) => {
+const streamFromBackend = (userMessage, isFirstMessage = false, previousSources = []) => {
     const streamConvId = state.currentConvId; // capture now — don't read live inside stream
     const typingEl = showTyping();
 
@@ -1094,6 +1107,8 @@ const streamFromBackend = (userMessage, isFirstMessage = false) => {
         is_first_message: isFirstMessage,
         sesskey: (window.M && window.M.cfg) ? window.M.cfg.sesskey : '',
         user_id: state.userId,
+        previous_sources: previousSources,
+        previous_message: getConvState(streamConvId).lastTopicalMessage || null,
     };
     if (state.selectedDomain) {
         payload.selected_domain = state.selectedDomain;
@@ -1183,6 +1198,15 @@ const streamFromBackend = (userMessage, isFirstMessage = false) => {
                             // hint before processing the next event in the same chunk.
                             await new Promise(resolve => requestAnimationFrame(resolve));
 
+                        } else if (ev.event === 'intent' && ev.data) {
+                            // Only advance the "last topical message" pointer when this
+                            // turn was itself a real topic, not a pagination follow-up
+                            // ("show me another") — otherwise a chain of pagination
+                            // requests would lose the original topic to search against.
+                            if (!ev.data.is_pagination_request) {
+                                getConvState(streamConvId).lastTopicalMessage = userMessage;
+                            }
+
                         } else if (ev.event === 'video_metadata' && ev.data) {
                             const vm    = ev.data;
                             const isBVH = (vm.filename || '').toLowerCase().endsWith('.bvh');
@@ -1196,6 +1220,7 @@ const streamFromBackend = (userMessage, isFirstMessage = false) => {
                                 end_time:    vm.end_time,
                                 duration:    vm.duration,
                                 project_name: vm.project_name,
+                                thumbnail:   vm.thumbnail,
                             }, streamConvId);
 
                         } else if (ev.event === 'bvh_metadata' && ev.data) {

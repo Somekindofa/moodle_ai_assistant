@@ -53,15 +53,18 @@ class InfomaniakReranker:
         passing = [(score, doc) for score, doc in scored if score >= self._threshold]
         passing.sort(key=lambda x: x[0], reverse=True)
 
+        all_scores_sorted = sorted([round(float(s), 4) for s, _ in scored], reverse=True)
+
         if passing:
             logger.info(
                 f"remote rerank: {len(documents)} candidates → {len(passing)} passed "
-                f"threshold={self._threshold} (top score={passing[0][0]:.3f})"
+                f"threshold={self._threshold} (top score={passing[0][0]:.3f}, "
+                f"all scores={all_scores_sorted})"
             )
         else:
             logger.info(
                 f"remote rerank: {len(documents)} candidates → 0 passed "
-                f"threshold={self._threshold}"
+                f"threshold={self._threshold} (all scores={all_scores_sorted})"
             )
 
         return [doc for _, doc in passing]

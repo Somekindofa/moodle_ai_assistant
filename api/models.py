@@ -20,6 +20,8 @@ class ChatRequest(BaseModel):
     is_first_message: bool = False         # True on first message — triggers title generation
     disable_rerank: bool = False           # Ablation flag: skip cross-encoder reranking when True
     user_id: Optional[int] = None          # NEW — validated by chat_proxy.php
+    previous_sources: Optional[List[Dict[str, Any]]] = None  # NEW — frontend's prior-turn video cards
+    previous_message: Optional[str] = None                   # NEW — frontend's last non-pagination message
 
 
 class SystemStatus(BaseModel):

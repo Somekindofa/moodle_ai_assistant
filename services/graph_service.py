@@ -28,14 +28,16 @@ class ConversationGraphService:
     ) -> "ConversationGraphService":
         """Build the PRF conversation graph with the given node sequence.
 
-        Default sequence: retrieve_initial → refine_query_prf → retrieve_final_dual → rerank → generate
+        Default sequence: parse_query_intent → retrieve_initial → refine_query_prf → retrieve_final_dual → rerank → assess_relevance → generate
         """
         if functions is None:
             functions = [
+                "parse_query_intent",
                 "retrieve_initial",
                 "refine_query_prf",
                 "retrieve_final_dual",
                 "rerank",
+                "assess_relevance",
                 "generate",
             ]
 

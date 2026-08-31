@@ -47,13 +47,16 @@ async def generate_simplified_stream(
     is_first_message: bool = False,
     disable_rerank: bool = False,
     user_id: Optional[int] = None,         # NEW
+    previous_sources: Optional[List[dict]] = None,   # NEW
+    previous_message: Optional[str] = None,          # NEW
 ) -> AsyncGenerator[str, None]:
     """Stream the RAG pipeline response as JSON-lines.
 
     Delegates to pipeline.stream_response() which runs the PRF retrieval
     nodes then streams LLM tokens individually.  The client receives:
       {"event": "conversation_title", "data": "..."}  — only on first message
-      {"event": "video_metadata", "data": {...}}       — optional source card
+      {"event": "intent", "data": {"is_pagination_request": bool}}
+      {"event": "video_metadata", "data": {...}}       — one per source card
       {"event": "token", "data": "<text>"}             — one per token
       {"event": "documents", "data": [...]}            — document sources
       {"event": "rerank_debug", "data": {...}}         — reranker diagnostics
@@ -67,6 +70,8 @@ async def generate_simplified_stream(
         is_first_message=is_first_message,
         disable_rerank=disable_rerank,
         user_id=user_id,                   # NEW
+        previous_sources=previous_sources,      # NEW
+        previous_message=previous_message,      # NEW
     ):
         yield line
 
@@ -106,6 +111,8 @@ async def chat_stream(request: ChatRequest):
             request.is_first_message,
             request.disable_rerank,
             user_id=request.user_id,        # NEW
+            previous_sources=request.previous_sources,   # NEW
+            previous_message=request.previous_message,   # NEW
         ),
         media_type="text/plain",
         headers={"X-Accel-Buffering": "no"},

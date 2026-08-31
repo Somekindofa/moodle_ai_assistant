@@ -27,6 +27,32 @@ test_config = RunnableConfig({"configurable": {"thread_id": test_thread_id}})
 StreamMode = Literal["values", "updates"]
 
 
+def _build_ambiguous_clarification(context_docs: List[Document]) -> str:
+    """Deterministic clarifying question for assess_relevance's AMBIGUOUS case.
+
+    Lists the distinct topics actually found (project_name/craft metadata) so
+    the learner can see why the system is unsure, rather than a generic
+    "please rephrase" with no information about what was actually retrieved.
+    """
+    topics: List[str] = []
+    for doc in context_docs[:5]:
+        topic = doc.metadata.get("project_name") or doc.metadata.get("craft")
+        if topic and topic not in topics:
+            topics.append(topic)
+
+    if topics:
+        topics_text = ", ".join(topics[:3])
+        return (
+            "Votre question peut correspondre à plusieurs sujets du corpus "
+            f"({topics_text}). Pourriez-vous préciser votre demande ?"
+        )
+
+    return (
+        "Votre question n'est pas assez précise pour que je trouve une réponse fiable "
+        "dans le corpus. Pourriez-vous la reformuler avec plus de détails ?"
+    )
+
+
 class MoodleAIAssistantPipeline:
     """Main pipeline orchestrating the Moodle AI Assistant services."""
 
@@ -121,21 +147,29 @@ class MoodleAIAssistantPipeline:
         """Build and compile the PRF conversation graph with cross-encoder reranking.
 
         Pipeline:
-          retrieve_initial → refine_query_prf → retrieve_final_dual → rerank → generate
+          detect_and_translate_query → parse_query_intent → retrieve_initial →
+          refine_query_prf → retrieve_final_dual → rerank → assess_relevance → generate
 
         retrieve_initial and retrieve_final_dual cast a wide net from both the
         video annotation collection and per-course collections.  rerank filters
         and re-orders the candidate set using a local multilingual cross-encoder,
         replacing the old L2 distance guardrail with a principled relevance score.
+        assess_relevance is a second, independent check — see its docstring for
+        why a high rerank score alone isn't sufficient here. Note: this compiled
+        graph is linear (add_sequence) and can't branch on assess_relevance's
+        result the way the actually-live stream_response can — see that
+        method's docstring.
         """
         try:
             return self.graph_service.build_conversation_graph(
                 functions=[
                     "detect_and_translate_query",
+                    "parse_query_intent",
                     "retrieve_initial",
                     "refine_query_prf",
                     "retrieve_final_dual",
                     "rerank",
+                    "assess_relevance",
                     "generate",
                 ]
             ).compile_graph()
@@ -349,6 +383,8 @@ class MoodleAIAssistantPipeline:
         is_first_message: bool = False,
         disable_rerank: bool = False,
         user_id: Optional[int] = None,     # NEW
+        previous_sources: Optional[List[Dict[str, Any]]] = None,  # NEW — frontend's prior-turn video cards
+        previous_message: Optional[str] = None,                   # NEW — frontend's last non-pagination message
     ):
         """Async generator that streams the full response as JSON-lines events.
 
@@ -356,11 +392,21 @@ class MoodleAIAssistantPipeline:
         vector-search + one LLM call each), then streams the final generation
         token-by-token so the client sees output immediately.
 
+        `previous_sources`/`previous_message` carry the frontend's own record
+        of the conversation (this backend is stateless per request — see
+        parse_query_intent) so pagination ("show me another") and ordinal
+        references ("the second video") can work despite no server-side
+        cross-turn memory.
+
         Yields JSON-line strings:
           {"event": "status", "data": "..."}               — pipeline step hints
           {"event": "conversation_title", "data": "..."}  — only when is_first_message=True
-          {"event": "video_metadata", "data": {...}}       — optional, before tokens
-          {"event": "token", "data": "<text>"}             — one per LLM token
+          {"event": "intent", "data": {"is_pagination_request": bool}}  — after parse_query_intent
+          {"event": "video_metadata", "data": {...}}       — one per video, before tokens — SUFFICIENT only
+          {"event": "token", "data": "<text>"}             — one per LLM token, or a single deterministic
+                                                              message + [DONE] if assess_relevance found the
+                                                              context AMBIGUOUS/INSUFFICIENT (no video cards,
+                                                              no follow-ups, no `documents` event in that case)
           {"event": "documents", "data": [...]}            — after all tokens
           {"content": "[DONE]"}                            — terminal marker
         """
@@ -401,13 +447,17 @@ class MoodleAIAssistantPipeline:
                 title = await self._generate_conversation_title(message)
                 yield json.dumps({"event": "conversation_title", "data": title}) + "\n"
 
-            # Build the initial state dict (MessagesState expects message objects)
+            # Build the initial state dict (MessagesState expects message objects).
+            # previous_video_metadata/shown_video_ids/last_topical_query are seeded
+            # straight from the request — this backend has no cross-turn memory of
+            # its own (see parse_query_intent docstring), the frontend supplies it.
+            previous_video_metadata = previous_sources or []
             state: Dict[str, Any] = {
                 "messages": [HumanMessage(content=message)],
                 "selected_domain": selected_domain,
                 "course_id": course_id,
                 "context": [],
-                "video_metadata": None,
+                "video_metadata": [],
                 "refined_query": None,
                 "hypothetical_document": None,
                 "enhanced_query": None,
@@ -417,6 +467,18 @@ class MoodleAIAssistantPipeline:
                 "enrolled_course_ids": enrolled_course_ids,   # NEW
                 "query_language": None,           # NEW
                 "search_query": None,              # NEW
+                "desired_video_count": 1,                          # NEW
+                "depth_preference": "normal",                      # NEW
+                "is_pagination_request": False,                    # NEW
+                "referenced_video_id": None,                       # NEW
+                "previous_video_metadata": previous_video_metadata,  # NEW
+                "shown_video_ids": [
+                    v.get("video_id") or v.get("id")
+                    for v in previous_video_metadata
+                    if v.get("video_id") or v.get("id")
+                ],                                                 # NEW
+                "last_topical_query": previous_message or "",       # NEW
+                "relevance_assessment": "SUFFICIENT",               # NEW
             }
 
             # --- Step 0: language detection + translation ---
@@ -425,6 +487,14 @@ class MoodleAIAssistantPipeline:
                 state.update(result)
                 if state.get("query_language") and state["query_language"] != "fr":
                     yield json.dumps({"event": "status", "data": "Traduction de la question…"}) + "\n"
+
+            # --- Step 0b: parse video-count / depth / pagination / reference intent ---
+            result = await asyncio.to_thread(self.rag_service.parse_query_intent, state)
+            state.update(result)
+            yield json.dumps({
+                "event": "intent",
+                "data": {"is_pagination_request": state.get("is_pagination_request", False)},
+            }) + "\n"
 
             # --- PRF step 1: initial retrieval ---
             yield json.dumps({"event": "status", "data": "Recherche dans la base de connaissances…"}) + "\n"
@@ -454,9 +524,35 @@ class MoodleAIAssistantPipeline:
                 result = await asyncio.to_thread(self.rag_service.rerank, state)
                 state.update(result)
 
-            # Re-emit video metadata after reranking (top doc may have changed).
-            if state.get("video_metadata"):
-                yield json.dumps({"event": "video_metadata", "data": state["video_metadata"]}) + "\n"
+            # --- Relevance gate — runs before video cards or generate, so they
+            # can never contradict each other the way generate's own ad-hoc
+            # refusal decision used to (paraphrased wording instead of the
+            # fixed message, video cards shown anyway, follow-up questions
+            # generated despite refusing). A high rerank score alone isn't a
+            # reliable signal here — see assess_relevance's docstring. ---
+            yield json.dumps({"event": "status", "data": "Vérification de la pertinence…"}) + "\n"
+            result = await asyncio.to_thread(self.rag_service.assess_relevance, state)
+            state.update(result)
+            assessment = state.get("relevance_assessment", "SUFFICIENT")
+
+            if assessment == "INSUFFICIENT":
+                yield json.dumps({"event": "token", "data": self.rag_service.INSUFFICIENT_CONTEXT_MESSAGE}) + "\n"
+                yield json.dumps({"content": "[DONE]"}) + "\n"
+                return
+
+            if assessment == "AMBIGUOUS":
+                yield json.dumps({
+                    "event": "token",
+                    "data": _build_ambiguous_clarification(state.get("context", [])),
+                }) + "\n"
+                yield json.dumps({"content": "[DONE]"}) + "\n"
+                return
+
+            # Re-emit video metadata after reranking (candidates may have changed) —
+            # one event per video so the frontend's existing addSource()/dedupe
+            # logic renders one card per video with no changes needed on its side.
+            for video in state.get("video_metadata") or []:
+                yield json.dumps({"event": "video_metadata", "data": video}) + "\n"
 
             # --- Stream the generate step token by token ---
             yield json.dumps({"event": "status", "data": "Génération de la réponse…"}) + "\n"

@@ -1,6 +1,8 @@
 """RAG service for document retrieval and generation."""
 
 import os
+import re
+import base64
 import logging
 from typing import List, Dict, Any, Union, Optional
 from langsmith import traceable
@@ -77,8 +79,7 @@ class RAGService:
                 "- N'inventez JAMAIS d'URLs, de liens, de références bibliographiques ou de citations.\n"
                 "- Basez-vous EXCLUSIVEMENT sur le contexte documentaire fourni. "
                 "Si le contexte est insuffisant ou ne traite pas de la question posée, répondez UNIQUEMENT : "
-                "\"Je n'ai pas trouvé d'information pertinente dans le corpus pour répondre à cette question. "
-                "Veuillez reformuler ou consulter votre formateur.\" "
+                f"\"{self.INSUFFICIENT_CONTEXT_MESSAGE}\" "
                 "Ne complétez JAMAIS par des connaissances extérieures au contexte fourni.\n\n"
                 "STRUCTURE DE LA RÉPONSE — adaptez-la à la nature de la question :\n"
                 "- Pour une question factuelle simple (température, durée, proportion, définition…), "
@@ -139,7 +140,28 @@ class RAGService:
             f"\n\nVous vous concentrez particulièrement sur le domaine : {domain}."
             if domain else ""
         )
-        query = str(state.get("messages")[-1].content) + domain_suffix
+
+        depth_preference = state.get("depth_preference", "normal")
+        depth_suffix = ""
+        if depth_preference == "brief":
+            depth_suffix = "\n\nRéponds de manière brève et concise."
+        elif depth_preference == "detailed":
+            depth_suffix = "\n\nRéponds de manière détaillée et approfondie."
+
+        desired_video_count = state.get("desired_video_count", 1)
+        shown_video_count = len(state.get("video_metadata") or [])
+        undersupply_suffix = ""
+        if shown_video_count < desired_video_count:
+            undersupply_suffix = (
+                f"\n\n(Note interne : seulement {shown_video_count} vidéo(s) pertinente(s) "
+                f"trouvée(s) sur les {desired_video_count} demandées — mentionne-le brièvement "
+                "dans ta réponse, dans la langue de la question.)"
+            )
+
+        query = (
+            str(state.get("messages")[-1].content)
+            + domain_suffix + depth_suffix + undersupply_suffix
+        )
         history_lines = [
             f"{msg.type}: {msg.content}"
             for msg in state.get("messages", [])[:-1]
@@ -249,6 +271,17 @@ class RAGService:
     # range where 0.0 separates relevant from non-relevant, so this threshold
     # can be used at face value without corpus-specific calibration.
     RERANK_SCORE_THRESHOLD: float = 0.0
+
+    # Single source of truth for the "nothing relevant found" message — used
+    # both in the system prompt (as a fallback if assess_relevance somehow
+    # doesn't run) and deterministically by stream_response when
+    # assess_relevance classifies the retrieved context as INSUFFICIENT.
+    # Deterministic beats letting the LLM paraphrase it: a fixed string can't
+    # drift or contradict itself the way free-form generation did.
+    INSUFFICIENT_CONTEXT_MESSAGE = (
+        "Je n'ai pas trouvé d'information pertinente dans le corpus pour répondre à cette question. "
+        "Veuillez reformuler ou consulter votre formateur."
+    )
 
     def _initialize_cross_encoder(self):
         """Load local cross-encoder or skip if remote reranker is configured."""
@@ -674,7 +707,7 @@ Génère une explication détaillée à la première personne de la technique co
         docs = state.get("context", [])
 
         if not docs:
-            return {"context": [], "video_metadata": None}
+            return {"context": [], "video_metadata": []}
 
         rag_cfg = self.config_manager.get_config().rag
 
@@ -692,7 +725,12 @@ Génère une explication détaillée à la première personne de la technique co
                 f"rerank (remote): {len(docs)} candidates → {len(passing)} passed "
                 f"threshold={rag_cfg.remote_reranker_score_threshold}"
             )
-            video_metadata = self._extract_video_metadata(passing)
+            video_metadata = self._extract_video_metadata(
+                passing,
+                limit=state.get("desired_video_count", 1),
+                exclude_ids=set(state.get("shown_video_ids") or []),
+                preferred_video_id=state.get("referenced_video_id"),
+            )
             return {
                 "context": passing,
                 "video_metadata": video_metadata,
@@ -727,7 +765,12 @@ Génère une explication détaillée à la première personne de la technique co
             f"(top score={top_score:.2f}, threshold={self.RERANK_SCORE_THRESHOLD})"
         )
 
-        video_metadata = self._extract_video_metadata(passing)
+        video_metadata = self._extract_video_metadata(
+            passing,
+            limit=state.get("desired_video_count", 1),
+            exclude_ids=set(state.get("shown_video_ids") or []),
+            preferred_video_id=state.get("referenced_video_id"),
+        )
         return {
             "context": passing,
             "video_metadata": video_metadata,
@@ -741,6 +784,79 @@ Génère une explication détaillée à la première personne de la technique co
                 "scores": all_scores_sorted,
             },
         }
+
+    def assess_relevance(self, state: ConversationState) -> Dict[str, Any]:
+        """Pipeline step — after the final retrieval/rerank, before generate.
+
+        One LLM call judges whether the retrieved context actually answers
+        the learner's request, so stream_response can skip generation and
+        emit a deterministic, consistent message instead of letting
+        `generate` decide ad-hoc. That ad-hoc decision was producing
+        self-contradicting turns: video cards shown alongside a text
+        refusal, non-fixed refusal wording (the LLM paraphrases despite the
+        system prompt mandating an exact string), and follow-up questions
+        generated even when refusing.
+
+        A high rerank score alone isn't a reliable relevance signal here —
+        cross-craft vocabulary (e.g. "biseau"/"meule" grinding technique
+        terms also used in glass-finishing) can score >0.9 on a genuinely
+        wrong topic. This is a second, independent check.
+
+        Returns one of SUFFICIENT | AMBIGUOUS | INSUFFICIENT. Fails open to
+        SUFFICIENT on any LLM error or unparseable response — same
+        fail-open philosophy as route_query, so a broken classifier never
+        blocks a real answer.
+        """
+        context_docs = state.get("context") or []
+
+        if not context_docs:
+            return {"relevance_assessment": "INSUFFICIENT"}
+
+        if not self.llm:
+            return {"relevance_assessment": "SUFFICIENT"}
+
+        query = str(state.get("messages")[-1].content)
+        snippets = []
+        for i, doc in enumerate(context_docs[:5], 1):
+            preview = doc.page_content[:300] + "..." if len(doc.page_content) > 300 else doc.page_content
+            snippets.append(f"[Document {i}]\n{preview}")
+        context_text = "\n\n".join(snippets)
+
+        prompt = (
+            "Tu es un classificateur de pertinence pour un assistant pédagogique en arts et métiers.\n"
+            "On te donne la question de l'apprenti et les documents effectivement récupérés du corpus.\n"
+            "Détermine si ces documents permettent réellement de répondre à la question posée.\n\n"
+            f'Question : "{query}"\n\n'
+            f"Documents récupérés :\n{context_text}\n\n"
+            "Réponds avec EXACTEMENT un mot parmi :\n"
+            "  SUFFISANT — les documents traitent bien du sujet demandé et permettent de répondre.\n"
+            "  AMBIGU — les documents traitent d'un sujet proche du domaine mais pas exactement "
+            "celui demandé (ex : une autre technique du même métier), une clarification aiderait.\n"
+            "  INSUFFISANT — les documents ne traitent pas du tout du sujet demandé."
+        )
+
+        try:
+            response = self.llm.invoke(prompt)
+            raw = str(response.content).strip().upper()
+            # Check French first — this classifier's prompt is otherwise all
+            # French, so the LLM naturally answers in French despite being
+            # asked for these exact words; English is kept as a fallback.
+            # INSUFFISANT/INSUFFICIENT must be checked before
+            # SUFFISANT/SUFFICIENT — each contains the other as a substring.
+            if "INSUFFISANT" in raw or "INSUFFICIENT" in raw:
+                assessment = "INSUFFICIENT"
+            elif "AMBIGU" in raw or "AMBIGUOUS" in raw:
+                assessment = "AMBIGUOUS"
+            elif "SUFFISANT" in raw or "SUFFICIENT" in raw:
+                assessment = "SUFFICIENT"
+            else:
+                logger.warning(f"assess_relevance: unparseable response: {raw!r} — defaulting to SUFFICIENT")
+                assessment = "SUFFICIENT"
+        except Exception as e:
+            logger.error(f"assess_relevance failed: {e} — defaulting to SUFFICIENT")
+            assessment = "SUFFICIENT"
+
+        return {"relevance_assessment": assessment}
 
     def get_vector_store_data(self) -> Dict[str, Any]:
         """Get current vector store data."""
@@ -879,21 +995,36 @@ Génère une explication détaillée à la première personne de la technique co
             return 0
 
     def _extract_video_metadata(
-        self, documents: List[Document]
-    ) -> Optional[Dict[str, Any]]:
+        self,
+        documents: List[Document],
+        limit: int = 1,
+        exclude_ids: Optional[set] = None,
+        preferred_video_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Extract video metadata from retrieved documents.
 
-        Looks for video annotation documents and extracts video playback information.
-        Returns metadata for the first video annotation found.
+        Looks for video annotation documents and extracts video playback
+        information, returning up to `limit` distinct videos (deduplicated
+        by video_id), in document order except that `preferred_video_id`
+        (if present among the candidates) is moved to the front — used to
+        ground a follow-up like "tell me more about the second video" in
+        the right one.
 
         Args:
             documents: List of retrieved documents (just Document objects, not tuples)
+            limit: Maximum number of distinct videos to return
+            exclude_ids: video_ids to skip entirely (already shown this conversation)
+            preferred_video_id: video_id to prioritize to the front, if found
 
         Returns:
-            Dictionary with video metadata or None if no video annotations found
+            List of video metadata dicts, empty if none found
         """
         import hashlib
+
+        exclude_ids = exclude_ids or set()
+        candidates: List[Dict[str, Any]] = []
+        seen_video_ids: set = set()
 
         for doc in documents:
             metadata = doc.metadata
@@ -911,6 +1042,10 @@ Génère une explication détaillée à la première personne de la technique co
                 )
                 video_id = hashlib.md5(video_id_source.encode()).hexdigest()
 
+                if video_id in seen_video_ids or video_id in exclude_ids:
+                    continue
+                seen_video_ids.add(video_id)
+
                 video_metadata = {
                     "video_id": video_id,
                     "filename": metadata.get("video_filename", "unknown.mp4"),
@@ -922,14 +1057,93 @@ Génère une explication détaillée à la première personne de la technique co
                     "annotation_id": metadata.get("annotation_id"),
                     "project_name": metadata.get("project_name"),
                 }
+                candidates.append(video_metadata)
 
-                logger.info(
-                    f"Extracted video metadata for {video_metadata['filename']}"
+        if preferred_video_id:
+            candidates.sort(key=lambda v: v["video_id"] != preferred_video_id)
+
+        results = candidates[:limit]
+
+        for video_metadata in results:
+            video_metadata["thumbnail"] = self._generate_video_thumbnail(
+                video_metadata["filepath"], video_metadata["start_time"]
+            )
+            logger.info(f"Extracted video metadata for {video_metadata['filename']}")
+
+        if not results:
+            logger.info("No video annotations found in retrieved documents")
+
+        return results
+
+    def _generate_video_thumbnail(
+        self,
+        filepath: str,
+        start_time: float,
+        max_width: int = 200,
+        jpeg_quality: int = 60,
+    ) -> Optional[str]:
+        """
+        Extract a downscaled JPEG frame from the video at start_time and
+        return it as a base64 data URL for embedding directly in the
+        video_metadata event, or None if extraction isn't possible.
+        """
+        try:
+            import cv2
+        except ImportError:
+            logger.warning(
+                "opencv-python-headless not installed; skipping video thumbnail"
+            )
+            return None
+
+        try:
+            capture = cv2.VideoCapture(filepath)
+            if not capture.isOpened():
+                logger.warning(f"Could not open video for thumbnail: {filepath}")
+                return None
+
+            fps = capture.get(cv2.CAP_PROP_FPS) or 0
+            frame_count = capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0
+            duration_ms = (frame_count / fps * 1000) if fps else 0
+            seek_ms = max(0.0, start_time * 1000)
+            if duration_ms:
+                seek_ms = min(seek_ms, max(duration_ms - 100, 0))
+
+            capture.set(cv2.CAP_PROP_POS_MSEC, seek_ms)
+            success, frame = capture.read()
+
+            if not success and seek_ms != 0:
+                # Some codecs can only seek to keyframes; fall back to frame 0
+                # rather than showing nothing.
+                capture.set(cv2.CAP_PROP_POS_MSEC, 0)
+                success, frame = capture.read()
+
+            capture.release()
+
+            if not success or frame is None:
+                logger.warning(f"Could not read frame for thumbnail: {filepath}")
+                return None
+
+            height, width = frame.shape[:2]
+            if width > max_width:
+                scale = max_width / width
+                frame = cv2.resize(
+                    frame,
+                    (max_width, int(height * scale)),
+                    interpolation=cv2.INTER_AREA,
                 )
-                return video_metadata
 
-        logger.info("No video annotations found in retrieved documents")
-        return None
+            ok, buffer = cv2.imencode(
+                ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality]
+            )
+            if not ok:
+                return None
+
+            return "data:image/jpeg;base64," + base64.b64encode(buffer).decode(
+                "ascii"
+            )
+        except Exception as e:
+            logger.warning(f"Thumbnail generation failed for {filepath}: {e}")
+            return None
 
     # ============================================================================
     # PRF PIPELINE — corpus-grounded query refinement
@@ -993,6 +1207,84 @@ Génère une explication détaillée à la première personne de la technique co
         return {"query_language": lang, "search_query": translated or original_query}
 
     @traceable(name="retrieve_initial", run_type="retriever")
+    def parse_query_intent(self, state: ConversationState) -> Dict[str, Any]:
+        """Pipeline step 1 (after detect_and_translate_query) — one LLM call
+        extracts how many videos were requested, how much depth/detail the
+        learner wants, whether this message is a "show me another" pagination
+        follow-up, and whether it references a specific previously-shown
+        video by ordinal position.
+
+        Defaults and the hard count cap are always applied here in code —
+        the LLM output is never trusted directly for the cap.
+        """
+        query = state.get("search_query") or str(state.get("messages")[-1].content)
+        previous_videos = state.get("previous_video_metadata") or []
+
+        desired_video_count = 1
+        depth_preference = "normal"
+        is_pagination_request = False
+        referenced_video_id = None
+
+        if self.llm:
+            previous_list_text = "\n".join(
+                f"{i + 1}. {v.get('filename', 'unknown')}"
+                for i, v in enumerate(previous_videos)
+            ) or "(none)"
+
+            prompt = (
+                "You are an intent classifier for a vocational-training chat assistant "
+                "that can show instructional videos.\n"
+                "Given the learner's message, extract:\n"
+                "  COUNT: how many videos they're asking for, a digit 1-5 (default 1 if not specified).\n"
+                "  DEPTH: brief | normal | detailed — how much detail they want in the answer.\n"
+                "  PAGINATION: YES if this message is a follow-up asking for another/more video(s) "
+                "on the same topic (e.g. 'show me another one', 'un autre', 'encore une'), NO otherwise.\n"
+                "  ORDINAL: which previously-shown video they refer to by position (1, 2, 3...), or NONE.\n\n"
+                f"Videos already shown this turn, by position:\n{previous_list_text}\n\n"
+                f'Message: "{query}"\n\n'
+                "Reply with EXACTLY this format, one line, no explanation:\n"
+                "COUNT=<n>;DEPTH=<brief|normal|detailed>;PAGINATION=<YES|NO>;ORDINAL=<n|NONE>"
+            )
+
+            try:
+                response = self.llm.invoke(prompt)
+                raw = str(response.content).strip()
+                match = re.match(
+                    r"COUNT=(\d+);DEPTH=(brief|normal|detailed);PAGINATION=(YES|NO);ORDINAL=(\d+|NONE)",
+                    raw,
+                    re.IGNORECASE,
+                )
+                if match:
+                    desired_video_count = int(match.group(1))
+                    depth_preference = match.group(2).lower()
+                    is_pagination_request = match.group(3).upper() == "YES"
+                    ordinal_raw = match.group(4)
+                    if ordinal_raw.upper() != "NONE":
+                        ordinal = int(ordinal_raw)
+                        if 1 <= ordinal <= len(previous_videos):
+                            referenced = previous_videos[ordinal - 1]
+                            referenced_video_id = referenced.get("video_id") or referenced.get("id")
+                else:
+                    logger.warning(f"parse_query_intent: could not parse LLM response: {raw!r} — using defaults")
+            except Exception as e:
+                logger.error(f"parse_query_intent failed: {e} — using defaults")
+        else:
+            logger.warning("No LLM available for intent parsing — defaulting to count=1")
+
+        desired_video_count = max(1, min(desired_video_count, 5))
+
+        last_topical_query = state.get("last_topical_query") or ""
+        if not is_pagination_request:
+            last_topical_query = query
+
+        return {
+            "desired_video_count": desired_video_count,
+            "depth_preference": depth_preference,
+            "is_pagination_request": is_pagination_request,
+            "referenced_video_id": referenced_video_id,
+            "last_topical_query": last_topical_query,
+        }
+
     def retrieve_initial(self, state: ConversationState) -> Dict[str, Any]:
         """PRF step 1 — first-pass retrieval with the raw user query.
 
@@ -1005,6 +1297,8 @@ Génère une explication détaillée à la première personne de la technique co
         has_annotation_docs = bool(vector_data.get("ids"))
 
         query = state.get("search_query") or str(state.get("messages")[-1].content)
+        if state.get("is_pagination_request") and state.get("last_topical_query"):
+            query = state["last_topical_query"]
         course_id = state.get("course_id")
 
         results: List[Document] = []
@@ -1033,10 +1327,15 @@ Génère une explication détaillée à la première personne de la technique co
 
         if not results:
             logger.info("retrieve_initial: no documents found")
-            return {"context": [], "video_metadata": None}
+            return {"context": [], "video_metadata": []}
 
         results = results[: self.MAX_CONTEXT_DOCS]
-        video_metadata = self._extract_video_metadata(results)
+        video_metadata = self._extract_video_metadata(
+            results,
+            limit=state.get("desired_video_count", 1),
+            exclude_ids=set(state.get("shown_video_ids") or []),
+            preferred_video_id=state.get("referenced_video_id"),
+        )
         logger.info(f"retrieve_initial: {len(results)} docs retrieved")
         return {"context": results, "video_metadata": video_metadata}
 
@@ -1110,6 +1409,8 @@ Génère une explication détaillée à la première personne de la technique co
             or state.get("search_query")
             or str(state.get("messages")[-1].content)
         )
+        if state.get("is_pagination_request") and state.get("last_topical_query"):
+            refined_query = state["last_topical_query"]
         course_id = state.get("course_id")
 
         vector_data = self.get_vector_store_data()
@@ -1138,10 +1439,15 @@ Génère une explication détaillée à la première personne de la technique co
 
         if not results:
             logger.info("retrieve_final_dual: no documents found with refined query")
-            return {"context": [], "video_metadata": None}
+            return {"context": [], "video_metadata": []}
 
         results = results[: self.MAX_CONTEXT_DOCS]
-        video_metadata = self._extract_video_metadata(results)
+        video_metadata = self._extract_video_metadata(
+            results,
+            limit=state.get("desired_video_count", 1),
+            exclude_ids=set(state.get("shown_video_ids") or []),
+            preferred_video_id=state.get("referenced_video_id"),
+        )
         logger.info(
             f"retrieve_final_dual: {len(results)} candidates "
             f"(annotations={len(annotation_results)}, course={len(course_results)})"
