@@ -283,6 +283,17 @@ class RAGService:
         "Veuillez reformuler ou consulter votre formateur."
     )
 
+    # Per-document preview length for assess_relevance's classifier prompt.
+    # Must cover a full chunk, not an arbitrary short slice — SemanticChunker
+    # (course_rag_service.py) targets ~1600 chars per chunk (TARGET_TOKENS=400).
+    # A shorter preview silently hides whichever part of a chunk didn't fit,
+    # and the classifier then judges relevance on partial content without
+    # any indication that anything was cut — confirmed live (2026-09-02) on a
+    # 672-char chunk whose answer-bearing sentence sat past char 300 with the
+    # previous limit, causing a well-matched (rerank score 0.92+) chunk to be
+    # misjudged as insufficient.
+    RELEVANCE_PREVIEW_CHARS = 1600
+
     def _initialize_cross_encoder(self):
         """Load local cross-encoder or skip if remote reranker is configured."""
         if self.config_manager.get_config().rag.use_remote_reranker:
@@ -818,7 +829,8 @@ Génère une explication détaillée à la première personne de la technique co
         query = str(state.get("messages")[-1].content)
         snippets = []
         for i, doc in enumerate(context_docs[:5], 1):
-            preview = doc.page_content[:300] + "..." if len(doc.page_content) > 300 else doc.page_content
+            limit = self.RELEVANCE_PREVIEW_CHARS
+            preview = doc.page_content[:limit] + "..." if len(doc.page_content) > limit else doc.page_content
             snippets.append(f"[Document {i}]\n{preview}")
         context_text = "\n\n".join(snippets)
 

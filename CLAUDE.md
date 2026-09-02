@@ -372,6 +372,24 @@ process; nothing runs them anymore.
 - Conversation isolation bugs (Mar 2026) — see `docs/incidents/conversation-isolation-2026-03.md`
 - Video streaming perf bugs (Apr 2026) — see `docs/incidents/video-streaming-perf-2026-04.md`
 - Security fixes summary — see `docs/incidents/security-fixes.md`
+- Relevance classifier truncation bug (Sep 2026) — well-matched, correctly-translated course content misjudged as "insufficient" because `assess_relevance`'s 300-char document preview was 5x shorter than an actual chunk — see `docs/incidents/assess-relevance-truncation-2026-09.md`
+
+---
+
+## Dev tooling — browser-driven debugging against the live Moodle instance
+
+To test something end-to-end for real (a teacher saving a page, the
+observer firing, translation, ingestion, CraftPilot chat retrieval) rather
+than via a script or unit test, drive a real browser at
+`https://aimove.minesparis.psl.eu` with the Playwright MCP tool. This hits
+several real gotchas on a fresh session — an expired local TLS cert that's
+fine in production but breaks local browser navigation, a stale browser
+process lock after reconnecting, the auto-mode permission classifier
+silently blocking clicks even after verbal user approval, and Moodle
+rendering some "buttons" as `<input type=submit>` that role/CSS selectors
+miss. See `docs/PLAYWRIGHT_DEBUGGING.md` for the full writeup and a
+quick-start checklist — read it before burning time rediscovering any of
+this.
 
 ---
 

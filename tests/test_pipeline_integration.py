@@ -541,6 +541,42 @@ def test_assess_relevance_fails_open_to_sufficient_on_unparseable_response():
     assert result["relevance_assessment"] == "SUFFICIENT"
 
 
+def test_assess_relevance_prompt_includes_answer_past_300_chars():
+    """Reproduces a live bug (2026-09-02): a real ingested chunk was 672
+    chars long — well within SemanticChunker's ~1600-char target
+    (TARGET_TOKENS=400, course_rag_service.py) — but the fact that actually
+    answered the learner's question ("apprentices must never work alone
+    near the glory hole") sat past character 300. assess_relevance's
+    snippet preview truncates each document to doc.page_content[:300],
+    so the classifier LLM never saw it and misjudged well-matched,
+    correctly-translated content as insufficient, even though rerank
+    scored it 0.92+. The preview window must cover a full target-size
+    chunk, not an arbitrary short slice."""
+    llm = _make_intent_llm("SUFFICIENT")
+    rag_service = _make_rag_service(llm=llm)
+    filler = "Le soufflage du verre nécessite des précautions de sécurité. " * 6
+    assert len(filler) > 300  # sanity: filler alone already exceeds the truncation point
+    # Marker deliberately absent from the query — the query is phrased
+    # generically so the only way it can appear in the prompt sent to the
+    # LLM is via the (possibly truncated) document preview, not by leaking
+    # in from the question text itself.
+    marker = "MARKER_ANSWER_TEXT_APPRENTIS_NE_DOIVENT_JAMAIS_TRAVAILLER_SEULS"
+    page_content = filler + marker
+    state = ConversationState(
+        messages=[HumanMessage(content="Pourquoi les apprentis ne doivent-ils jamais travailler seuls ?")],
+        context=[Document(page_content=page_content)],
+    )
+
+    rag_service.assess_relevance(state)
+
+    prompt_sent_to_llm = llm.invoke.call_args[0][0]
+    assert marker in prompt_sent_to_llm, (
+        "assess_relevance truncated the document before the classifier ever "
+        "saw the answer-bearing text — it will misjudge this as INSUFFISANT "
+        "regardless of what the LLM does with what little it received."
+    )
+
+
 def test_hyde_generates_document():
     """Test that hyde_generate produces a non-empty Document."""
     mock_llm = Mock()
