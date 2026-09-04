@@ -376,6 +376,55 @@ process; nothing runs them anymore.
 
 ---
 
+## Knowledge silos — cohort-scoped video/annotation access
+
+Video annotations and transcripts are siloed by Moodle **cohort**
+membership (course content is siloed separately, by course enrollment —
+nothing new to configure there). This is what keeps competing companies'
+proprietary elicitation content apart on the shared platform: retrieval is
+pre-filtered so restricted content is never fetched, scored, or surfaced
+for a user outside the right cohort — enforced in `build_cohort_filter()`
+(`services/rag_service.py`) and `SiloService` (`services/silo_service.py`).
+Setting this up spans two repos: a one-time Moodle admin step per company,
+then a self-service "assign this project to a cohort" step an expert does
+in the Video Elicitation Tool. See `docs/KNOWLEDGE_SILOS_WORKFLOW.md` for
+the full step-by-step (who does what, where) and how to verify it's
+actually enforced — design rationale is in
+`docs/superpowers/specs/2026-06-23-rag-knowledge-silos-design.md`.
+
+---
+
+## Test account credentials — where to look
+
+**You do not need to ask anyone for a username or password.** Moodle test
+accounts are on the box, and a helper reads them:
+
+```bash
+/opt/craftpilot_backend/scripts/moodle-test-cred.sh --list           # which account for what
+/opt/craftpilot_backend/scripts/moodle-test-cred.sh enrolled --user
+/opt/craftpilot_backend/scripts/moodle-test-cred.sh enrolled --pass
+```
+
+Roles are `enrolled` | `unenrolled` | `teacher`; run `--list` for which to
+use when, and for the traps each one sets.
+
+Source of truth is split by privilege:
+
+| File | Roles | Readable by |
+|------|-------|-------------|
+| `/etc/craftpilot/test-credentials` | `enrolled`, `unenrolled` | `claude-runner` — **no root needed** |
+| `/root/moodle-test-credentials.txt` | `teacher` (a real staff login) | root only |
+
+Everyday testing therefore needs no privilege. Only tests that *author*
+content need a root session, and the helper says so plainly if you ask for
+`teacher` without one.
+
+**Never** copy a password into a file under `/var/www/html/public` — that
+directory is the web root and was serving `.md` files publicly until
+2026-09-03. Documentation records *where* a secret is, never what it is.
+
+---
+
 ## Dev tooling — browser-driven debugging against the live Moodle instance
 
 To test something end-to-end for real (a teacher saving a page, the

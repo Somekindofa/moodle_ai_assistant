@@ -13,7 +13,7 @@ from langgraph.graph.state import CompiledStateGraph
 from config.settings import ConfigurationManager
 from core.types import ConversationState
 from services.langchain_service import LangChainService
-from services.rag_service import RAGService
+from services.rag_service import RAGService, DOMAIN_MAP
 from services.course_rag_service import CourseRAGService
 from services.document_service import DocumentProcessingService
 from services.graph_service import ConversationGraphService
@@ -56,10 +56,21 @@ def _build_ambiguous_clarification(context_docs: List[Document]) -> str:
 class MoodleAIAssistantPipeline:
     """Main pipeline orchestrating the Moodle AI Assistant services."""
 
-    # Maximum number of candidates passed to the cross-encoder reranker.
-    # Keeping this low is critical on 2-core CPUs where bge-reranker-v2-m3
-    # takes ~5 s per document pair.
-    MAX_RERANK_CANDIDATES = 5
+    # Maximum number of candidates passed to the reranker.
+    #
+    # This was 5, sized for the *local* bge-reranker-v2-m3 cross-encoder, which
+    # costs ~5 s per document pair on a 2-core CPU. With USE_REMOTE_RERANKER
+    # the whole candidate set is scored in one Infomaniak API call, so that
+    # cost no longer applies — and a cap of 5 was silently discarding every
+    # course document, because retrieval returns up to 5 annotations plus the
+    # course chunks and the cap cut the list before the reranker saw them.
+    #
+    # Kept equal to RAGService.MAX_CONTEXT_DOCS so nothing retrieved is thrown
+    # away unscored; that invariant is asserted in tests/test_merge_dedup.py.
+    # If the local cross-encoder is ever re-enabled on constrained hardware,
+    # lower this — merge_dedup_interleaved() ensures the truncation stays fair
+    # to both sources.
+    MAX_RERANK_CANDIDATES = 8
 
     def __init__(self, config_manager: Optional[ConfigurationManager] = None):
         self.config_manager = config_manager or ConfigurationManager()
@@ -419,10 +430,46 @@ class MoodleAIAssistantPipeline:
             # Resolve silo scope — inner catch yields error JSON-line and returns early on DB failure
             user_cohort_ids: list[int] = []
             enrolled_course_ids: list[str] = []
+            inferred_craft: Optional[str] = None
             if user_id and user_id > 0:
                 try:
                     user_cohort_ids = await asyncio.to_thread(self.silo_service.get_allowed_cohorts, user_id)
                     enrolled_course_ids = await asyncio.to_thread(self.silo_service.get_enrolled_course_ids, user_id)
+                    # A selected domain focus narrows (never widens) the courses
+                    # retrieval can see — intersected with actual enrolment, so
+                    # this can't be used to bypass access control.
+                    domain_entry = DOMAIN_MAP.get(selected_domain) if selected_domain else None
+                    if domain_entry:
+                        domain_course_ids = await asyncio.to_thread(
+                            self.silo_service.get_course_ids_by_category, domain_entry["category_id"]
+                        )
+                        enrolled_course_ids = [
+                            cid for cid in enrolled_course_ids if cid in domain_course_ids
+                        ]
+                    elif course_id:
+                        # No domain button clicked, but the question is asked from
+                        # inside a course — infer the craft from that course's
+                        # category. Without this, annotation retrieval is
+                        # craft-blind: a bevel question asked inside a glassblowing
+                        # course scored two glovemaking clips at 0.96/0.96 above the
+                        # actual bevel video at 0.77, so the wrong video card was
+                        # shown. No threshold can separate those; excluding the
+                        # wrong craft outright is what fixes it.
+                        # Craft only — deliberately does NOT narrow
+                        # enrolled_course_ids, so course retrieval keeps its
+                        # current cross-course reach.
+                        for entry in DOMAIN_MAP.values():
+                            category_course_ids = await asyncio.to_thread(
+                                self.silo_service.get_course_ids_by_category,
+                                entry["category_id"],
+                            )
+                            if str(course_id) in category_course_ids:
+                                inferred_craft = entry["craft"]
+                                logger.info(
+                                    f"Inferred craft '{inferred_craft}' from course "
+                                    f"{course_id} (category {entry['category_id']})"
+                                )
+                                break
                 except Exception as e:
                     logger.error(f"SiloService failed for user {user_id}: {e}")
                     yield json.dumps({"event": "error", "data": "Service temporarily unavailable"}) + "\n"
@@ -465,6 +512,7 @@ class MoodleAIAssistantPipeline:
                 "route": None,
                 "user_cohort_ids": user_cohort_ids,           # NEW
                 "enrolled_course_ids": enrolled_course_ids,   # NEW
+                "domain_craft": inferred_craft,               # NEW — craft implied by the course's category
                 "query_language": None,           # NEW
                 "search_query": None,              # NEW
                 "desired_video_count": 1,                          # NEW

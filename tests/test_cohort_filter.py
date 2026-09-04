@@ -61,6 +61,21 @@ def test_build_cohort_filter_no_cohorts_returns_open_only():
     assert f == {"open_access": True}
 
 
+def test_build_cohort_filter_with_craft_ands_craft_condition():
+    f = build_cohort_filter([1, 2], craft="glassblowing")
+    assert f == {
+        "$and": [
+            {"$or": [{"cohort_id": {"$in": [1, 2]}}, {"open_access": True}]},
+            {"craft": "glassblowing"},
+        ]
+    }
+
+
+def test_build_cohort_filter_no_craft_unchanged():
+    f = build_cohort_filter([1, 2], craft=None)
+    assert f == {"$or": [{"cohort_id": {"$in": [1, 2]}}, {"open_access": True}]}
+
+
 def test_retrieve_no_filter_when_cohorts_not_in_state():
     """When user_cohort_ids is absent from state, no filter reaches ChromaDB."""
     from langchain_core.messages import HumanMessage

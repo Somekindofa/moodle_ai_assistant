@@ -95,6 +95,36 @@ def test_get_enrolled_course_ids_cached():
     assert mock_connect.call_count == 1
 
 
+# ── get_course_ids_by_category ────────────────────────────────────────────────
+
+def test_get_course_ids_by_category_returns_string_ids():
+    svc = _make_service()
+    cursor = _mock_cursor([(101,), (103,)])
+    conn = _mock_conn(cursor)
+    with patch("services.silo_service.pymysql.connect", return_value=conn):
+        result = svc.get_course_ids_by_category(25)
+    assert result == ["101", "103"]
+
+
+def test_get_course_ids_by_category_empty_for_unknown_category():
+    svc = _make_service()
+    cursor = _mock_cursor([])
+    conn = _mock_conn(cursor)
+    with patch("services.silo_service.pymysql.connect", return_value=conn):
+        result = svc.get_course_ids_by_category(999)
+    assert result == []
+
+
+def test_get_course_ids_by_category_cached_on_second_call():
+    svc = _make_service()
+    cursor = _mock_cursor([(101,)])
+    conn = _mock_conn(cursor)
+    with patch("services.silo_service.pymysql.connect", return_value=conn) as mock_connect:
+        svc.get_course_ids_by_category(25)
+        svc.get_course_ids_by_category(25)   # should use cache
+    assert mock_connect.call_count == 1
+
+
 # ── DB failure ───────────────────────────────────────────────────────────────
 
 def test_get_allowed_cohorts_raises_on_db_error():
@@ -109,3 +139,10 @@ def test_get_enrolled_course_ids_raises_on_db_error():
     with patch("services.silo_service.pymysql.connect", side_effect=Exception("DB down")):
         with pytest.raises(Exception, match="DB down"):
             svc.get_enrolled_course_ids(1)
+
+
+def test_get_course_ids_by_category_raises_on_db_error():
+    svc = _make_service()
+    with patch("services.silo_service.pymysql.connect", side_effect=Exception("DB down")):
+        with pytest.raises(Exception, match="DB down"):
+            svc.get_course_ids_by_category(25)

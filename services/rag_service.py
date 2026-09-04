@@ -1,5 +1,6 @@
 """RAG service for document retrieval and generation."""
 
+import hashlib
 import os
 import re
 import base64
@@ -26,20 +27,103 @@ from core.types import ConversationState
 logger = logging.getLogger(__name__)
 
 
-def build_cohort_filter(user_cohort_ids: list) -> dict:
+def merge_dedup_interleaved(a: list, b: list) -> List:
+    """Merge two retrieval result lists round-robin, deduplicating by source.
+
+    Interleaved rather than concatenated because the merged list is truncated
+    downstream (MAX_CONTEXT_DOCS here, MAX_RERANK_CANDIDATES in the pipeline).
+    Concatenating put every annotation ahead of every course chunk, so a cut at
+    N could — and did — discard all course content before the reranker scored
+    any of it: course material never lost on relevance, it just never entered
+    the contest. Round-robin makes truncation cost both sources equally.
+
+    Leftovers from the longer list are appended once the shorter one runs out.
+    """
+    seen: set = set()
+    merged: List = []
+
+    for index in range(max(len(a), len(b))):
+        for source_list in (a, b):
+            if index >= len(source_list):
+                continue
+            doc = source_list[index]
+            key = doc.metadata.get("source", "")
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(doc)
+
+    return merged
+
+
+def stable_document_id(document) -> str:
+    """A deterministic id for a document, so re-ingesting replaces rather than appends.
+
+    Chroma upserts when given ids, so a stable id makes ingestion idempotent.
+    Without one, langchain_chroma generates a fresh UUID per call and the
+    startup annotation sync appends a full copy of the corpus every restart.
+
+    Two keying strategies, because the store holds two shapes of document:
+
+    * **Video annotations** key on ``source`` (``file.mp4#<id>_raw``), which is
+      unique per annotation. Deliberately *not* content-based: re-running
+      translation rewrites the text, and that must update the existing document
+      rather than create a second copy of the same clip.
+    * **Everything else** (file chunks from app.py) keys on source + content,
+      because one file is split into many chunks that all share a ``source``;
+      keying on source alone would collapse a document into its last chunk.
+    """
+    metadata = getattr(document, "metadata", None) or {}
+    source = metadata.get("source") or ""
+
+    if metadata.get("type") == "video_annotation" and source:
+        return f"annotation::{source}"
+
+    digest = hashlib.sha256(
+        f"{source}|{document.page_content}".encode("utf-8")
+    ).hexdigest()
+    return f"sha256::{digest}"
+
+
+def stable_document_ids(documents: list) -> List[str]:
+    """Stable ids for a batch of documents. See stable_document_id."""
+    return [stable_document_id(doc) for doc in documents]
+
+
+def build_cohort_filter(user_cohort_ids: list, craft: Optional[str] = None) -> dict:
     """Build a ChromaDB `where` filter enforcing cohort-level access.
 
     Documents pass if they are open-access (cohort_id == -1, open_access == True)
     OR if their cohort_id is in the user's allowed cohort list.
+
+    If `craft` is given (the student picked a domain focus button), it's ANDed
+    on top as an additional requirement — see DOMAIN_MAP.
     """
     if not user_cohort_ids:
-        return {"open_access": True}
-    return {
-        "$or": [
-            {"cohort_id": {"$in": list(user_cohort_ids)}},
-            {"open_access": True},
-        ]
-    }
+        base = {"open_access": True}
+    else:
+        base = {
+            "$or": [
+                {"cohort_id": {"$in": list(user_cohort_ids)}},
+                {"open_access": True},
+            ]
+        }
+    if craft:
+        return {"$and": [base, {"craft": craft}]}
+    return base
+
+
+# Maps a domain-focus button's label (sent by the frontend as `selected_domain`,
+# see plugin/templates/chat_interface.mustache) to the two identifiers needed to
+# narrow retrieval: the Moodle course category (for course_content) and the
+# annotation `craft` tag (for video_annotation). A domain is only added here
+# once its category/craft actually exist and hold content — never the other
+# way around, so a stale/unmapped label just falls through to unfiltered
+# retrieval (see retrieve_initial/retrieve_final_dual) instead of dead-ending.
+DOMAIN_MAP: Dict[str, Dict[str, Any]] = {
+    "Soufflerie de verre": {"category_id": 25, "craft": "glassblowing"},
+    "Ganterie": {"category_id": 34, "craft": "glovemaking"},
+}
 
 
 class RAGService:
@@ -294,6 +378,17 @@ class RAGService:
     # misjudged as insufficient.
     RELEVANCE_PREVIEW_CHARS = 1600
 
+    # How many documents the classifier is shown. The same incident had a
+    # second half that went unnoticed: the prompt used only the first 5
+    # documents while retrieval supplies up to MAX_CONTEXT_DOCS. After
+    # reranking, annotation clips can hold the top 5 on cross-craft vocabulary
+    # ("biseau", "meule" appear in both grinding and glass finishing), leaving
+    # the course chunk that actually answers the question at rank 6-8 —
+    # invisible to the classifier, which then declared the context
+    # insufficient while `generate` had that same chunk in hand.
+    # Kept at MAX_CONTEXT_DOCS so the gate judges exactly what generate sees.
+    RELEVANCE_MAX_DOCS = 8
+
     def _initialize_cross_encoder(self):
         """Load local cross-encoder or skip if remote reranker is configured."""
         if self.config_manager.get_config().rag.use_remote_reranker:
@@ -326,9 +421,14 @@ class RAGService:
         return translation_service.load_langid()
 
     def add_documents(self, documents: List[Document]) -> None:
-        """Add documents to the vector store."""
+        """Add documents to the vector store, replacing any earlier copy.
+
+        Ids are deterministic (see stable_document_id) and Chroma upserts on
+        id, so re-running a sync updates existing documents instead of
+        appending duplicates.
+        """
         try:
-            self.vector_store.add_documents(documents)
+            self.vector_store.add_documents(documents, ids=stable_document_ids(documents))
             logger.info(f"Added {len(documents)} documents to vector store")
         except Exception as e:
             logger.error(f"Failed to add documents: {str(e)}")
@@ -405,7 +505,7 @@ class RAGService:
             return unique_results
 
         except Exception as e:
-            logger.error(f"Error during similarity search: {str(e)}")
+            logger.error(f"Error during similarity search: {str(e)}", exc_info=True)
             return []
 
     def generate_hypothetical_document(
@@ -828,7 +928,7 @@ Génère une explication détaillée à la première personne de la technique co
 
         query = str(state.get("messages")[-1].content)
         snippets = []
-        for i, doc in enumerate(context_docs[:5], 1):
+        for i, doc in enumerate(context_docs[: self.RELEVANCE_MAX_DOCS], 1):
             limit = self.RELEVANCE_PREVIEW_CHARS
             preview = doc.page_content[:limit] + "..." if len(doc.page_content) > limit else doc.page_content
             snippets.append(f"[Document {i}]\n{preview}")
@@ -1166,15 +1266,12 @@ Génère une explication détaillée à la première personne de la technique co
     def _merge_dedup(
         self, a: List[Document], b: List[Document]
     ) -> List[Document]:
-        """Merge two document lists, deduplicating by metadata.source."""
-        seen: set = set()
-        merged: List[Document] = []
-        for doc in a + b:
-            src = doc.metadata.get("source", "")
-            if src not in seen:
-                seen.add(src)
-                merged.append(doc)
-        return merged
+        """Merge two document lists, deduplicating by metadata.source.
+
+        Delegates to merge_dedup_interleaved so that truncating the result
+        cannot starve one retrieval source — see that function for why.
+        """
+        return merge_dedup_interleaved(a, b)
 
     # Maximum number of docs fed into the LLM context across all sources.
     # Keeps the total prompt well within the Apertus-70B 16 384-token window
@@ -1317,9 +1414,30 @@ Génère une explication détaillée à la première personne de la technique co
 
         # 1. Video annotations collection.
         user_cohort_ids = state.get("user_cohort_ids")
-        cohort_filter = build_cohort_filter(user_cohort_ids) if user_cohort_ids is not None else None
+        # An explicitly clicked domain button wins; otherwise fall back to the
+        # craft implied by the course the question was asked from (see
+        # stream_response). Keeps annotation retrieval on-craft even when the
+        # user never touches the domain selector.
+        domain_craft = (
+            DOMAIN_MAP.get(state.get("selected_domain"), {}).get("craft")
+            or state.get("domain_craft")
+        )
+        cohort_filter = (
+            build_cohort_filter(user_cohort_ids, craft=domain_craft)
+            if user_cohort_ids is not None else None
+        )
         if has_annotation_docs:
             annotation_results = self.similarity_search(query, k=5, cohort_filter=cohort_filter)
+            if not annotation_results:
+                # The collection is not empty, so zero hits means retrieval failed rather
+                # than genuinely matching nothing — most likely the hnswlib
+                # "contigious 2D array" fault (see similarity_search's traceback above),
+                # which silently costs every video source for the rest of this process.
+                logger.error(
+                    "Annotation retrieval returned 0 of %d documents — video sources "
+                    "will be missing site-wide until the backend is restarted",
+                    len(vector_data.get("ids") or []),
+                )
             results.extend(annotation_results)
         else:
             logger.info("Annotation collection empty — skipping annotation retrieval")
@@ -1329,7 +1447,7 @@ Génère une explication détaillée à la première personne de la technique co
             enrolled_course_ids = state.get("enrolled_course_ids")
             course_results = self.course_rag_service.similarity_search_all_courses(
                 query,
-                k_per_course=1,
+                k_per_course=4,
                 priority_course_id=course_id,
                 allowed_course_ids=enrolled_course_ids,
             )
@@ -1430,7 +1548,18 @@ Génère une explication détaillée à la première personne de la technique co
 
         annotation_results: List[Document] = []
         user_cohort_ids = state.get("user_cohort_ids")
-        cohort_filter = build_cohort_filter(user_cohort_ids) if user_cohort_ids is not None else None
+        # An explicitly clicked domain button wins; otherwise fall back to the
+        # craft implied by the course the question was asked from (see
+        # stream_response). Keeps annotation retrieval on-craft even when the
+        # user never touches the domain selector.
+        domain_craft = (
+            DOMAIN_MAP.get(state.get("selected_domain"), {}).get("craft")
+            or state.get("domain_craft")
+        )
+        cohort_filter = (
+            build_cohort_filter(user_cohort_ids, craft=domain_craft)
+            if user_cohort_ids is not None else None
+        )
 
         # 1. Video annotations.
         if has_annotation_docs:
@@ -1442,7 +1571,7 @@ Génère une explication détaillée à la première personne de la technique co
             enrolled_course_ids = state.get("enrolled_course_ids")
             course_results = self.course_rag_service.similarity_search_all_courses(
                 refined_query,
-                k_per_course=1,
+                k_per_course=4,
                 priority_course_id=course_id,
                 allowed_course_ids=enrolled_course_ids,
             )

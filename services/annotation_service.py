@@ -7,10 +7,14 @@ service reads from the live mdl_local_videoelicit_* tables directly; the old
 SQLite file is stale and no longer written to.
 """
 
+import json
 import logging
 import os
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+
+from dotenv import dotenv_values
 
 import pymysql
 import pymysql.cursors
@@ -22,6 +26,43 @@ from services import translation_service
 
 
 logger = logging.getLogger(__name__)
+
+
+def _load_craft_cohort_map() -> Dict[str, int]:
+    """Load the craft -> cohort id safety net from the environment.
+
+    Format: JSON object, e.g. ``{"lv_rivetage_maletterie": 30}``.  A craft
+    listed here is restricted to that cohort whenever its project does not
+    already set one — see CRAFT_COHORT_MAP below.
+    """
+    raw = os.getenv("CRAFT_COHORT_MAP", "").strip()
+    if not raw:
+        # This runs at import time, before any ConfigurationManager has called
+        # load_dotenv(), so read the project's .env directly. Absolute path:
+        # the working directory is not guaranteed (uvicorn, pytest, CLI tools).
+        env_path = Path(__file__).resolve().parent.parent / ".env"
+        raw = (dotenv_values(env_path).get("CRAFT_COHORT_MAP") or "").strip()
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+        return {str(craft): int(cohortid) for craft, cohortid in parsed.items()}
+    except (ValueError, AttributeError) as e:
+        logger.error(
+            f"CRAFT_COHORT_MAP is not valid JSON ({e}) — falling back to an empty map. "
+            "Partner content will rely on project-level cohorts alone."
+        )
+        return {}
+
+
+# Craft-level access safety net, applied only when a project sets no cohort.
+#
+# Partner-confidential material must not become world-readable just because
+# somebody forgot to set a project's organisation — and legacy annotations
+# carry no project at all (they were bulk-imported with project_name
+# 'unknown').  This is defence in depth *behind* the project-level control,
+# never a replacement for it: an explicit project cohort always wins.
+CRAFT_COHORT_MAP: Dict[str, int] = _load_craft_cohort_map()
 
 
 class AnnotationService:
@@ -46,7 +87,8 @@ class AnnotationService:
             v.duration AS video_duration,
             v.source_type,
             p.name AS project_name,
-            p.description AS project_description
+            p.description AS project_description,
+            p.allowed_cohort_id AS allowed_cohort_id
         FROM mdl_local_videoelicit_annotations a
         JOIN mdl_local_videoelicit_videos v ON a.videoid = v.id
         LEFT JOIN mdl_local_videoelicit_projects p ON v.projectid = p.id
@@ -186,6 +228,12 @@ class AnnotationService:
                 # else: translation failed — index untranslated, but
                 # source_language is still tagged for a later retry.
 
+        # Resolve silo access: the project's own cohort takes precedence; a
+        # craft in CRAFT_COHORT_MAP is the fallback; None means open access.
+        effective_cohort_id = annotation.get("allowed_cohort_id")
+        if effective_cohort_id is None:
+            effective_cohort_id = CRAFT_COHORT_MAP.get(annotation.get("craft") or "")
+
         metadata = {
             "annotation_id": annotation["annotation_id"],
             "video_id": annotation["video_id"],
@@ -203,10 +251,11 @@ class AnnotationService:
             "type": "video_annotation",
             "transcript_type": "raw",
             "source": f"{video_filename}#{annotation_id}_raw",
-            # Silo fields — the new schema has no per-project cohort restriction,
-            # so every annotation is open-access (matches the prior default).
-            "cohort_id": -1,
-            "open_access": True,
+            # Silo fields — an explicit project cohort wins; otherwise the
+            # craft-level safety net applies; otherwise the annotation is open.
+            # Read by build_cohort_filter() in services/rag_service.py.
+            "cohort_id": effective_cohort_id if effective_cohort_id is not None else -1,
+            "open_access": effective_cohort_id is None,
         }
         if source_language:
             metadata["source_language"] = source_language

@@ -669,7 +669,7 @@ class CourseRAGService:
     def similarity_search_all_courses(
         self,
         query: str,
-        k_per_course: int = 1,
+        k_per_course: int = 4,
         priority_course_id: Optional[str] = None,
         allowed_course_ids: Optional[list] = None,
     ) -> List[Document]:
@@ -680,7 +680,14 @@ class CourseRAGService:
         embedding API calls (one per course) with a single call, cutting latency
         from O(N × embed_time) to O(embed_time + N × vector_search_time).
 
-        The priority course gets k=6 results; all others get k_per_course results.
+        The priority course gets k=6 results; all others get k_per_course
+        results. k_per_course is deliberately >1: a broad question ("what are
+        the melting temperatures of classic glasses") often matches a course's
+        headings or overview chunk most closely, while the chunk carrying the
+        actual figures ranks several places lower. One chunk per course made
+        those answers unreachable. The merged set is capped downstream
+        (MAX_CONTEXT_DOCS), so a larger k widens the candidate pool without
+        enlarging the prompt.
 
         If ``allowed_course_ids`` is provided, only those collections are queried.
         """

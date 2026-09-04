@@ -180,6 +180,95 @@ def test_retrieve_initial_uses_last_topical_query_for_pagination():
     assert args[0] == "souffler le verre"
 
 
+def test_retrieve_initial_filters_annotations_by_selected_domain_craft():
+    """A selected domain button ANDs its craft tag onto the cohort filter
+    passed to similarity_search, so only that craft's annotations come back."""
+    rag_service = _make_rag_service()
+    rag_service.course_rag_service = None
+    rag_service.get_vector_store_data = Mock(return_value={"ids": ["1"]})
+    rag_service.similarity_search = Mock(return_value=[])
+    rag_service._extract_video_metadata = Mock(return_value=[])
+
+    state = ConversationState(
+        messages=[HumanMessage(content="comment coudre un gant")],
+        search_query="comment coudre un gant",
+        desired_video_count=1,
+        shown_video_ids=[],
+        referenced_video_id=None,
+        is_pagination_request=False,
+        last_topical_query="",
+        user_cohort_ids=[1],
+        selected_domain="Ganterie",
+    )
+
+    rag_service.retrieve_initial(state)
+
+    _, kwargs = rag_service.similarity_search.call_args
+    assert kwargs["cohort_filter"] == {
+        "$and": [
+            {"$or": [{"cohort_id": {"$in": [1]}}, {"open_access": True}]},
+            {"craft": "glovemaking"},
+        ]
+    }
+
+
+def test_retrieve_initial_ignores_unmapped_selected_domain():
+    """An unrecognized/stale domain label must fall through to normal,
+    unfiltered-by-craft retrieval rather than dead-ending."""
+    rag_service = _make_rag_service()
+    rag_service.course_rag_service = None
+    rag_service.get_vector_store_data = Mock(return_value={"ids": ["1"]})
+    rag_service.similarity_search = Mock(return_value=[])
+    rag_service._extract_video_metadata = Mock(return_value=[])
+
+    state = ConversationState(
+        messages=[HumanMessage(content="une question")],
+        search_query="une question",
+        desired_video_count=1,
+        shown_video_ids=[],
+        referenced_video_id=None,
+        is_pagination_request=False,
+        last_topical_query="",
+        user_cohort_ids=[1],
+        selected_domain="Scellerie nautique",
+    )
+
+    rag_service.retrieve_initial(state)
+
+    _, kwargs = rag_service.similarity_search.call_args
+    assert kwargs["cohort_filter"] == {"$or": [{"cohort_id": {"$in": [1]}}, {"open_access": True}]}
+
+
+def test_retrieve_final_dual_filters_annotations_by_selected_domain_craft():
+    rag_service = _make_rag_service()
+    rag_service.course_rag_service = None
+    rag_service.get_vector_store_data = Mock(return_value={"ids": ["1"]})
+    rag_service.similarity_search = Mock(return_value=[])
+    rag_service._extract_video_metadata = Mock(return_value=[])
+
+    state = ConversationState(
+        messages=[HumanMessage(content="comment coudre un gant")],
+        refined_query="comment coudre un gant en cuir",
+        desired_video_count=1,
+        shown_video_ids=[],
+        referenced_video_id=None,
+        is_pagination_request=False,
+        last_topical_query="",
+        user_cohort_ids=[1],
+        selected_domain="Ganterie",
+    )
+
+    rag_service.retrieve_final_dual(state)
+
+    _, kwargs = rag_service.similarity_search.call_args
+    assert kwargs["cohort_filter"] == {
+        "$and": [
+            {"$or": [{"cohort_id": {"$in": [1]}}, {"open_access": True}]},
+            {"craft": "glovemaking"},
+        ]
+    }
+
+
 def test_retrieve_final_dual_passes_desired_count_and_preferred_to_extraction():
     rag_service = _make_rag_service()
     rag_service.course_rag_service = None
@@ -732,6 +821,103 @@ async def test_stream_response_does_not_short_circuit_in_domain():
     assert "token" in event_types
     # Must NOT have stopped after 3 events
     assert len(events) > 3
+
+
+@pytest.mark.asyncio
+async def test_stream_response_narrows_enrolled_courses_by_selected_domain():
+    """Selecting a domain must intersect enrolled_course_ids with that domain's
+    category course IDs before retrieval runs, so a student only sees content
+    from courses they're both enrolled in AND that belong to the domain."""
+    pipeline = _make_pipeline_with_mock_llm("OUI")
+    pipeline.rag_service.config = MagicMock(enable_cross_lingual_detection=False)
+    pipeline.rag_service.parse_query_intent = MagicMock(return_value={
+        "desired_video_count": 1, "depth_preference": "normal",
+        "is_pagination_request": False, "referenced_video_id": None,
+    })
+
+    captured_state = {}
+
+    def _fake_retrieve_initial(state):
+        captured_state.update(state)
+        return {
+            "context": [], "video_metadata": None, "refined_query": None,
+            "hypothetical_document": None, "enhanced_query": None, "query_variants": [],
+        }
+
+    pipeline.rag_service.retrieve_initial = MagicMock(side_effect=_fake_retrieve_initial)
+    pipeline.rag_service.refine_query_prf = MagicMock(return_value={})
+    pipeline.rag_service.retrieve_final_dual = MagicMock(return_value={"context": []})
+    pipeline.rag_service.rerank = MagicMock(return_value={"context": []})
+
+    async def _fake_stream_generate(state):
+        yield "Bonjour"
+    pipeline.rag_service.stream_generate = _fake_stream_generate
+
+    pipeline.silo_service = MagicMock()
+    pipeline.silo_service.get_allowed_cohorts.return_value = [1]
+    pipeline.silo_service.get_enrolled_course_ids.return_value = ["34", "999"]
+    pipeline.silo_service.get_course_ids_by_category.return_value = ["34", "77"]
+
+    events = []
+    async for line in pipeline.stream_response(
+        message="Comment coudre un gant ?",
+        conversation_thread_id="test-thread",
+        is_first_message=False,
+        user_id=1,
+        selected_domain="Ganterie",
+    ):
+        import json as _json
+        events.append(_json.loads(line))
+
+    pipeline.silo_service.get_course_ids_by_category.assert_called_once_with(34)
+    assert captured_state["enrolled_course_ids"] == ["34"]
+
+
+@pytest.mark.asyncio
+async def test_stream_response_skips_course_narrowing_for_unmapped_domain():
+    """An unmapped domain label must not touch enrolled_course_ids at all."""
+    pipeline = _make_pipeline_with_mock_llm("OUI")
+    pipeline.rag_service.config = MagicMock(enable_cross_lingual_detection=False)
+    pipeline.rag_service.parse_query_intent = MagicMock(return_value={
+        "desired_video_count": 1, "depth_preference": "normal",
+        "is_pagination_request": False, "referenced_video_id": None,
+    })
+
+    captured_state = {}
+
+    def _fake_retrieve_initial(state):
+        captured_state.update(state)
+        return {
+            "context": [], "video_metadata": None, "refined_query": None,
+            "hypothetical_document": None, "enhanced_query": None, "query_variants": [],
+        }
+
+    pipeline.rag_service.retrieve_initial = MagicMock(side_effect=_fake_retrieve_initial)
+    pipeline.rag_service.refine_query_prf = MagicMock(return_value={})
+    pipeline.rag_service.retrieve_final_dual = MagicMock(return_value={"context": []})
+    pipeline.rag_service.rerank = MagicMock(return_value={"context": []})
+
+    async def _fake_stream_generate(state):
+        yield "Bonjour"
+    pipeline.rag_service.stream_generate = _fake_stream_generate
+
+    pipeline.silo_service = MagicMock()
+    pipeline.silo_service.get_allowed_cohorts.return_value = [1]
+    pipeline.silo_service.get_enrolled_course_ids.return_value = ["34", "999"]
+
+    events = []
+    async for line in pipeline.stream_response(
+        message="Une question quelconque",
+        conversation_thread_id="test-thread",
+        is_first_message=False,
+        user_id=1,
+        selected_domain="Scellerie nautique",
+    ):
+        import json as _json
+        events.append(_json.loads(line))
+
+    pipeline.silo_service.get_course_ids_by_category.assert_not_called()
+    assert captured_state["enrolled_course_ids"] == ["34", "999"]
 
 
 @pytest.mark.asyncio
