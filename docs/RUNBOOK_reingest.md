@@ -26,6 +26,19 @@ sudo systemctl start craftpilot-backend
 Stop the service first: the local Chroma client is **not process-safe**, so
 copying while it writes can capture a torn file.
 
+**`systemctl start` returns before the backend is usable.** The unit is
+`Type=simple`, so systemd reports success as soon as the process forks, but
+uvicorn does not bind port 8000 until it has loaded embeddings, Chroma and the
+LLM client and re-synced annotations against a remote API — about a minute.
+Measured here: systemd said active at 18:19:11, the port opened at 18:19:53.
+
+The CLI script now waits for `/api/health` on its own, so you do not need to
+think about this. To watch it by hand:
+
+```bash
+until curl -sf http://127.0.0.1:8000/api/health >/dev/null; do sleep 3; done; echo ready
+```
+
 To roll back later: stop the service, move the backup over
 `chroma_langchain_db`, start the service.
 
