@@ -130,22 +130,9 @@ async def ingest_annotation(request: AnnotationIngestRequest):
     try:
         from langchain_core.documents.base import Document
 
-        annotation_dict = {
-            "annotation_id":    request.annotation_id,
-            "video_id":         request.video_id,
-            "transcription":    request.transcription,
-            "start_time":       request.start_time,
-            "end_time":         request.end_time,
-            "video_filename":   request.video_filename,
-            "video_filepath":   request.video_filepath,
-            "source_type":      request.source_type,
-            "project_name":     request.project_name,
-            "audio_filepath":   request.audio_filepath,
-            "allowed_cohort_id": request.allowed_cohort_id,   # None = open access
-            "language":         request.language,
-            # extended_transcript not available yet at transcription time
-            "extended_transcript": None,
-        }
+        # Built by the request model so the payload shape stays in one place —
+        # in particular `craft`, which drives the CRAFT_COHORT_MAP safety net.
+        annotation_dict = request.to_annotation_dict()
 
         docs = pipeline.annotation_service.annotation_to_documents(
             annotation_dict, use_extended=False

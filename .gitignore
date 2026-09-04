@@ -16,3 +16,5 @@ client_example.py
 !TROUBLESHOOT.md
 !CLAUDE.md
 !docs/**/*.md
+chroma_backup_*/
+.claude/

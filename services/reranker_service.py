@@ -55,6 +55,17 @@ class InfomaniakReranker:
 
         all_scores_sorted = sorted([round(float(s), 4) for s, _ in scored], reverse=True)
 
+        # Per-document scores, so it is possible to tell WHICH document earned
+        # which score — without this, a wrong video card is indistinguishable
+        # from a wrong ranking.
+        for score, doc in sorted(scored, key=lambda x: x[0], reverse=True):
+            logger.info(
+                "  rerank %.4f  %-16s %s",
+                score,
+                doc.metadata.get("type", "?"),
+                doc.metadata.get("source", "?")[:80],
+            )
+
         if passing:
             logger.info(
                 f"remote rerank: {len(documents)} candidates → {len(passing)} passed "

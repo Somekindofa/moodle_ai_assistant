@@ -13,12 +13,13 @@ from langgraph.graph.state import CompiledStateGraph
 from config.settings import ConfigurationManager
 from core.types import ConversationState
 from services.langchain_service import LangChainService
-from services.rag_service import RAGService
+from services.rag_service import RAGService, DOMAIN_MAP, localized_message
 from services.course_rag_service import CourseRAGService
 from services.document_service import DocumentProcessingService
 from services.graph_service import ConversationGraphService
 from services.annotation_service import AnnotationService
 from services.silo_service import SiloService
+from api.models import is_placeholder_project_name
 
 
 logger = logging.getLogger(__name__)
@@ -27,39 +28,82 @@ test_config = RunnableConfig({"configurable": {"thread_id": test_thread_id}})
 StreamMode = Literal["values", "updates"]
 
 
-def _build_ambiguous_clarification(context_docs: List[Document]) -> str:
+def _usable_topic(doc: Document) -> Optional[str]:
+    """A nameable topic for `doc`, or None if it has none worth showing.
+
+    Prefers project_name and falls back to craft, as before — but each
+    candidate must survive is_placeholder_project_name (api/models.py) first.
+    project_name defaults to the literal string "unknown" for annotations
+    ingested with no project (AnnotationIngestRequest.project_name), so
+    "unknown" is a value that really is sitting in ChromaDB metadata, not a
+    missing key. Falling through to `craft` rather than stopping at a
+    placeholder project is the point: a document tagged
+    project_name="unknown", craft="glassblowing" does have something useful
+    to say about itself.
+    """
+    for candidate in (doc.metadata.get("project_name"), doc.metadata.get("craft")):
+        if not is_placeholder_project_name(candidate):
+            return str(candidate).strip()
+    return None
+
+
+def _build_ambiguous_clarification(
+    context_docs: List[Document],
+    language: Optional[str] = None,
+) -> str:
     """Deterministic clarifying question for assess_relevance's AMBIGUOUS case.
 
     Lists the distinct topics actually found (project_name/craft metadata) so
     the learner can see why the system is unsure, rather than a generic
     "please rephrase" with no information about what was actually retrieved.
+
+    Two things this must not do, both of which it used to:
+
+    * Name a placeholder. ResyncProjectRequest's validator already refuses
+      "unknown" as a real project name and documents why; this builder simply
+      missed the same guard, and a real learner was told their question
+      matched "plusieurs sujets du corpus (unknown)" — a topic that does not
+      exist, phrased as if it did. Filtering happens per candidate, so a
+      placeholder project does not suppress a perfectly good craft tag.
+    * Answer in French regardless of the question's language — see
+      services.rag_service.USER_MESSAGES.
+
+    When filtering leaves nothing nameable, it falls back to the generic
+    "please be more specific" wording. Not to an empty parenthesis: listing no
+    topics at all is more honest than "(  )", and the generic message is
+    already the right thing to say when we cannot explain the ambiguity.
     """
     topics: List[str] = []
     for doc in context_docs[:5]:
-        topic = doc.metadata.get("project_name") or doc.metadata.get("craft")
+        topic = _usable_topic(doc)
         if topic and topic not in topics:
             topics.append(topic)
 
     if topics:
-        topics_text = ", ".join(topics[:3])
-        return (
-            "Votre question peut correspondre à plusieurs sujets du corpus "
-            f"({topics_text}). Pourriez-vous préciser votre demande ?"
+        return localized_message(
+            "ambiguous_topics", language, topics=", ".join(topics[:3])
         )
-
-    return (
-        "Votre question n'est pas assez précise pour que je trouve une réponse fiable "
-        "dans le corpus. Pourriez-vous la reformuler avec plus de détails ?"
-    )
+    return localized_message("ambiguous_generic", language)
 
 
 class MoodleAIAssistantPipeline:
     """Main pipeline orchestrating the Moodle AI Assistant services."""
 
-    # Maximum number of candidates passed to the cross-encoder reranker.
-    # Keeping this low is critical on 2-core CPUs where bge-reranker-v2-m3
-    # takes ~5 s per document pair.
-    MAX_RERANK_CANDIDATES = 5
+    # Maximum number of candidates passed to the reranker.
+    #
+    # This was 5, sized for the *local* bge-reranker-v2-m3 cross-encoder, which
+    # costs ~5 s per document pair on a 2-core CPU. With USE_REMOTE_RERANKER
+    # the whole candidate set is scored in one Infomaniak API call, so that
+    # cost no longer applies — and a cap of 5 was silently discarding every
+    # course document, because retrieval returns up to 5 annotations plus the
+    # course chunks and the cap cut the list before the reranker saw them.
+    #
+    # Kept equal to RAGService.MAX_CONTEXT_DOCS so nothing retrieved is thrown
+    # away unscored; that invariant is asserted in tests/test_merge_dedup.py.
+    # If the local cross-encoder is ever re-enabled on constrained hardware,
+    # lower this — merge_dedup_interleaved() ensures the truncation stays fair
+    # to both sources.
+    MAX_RERANK_CANDIDATES = 8
 
     def __init__(self, config_manager: Optional[ConfigurationManager] = None):
         self.config_manager = config_manager or ConfigurationManager()
@@ -139,6 +183,15 @@ class MoodleAIAssistantPipeline:
                 logger.info(f"Auto-synced {count} annotation documents on startup")
             else:
                 logger.info("No completed annotations found for auto-sync")
+
+            # Cheap, non-blocking sanity check on the HNSW segment's label
+            # high-water mark. Startup is the one moment the orphaned-label
+            # fault can be caught *before* it costs a query: a segment in that
+            # state reloads badly and then returns nothing for the rest of the
+            # process, silently. Reads two already-in-memory values and skips
+            # itself entirely if the vector segment isn't loaded yet — it never
+            # forces one to load. See warn_if_hnsw_labels_orphaned.
+            self.rag_service.warn_if_hnsw_labels_orphaned("startup annotation sync")
 
         except Exception as e:
             logger.warning(f"Auto-sync of annotations failed: {str(e)}")
@@ -419,25 +472,77 @@ class MoodleAIAssistantPipeline:
             # Resolve silo scope — inner catch yields error JSON-line and returns early on DB failure
             user_cohort_ids: list[int] = []
             enrolled_course_ids: list[str] = []
+            inferred_craft: Optional[str] = None
             if user_id and user_id > 0:
                 try:
                     user_cohort_ids = await asyncio.to_thread(self.silo_service.get_allowed_cohorts, user_id)
                     enrolled_course_ids = await asyncio.to_thread(self.silo_service.get_enrolled_course_ids, user_id)
+                    # A selected domain focus narrows (never widens) the courses
+                    # retrieval can see — intersected with actual enrolment, so
+                    # this can't be used to bypass access control.
+                    domain_entry = DOMAIN_MAP.get(selected_domain) if selected_domain else None
+                    if domain_entry:
+                        domain_course_ids = await asyncio.to_thread(
+                            self.silo_service.get_course_ids_by_category, domain_entry["category_id"]
+                        )
+                        enrolled_course_ids = [
+                            cid for cid in enrolled_course_ids if cid in domain_course_ids
+                        ]
+                    elif course_id:
+                        # No domain button clicked, but the question is asked from
+                        # inside a course — infer the craft from that course's
+                        # category. Without this, annotation retrieval is
+                        # craft-blind: a bevel question asked inside a glassblowing
+                        # course scored two glovemaking clips at 0.96/0.96 above the
+                        # actual bevel video at 0.77, so the wrong video card was
+                        # shown. No threshold can separate those; excluding the
+                        # wrong craft outright is what fixes it.
+                        # Craft only — deliberately does NOT narrow
+                        # enrolled_course_ids, so course retrieval keeps its
+                        # current cross-course reach.
+                        for entry in DOMAIN_MAP.values():
+                            category_course_ids = await asyncio.to_thread(
+                                self.silo_service.get_course_ids_by_category,
+                                entry["category_id"],
+                            )
+                            if str(course_id) in category_course_ids:
+                                inferred_craft = entry["craft"]
+                                logger.info(
+                                    f"Inferred craft '{inferred_craft}' from course "
+                                    f"{course_id} (category {entry['category_id']})"
+                                )
+                                break
                 except Exception as e:
                     logger.error(f"SiloService failed for user {user_id}: {e}")
                     yield json.dumps({"event": "error", "data": "Service temporarily unavailable"}) + "\n"
                     yield json.dumps({"content": "[DONE]"}) + "\n"
                     return
 
+            # Language of the question, detected locally (py3langid, no LLM
+            # call, sub-millisecond). Needed here because the topic classifier
+            # below can refuse the question before step 0 has run, so
+            # state["query_language"] does not exist yet — and a refusal the
+            # learner cannot read is the worst possible one. Deliberately not
+            # gated on enable_cross_lingual_detection: that kill-switch governs
+            # LLM *translation* of queries, and nothing here translates
+            # anything. Falls back to "fr" on any failure, matching
+            # detect_and_translate_query's own bias.
+            try:
+                detected_language = self.rag_service.detect_query_language(message)
+                if not isinstance(detected_language, str):
+                    detected_language = "fr"
+            except Exception as e:
+                logger.warning(f"Query language detection failed ({e}) — assuming French")
+                detected_language = "fr"
+
             # --- Pre-LLM topic classifier ---
             is_in_domain = await self._classify_in_domain(message)
             if not is_in_domain:
                 yield json.dumps({"event": "status", "data": "Vérification de la question…"}) + "\n"
-                yield json.dumps({"event": "token", "data": (
-                    "Je n'ai pas trouvé d'information pertinente dans le corpus "
-                    "pour répondre à cette question. Veuillez poser une question "
-                    "sur les arts et métiers ou consulter votre formateur."
-                )}) + "\n"
+                yield json.dumps({
+                    "event": "token",
+                    "data": localized_message("off_topic", detected_language),
+                }) + "\n"
                 yield json.dumps({"content": "[DONE]"}) + "\n"
                 return
 
@@ -465,6 +570,7 @@ class MoodleAIAssistantPipeline:
                 "route": None,
                 "user_cohort_ids": user_cohort_ids,           # NEW
                 "enrolled_course_ids": enrolled_course_ids,   # NEW
+                "domain_craft": inferred_craft,               # NEW — craft implied by the course's category
                 "query_language": None,           # NEW
                 "search_query": None,              # NEW
                 "desired_video_count": 1,                          # NEW
@@ -535,15 +641,36 @@ class MoodleAIAssistantPipeline:
             state.update(result)
             assessment = state.get("relevance_assessment", "SUFFICIENT")
 
+            # Both refusals below are written in the learner's language, the
+            # way answers already are. state["query_language"] is authoritative
+            # when step 0 ran; detected_language covers the case where
+            # enable_cross_lingual_detection is off, so the two refusal paths
+            # and the off-topic one above can never disagree about the language
+            # of the same question.
+            refusal_language = state.get("query_language") or detected_language
+
             if assessment == "INSUFFICIENT":
-                yield json.dumps({"event": "token", "data": self.rag_service.INSUFFICIENT_CONTEXT_MESSAGE}) + "\n"
+                # French — the default, and the overwhelmingly common case —
+                # reads INSUFFICIENT_CONTEXT_MESSAGE directly rather than going
+                # through the accessor, so that attribute stays the one
+                # overridable source of truth for the French wording (it is
+                # also what the system prompt interpolates) and this path is
+                # byte-for-byte what it was before localization existed.
+                insufficient_text = (
+                    self.rag_service.INSUFFICIENT_CONTEXT_MESSAGE
+                    if refusal_language in (None, "", "fr")
+                    else self.rag_service.insufficient_context_message(refusal_language)
+                )
+                yield json.dumps({"event": "token", "data": insufficient_text}) + "\n"
                 yield json.dumps({"content": "[DONE]"}) + "\n"
                 return
 
             if assessment == "AMBIGUOUS":
                 yield json.dumps({
                     "event": "token",
-                    "data": _build_ambiguous_clarification(state.get("context", [])),
+                    "data": _build_ambiguous_clarification(
+                        state.get("context", []), refusal_language
+                    ),
                 }) + "\n"
                 yield json.dumps({"content": "[DONE]"}) + "\n"
                 return

@@ -131,7 +131,110 @@ mysql -u moodleuser -p<DB_PASS> -h localhost moodle \
 
 ---
 
-## 6. Key file locations
+## 6. Wrong video card shown (retrieval returns an off-craft clip)
+
+**Symptom:** A question asked inside a course returns a video source from a completely
+different craft — e.g. a glovemaking clip answering a glassblowing bevel question.
+
+**Do not reach for the rerank threshold first.** The wrong clips routinely score *higher*
+than the right one, so no threshold separates them. Confirmed 2026-09-04 on the query
+`Πώς κατασκευάζεται το λοξό φάλτσο στον τροχό;` (course 109):
+
+```
+rerank 0.9620  video_annotation 2 montage fourchette index droit.mp4#63_raw   (glovemaking)
+rerank 0.9603  video_annotation 1 pouce droit.mp4#64_raw                      (glovemaking)
+rerank 0.7747  video_annotation Loic_biseauOblique.mov.mp4#23_raw             (CORRECT)
+```
+
+The only thing that works is excluding the wrong craft **before** scoring.
+
+**Two independent causes. Check both — fixing one alone changes nothing.**
+
+### (a) Retrieval was craft-blind unless a domain button was clicked
+
+`build_cohort_filter(..., craft=...)` originally got a craft only from
+`DOMAIN_MAP[selected_domain]`. A student asking from inside a course, without touching the
+domain selector, got no craft filter at all.
+
+Fixed: `pipeline.stream_response` now infers the craft from the course's category
+(`elif course_id:` loop over `DOMAIN_MAP` + `SiloService.get_course_ids_by_category`), passes
+it in state as `domain_craft` (`core/types.py`), and both `retrieve_initial` and
+`retrieve_final_dual` in `services/rag_service.py` fall back to it when no domain is selected.
+
+Craft only — it deliberately does **not** narrow `enrolled_course_ids`, so course-content
+retrieval keeps its cross-course reach.
+
+**Confirm it is active:**
+```bash
+grep "Inferred craft" /tmp/craftpilot_backend.log | tail -5
+# Expected: Inferred craft 'glassblowing' from course 109 (category 25)
+```
+No line means either a domain button *was* clicked (fine — that path wins), no `course_id`
+was sent, or the course's category is not in `DOMAIN_MAP` (`services/rag_service.py:123`).
+
+### (b) The `craft` column itself is wrong in Moodle
+
+The filter is only as good as the labels. On 2026-09-04, 4 of 16 annotations were tagged
+`glassblowing` despite plainly glovemaking transcripts ("mon tissu de gants", "monter la
+fourchette"). The tell: annotation 57, on the *same video*, was correctly tagged.
+
+**Diagnose — read the craft against the transcript, not against the filename:**
+```bash
+PW=$(grep -oP "dbpass\s*=\s*'\K[^']+" /var/www/html/config.php)
+mysql -t -u moodleuser -p"$PW" moodle -e "
+SELECT a.id, LEFT(v.filename,40) AS video, a.craft, LEFT(a.transcription,60) AS transcript
+FROM mdl_local_videoelicit_annotations a
+JOIN mdl_local_videoelicit_videos v ON a.videoid = v.id
+WHERE a.transcription IS NOT NULL AND a.transcription <> ''
+ORDER BY a.craft, a.id;"
+```
+
+**Fix — correct the rows, then restart:**
+```bash
+mysql -u moodleuser -p"$PW" moodle -e "
+UPDATE mdl_local_videoelicit_annotations SET craft='<correct>' WHERE id IN (...) AND craft='<wrong>';"
+sudo systemctl restart craftpilot-backend
+```
+Guard the UPDATE on the old value so re-running is a no-op, and capture the current values
+as revert statements first. The restart is what propagates the change: the startup sync
+upserts on `annotation::<source>` (`stable_document_id`), an id independent of `craft`, so
+metadata is updated in place with no duplicates.
+
+**Verify in ChromaDB — read a *copy*, never the live file:**
+```bash
+# reading chroma.sqlite3 while the backend is writing returns a stale/partial view
+cp /opt/craftpilot_backend/chroma_langchain_db/chroma.sqlite3 /tmp/chroma_read.sqlite3
+```
+then join `embeddings` → `embedding_metadata` on `id`, keyed by `e.embedding_id`.
+
+### Root cause of (b) — STILL OPEN
+
+`/opt/video_elicitation_annotation_tool/js/app.js:816`:
+```js
+state.craft = localStorage.getItem('craft') || 'glassblowing';
+```
+Every annotator who never opens the craft dropdown silently files their work as
+glassblowing. **Expect new mislabelled annotations until this is addressed.** The fix needs
+a product decision (block submission with no craft? force an explicit first choice? infer
+from the project?), so it was deliberately left alone.
+
+### Verifying the whole path
+
+The backend rejects unauthenticated calls (`X-Internal-Token`, `server.py:70`) and that
+token lives in `.env`, which the `claude_runner` account cannot read by design — so `curl`
+against `/api/chat` returns `401 Unauthorized`. Drive the Moodle chat UI instead
+(`#cp-toggle` → `#cp-input` → `#cp-send`, sources land in `#cp-sources`). See
+`docs/PLAYWRIGHT_DEBUGGING.md`.
+
+Per-document rerank scores are logged by `services/reranker_service.py` — without them a
+wrong video card is indistinguishable from a wrong ranking:
+```bash
+grep "  rerank " /tmp/craftpilot_backend.log | tail -20
+```
+
+---
+
+## 7. Key file locations
 
 | What | Path |
 |---|---|
@@ -144,5 +247,9 @@ mysql -u moodleuser -p<DB_PASS> -h localhost moodle \
 | Moodle config | `/var/www/html/config.php` |
 | SSL certs | `/etc/httpd/certs/` |
 | CraftPilot backend log | `/tmp/craftpilot_backend.log` |
+| Video elicitation annotation tool | `/opt/video_elicitation_annotation_tool/` |
+| Craft default (see §6) | `/opt/video_elicitation_annotation_tool/js/app.js:816` |
+| Craft → category map | `/opt/craftpilot_backend/services/rag_service.py:123` (`DOMAIN_MAP`) |
+| ChromaDB persist dir | `/opt/craftpilot_backend/chroma_langchain_db/` |
 | Video upload temp dir | `/var/video_uploads/.tmp` |
 | CLI cache purge | `/var/www/html/admin/cli/purge_caches.php` |

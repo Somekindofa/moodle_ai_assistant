@@ -26,6 +26,12 @@ _ENROL_QUERY = """
       AND e.status = 0
 """
 
+_CATEGORY_COURSES_QUERY = """
+    SELECT id
+    FROM mdl_course
+    WHERE category = %s
+"""
+
 
 class SiloService:
     """Resolves per-user access scope from the Moodle MySQL DB.
@@ -49,6 +55,7 @@ class SiloService:
         self._cache_ttl = cache_ttl
         self._cohort_cache: dict[int, tuple[list[int], float]] = {}
         self._course_cache: dict[int, tuple[list[str], float]] = {}
+        self._category_course_cache: dict[int, tuple[list[str], float]] = {}
 
     def _connect(self):
         return pymysql.connect(
@@ -100,4 +107,29 @@ class SiloService:
         result = [str(row[0]) for row in rows]
         self._course_cache[user_id] = (result, time.time())
         logger.debug(f"SiloService: user {user_id} courses={result}")
+        return result
+
+    def get_course_ids_by_category(self, category_id: int) -> list[str]:
+        """Return Moodle course IDs belonging to the given course category.
+
+        Used to narrow retrieval to a student's selected craft domain (see
+        DOMAIN_MAP in services/rag_service.py) — independent of enrolment.
+        """
+        cached, ts = self._category_course_cache.get(category_id, (None, 0.0))
+        if cached is not None and (time.time() - ts) < self._cache_ttl:
+            return list(cached)
+
+        conn = None
+        try:
+            conn = self._connect()
+            with conn.cursor() as cur:
+                cur.execute(_CATEGORY_COURSES_QUERY, (category_id,))
+                rows = cur.fetchall()
+        finally:
+            if conn is not None:
+                conn.close()
+
+        result = [str(row[0]) for row in rows]
+        self._category_course_cache[category_id] = (result, time.time())
+        logger.debug(f"SiloService: category {category_id} courses={result}")
         return result

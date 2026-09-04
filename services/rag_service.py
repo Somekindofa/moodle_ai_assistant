@@ -1,10 +1,11 @@
 """RAG service for document retrieval and generation."""
 
+import hashlib
 import os
 import re
 import base64
 import logging
-from typing import List, Dict, Any, Union, Optional
+from typing import List, Dict, Any, Tuple, Union, Optional
 from langsmith import traceable
 from typing_extensions import Literal
 from datetime import datetime
@@ -26,20 +27,240 @@ from core.types import ConversationState
 logger = logging.getLogger(__name__)
 
 
-def build_cohort_filter(user_cohort_ids: list) -> dict:
+def merge_dedup_interleaved(a: list, b: list) -> List:
+    """Merge two retrieval result lists round-robin, deduplicating by source.
+
+    Interleaved rather than concatenated because the merged list is truncated
+    downstream (MAX_CONTEXT_DOCS here, MAX_RERANK_CANDIDATES in the pipeline).
+    Concatenating put every annotation ahead of every course chunk, so a cut at
+    N could — and did — discard all course content before the reranker scored
+    any of it: course material never lost on relevance, it just never entered
+    the contest. Round-robin makes truncation cost both sources equally.
+
+    Leftovers from the longer list are appended once the shorter one runs out.
+    """
+    seen: set = set()
+    merged: List = []
+
+    for index in range(max(len(a), len(b))):
+        for source_list in (a, b):
+            if index >= len(source_list):
+                continue
+            doc = source_list[index]
+            key = doc.metadata.get("source", "")
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(doc)
+
+    return merged
+
+
+def stable_document_id(document) -> str:
+    """A deterministic id for a document, so re-ingesting replaces rather than appends.
+
+    Chroma upserts when given ids, so a stable id makes ingestion idempotent.
+    Without one, langchain_chroma generates a fresh UUID per call and the
+    startup annotation sync appends a full copy of the corpus every restart.
+
+    Two keying strategies, because the store holds two shapes of document:
+
+    * **Video annotations** key on ``source`` (``file.mp4#<id>_raw``), which is
+      unique per annotation. Deliberately *not* content-based: re-running
+      translation rewrites the text, and that must update the existing document
+      rather than create a second copy of the same clip.
+    * **Everything else** (file chunks from app.py) keys on source + content,
+      because one file is split into many chunks that all share a ``source``;
+      keying on source alone would collapse a document into its last chunk.
+    """
+    metadata = getattr(document, "metadata", None) or {}
+    source = metadata.get("source") or ""
+
+    if metadata.get("type") == "video_annotation" and source:
+        return f"annotation::{source}"
+
+    digest = hashlib.sha256(
+        f"{source}|{document.page_content}".encode("utf-8")
+    ).hexdigest()
+    return f"sha256::{digest}"
+
+
+def stable_document_ids(documents: list) -> List[str]:
+    """Stable ids for a batch of documents. See stable_document_id."""
+    return [stable_document_id(doc) for doc in documents]
+
+
+def build_cohort_filter(user_cohort_ids: list, craft: Optional[str] = None) -> dict:
     """Build a ChromaDB `where` filter enforcing cohort-level access.
 
     Documents pass if they are open-access (cohort_id == -1, open_access == True)
     OR if their cohort_id is in the user's allowed cohort list.
+
+    If `craft` is given (the student picked a domain focus button), it's ANDed
+    on top as an additional requirement — see DOMAIN_MAP.
     """
     if not user_cohort_ids:
-        return {"open_access": True}
-    return {
-        "$or": [
-            {"cohort_id": {"$in": list(user_cohort_ids)}},
-            {"open_access": True},
-        ]
-    }
+        base = {"open_access": True}
+    else:
+        base = {
+            "$or": [
+                {"cohort_id": {"$in": list(user_cohort_ids)}},
+                {"open_access": True},
+            ]
+        }
+    if craft:
+        return {"$and": [base, {"craft": craft}]}
+    return base
+
+
+# Maps a domain-focus button's label (sent by the frontend as `selected_domain`,
+# see plugin/templates/chat_interface.mustache) to the two identifiers needed to
+# narrow retrieval: the Moodle course category (for course_content) and the
+# annotation `craft` tag (for video_annotation). A domain is only added here
+# once its category/craft actually exist and hold content — never the other
+# way around, so a stale/unmapped label just falls through to unfiltered
+# retrieval (see retrieve_initial/retrieve_final_dual) instead of dead-ending.
+DOMAIN_MAP: Dict[str, Dict[str, Any]] = {
+    "Soufflerie de verre": {"category_id": 25, "craft": "glassblowing"},
+    "Ganterie": {"category_id": 34, "craft": "glovemaking"},
+}
+
+
+# ── Deterministic user-facing messages, keyed by ISO 639-1 language code ────
+#
+# These are the three things a learner can be shown *instead of* an answer:
+# the pre-LLM topic classifier's rejection, assess_relevance's INSUFFICIENT
+# refusal, and its AMBIGUOUS clarifying question. None of them goes through
+# the LLM, so none of them was following the learner's language — the answer
+# path already does (see _build_messages and query_language), which meant a
+# Greek learner got Greek when retrieval worked and French exactly when it
+# did not, i.e. at the moment they most needed to understand the reply.
+#
+# A static table rather than an LLM translation call per refusal, because:
+#   - a refusal is already the slow, disappointing path, and a network round
+#     trip is the wrong thing to add to it;
+#   - translation can fail (see translation_service.translate_to_french's
+#     error path, which returns None), and a failed translation of a refusal
+#     would degrade to no message at all — the one output that must never be
+#     missing;
+#   - the strings are fixed and few. There is nothing here to generate.
+#
+# Coverage is deliberately limited to the languages this deployment is known
+# to serve today: French (UI, corpus, prompts), plus English and Greek —
+# both attested in eval/fixtures/xling_annotations_seed.json /
+# xling_course_chunks_seed.json and in the GR-Glassblowing course. Any other
+# detected language falls back to English (the learner demonstrably did not
+# write French, so English is the better guess) and logs a warning naming the
+# ISO code, so a genuine coverage gap surfaces in the logs and can be closed
+# with data instead of guesswork. Add a language here only once something
+# actually asks for it.
+USER_MESSAGE_FALLBACK_LANG = "en"
+
+USER_MESSAGES: Dict[str, Dict[str, str]] = {
+    # assess_relevance == INSUFFICIENT. The French entry is also
+    # RAGService.INSUFFICIENT_CONTEXT_MESSAGE and is interpolated verbatim
+    # into the system prompt — see that attribute before editing it.
+    "insufficient_context": {
+        "fr": (
+            "Je n'ai pas trouvé d'information pertinente dans le corpus pour répondre à cette question. "
+            "Veuillez reformuler ou consulter votre formateur."
+        ),
+        "en": (
+            "I could not find any relevant information in the corpus to answer this question. "
+            "Please rephrase it, or ask your trainer."
+        ),
+        "el": (
+            "Δεν βρήκα σχετικές πληροφορίες στο σώμα κειμένων για να απαντήσω σε αυτή την ερώτηση. "
+            "Παρακαλώ αναδιατυπώστε την ή απευθυνθείτε στον εκπαιδευτή σας."
+        ),
+    },
+    # Pre-LLM topic classifier said the question is out of domain.
+    "off_topic": {
+        "fr": (
+            "Je n'ai pas trouvé d'information pertinente dans le corpus "
+            "pour répondre à cette question. Veuillez poser une question "
+            "sur les arts et métiers ou consulter votre formateur."
+        ),
+        "en": (
+            "I could not find any relevant information in the corpus to answer "
+            "this question. Please ask a question about the crafts and trades, "
+            "or ask your trainer."
+        ),
+        "el": (
+            "Δεν βρήκα σχετικές πληροφορίες στο σώμα κειμένων για να απαντήσω "
+            "σε αυτή την ερώτηση. Παρακαλώ κάντε μια ερώτηση σχετική με τις "
+            "τέχνες και τα επαγγέλματα ή απευθυνθείτε στον εκπαιδευτή σας."
+        ),
+    },
+    # assess_relevance == AMBIGUOUS, and we have real topic names to list.
+    # {topics} is the only placeholder in this table.
+    "ambiguous_topics": {
+        "fr": (
+            "Votre question peut correspondre à plusieurs sujets du corpus "
+            "({topics}). Pourriez-vous préciser votre demande ?"
+        ),
+        "en": (
+            "Your question could match several topics in the corpus "
+            "({topics}). Could you be more specific?"
+        ),
+        "el": (
+            "Η ερώτησή σας μπορεί να αντιστοιχεί σε περισσότερα θέματα του σώματος κειμένων "
+            "({topics}). Μπορείτε να τη διατυπώσετε πιο συγκεκριμένα;"
+        ),
+    },
+    # assess_relevance == AMBIGUOUS with no nameable topic left after
+    # placeholder filtering — see pipeline._build_ambiguous_clarification.
+    "ambiguous_generic": {
+        "fr": (
+            "Votre question n'est pas assez précise pour que je trouve une réponse fiable "
+            "dans le corpus. Pourriez-vous la reformuler avec plus de détails ?"
+        ),
+        "en": (
+            "Your question is not specific enough for me to find a reliable answer "
+            "in the corpus. Could you rephrase it with more detail?"
+        ),
+        "el": (
+            "Η ερώτησή σας δεν είναι αρκετά συγκεκριμένη ώστε να βρω μια αξιόπιστη απάντηση "
+            "στο σώμα κειμένων. Μπορείτε να την αναδιατυπώσετε με περισσότερες λεπτομέρειες;"
+        ),
+    },
+}
+
+
+def localized_message(key: str, language: Optional[str] = None, **fields: Any) -> str:
+    """Return USER_MESSAGES[key] in `language`, degrading instead of raising.
+
+    `language` is an ISO 639-1 code as produced by py3langid (see
+    RAGService.detect_query_language); None/empty means French, matching the
+    query_language default used everywhere else in the pipeline.
+
+    Never raises: an unknown language falls back to
+    USER_MESSAGE_FALLBACK_LANG and then to French, and a formatting failure
+    returns the unformatted template. A refusal that blows up instead of
+    printing is strictly worse than a refusal in the wrong language.
+    """
+    variants = USER_MESSAGES.get(key)
+    if not variants:
+        logger.error(f"localized_message: unknown message key '{key}'")
+        return ""
+
+    lang = (language or "fr").lower()
+    text = variants.get(lang)
+    if text is None:
+        logger.warning(
+            f"localized_message: no '{lang}' translation for '{key}' — "
+            f"falling back to '{USER_MESSAGE_FALLBACK_LANG}'. Add '{lang}' to "
+            "USER_MESSAGES if learners are writing in it."
+        )
+        text = variants.get(USER_MESSAGE_FALLBACK_LANG) or variants["fr"]
+
+    if not fields:
+        return text
+    try:
+        return text.format(**fields)
+    except Exception as e:  # pragma: no cover — defensive
+        logger.error(f"localized_message: formatting '{key}' failed: {e}")
+        return text
 
 
 class RAGService:
@@ -175,6 +396,16 @@ class RAGService:
                 "- Répondez TOUJOURS dans la même langue que la question de l'apprenti "
                 "(ci-dessous), avec une orthographe et une grammaire soignées.\n",
             )
+            # The prompt also pins the exact refusal sentence to reply with when
+            # the context is insufficient, in French. Left as-is, the "answer in
+            # the learner's language" rule above and that literal French sentence
+            # contradict each other, and the model resolves the contradiction
+            # however it likes. Swap in the same refusal the deterministic
+            # INSUFFICIENT path would have emitted, so both agree.
+            system_prompt = system_prompt.replace(
+                self.INSUFFICIENT_CONTEXT_MESSAGE,
+                self.insufficient_context_message(query_language),
+            )
         else:
             system_prompt = self.system_prompt
 
@@ -272,16 +503,58 @@ class RAGService:
     # can be used at face value without corpus-specific calibration.
     RERANK_SCORE_THRESHOLD: float = 0.0
 
-    # Single source of truth for the "nothing relevant found" message — used
-    # both in the system prompt (as a fallback if assess_relevance somehow
+    # Single source of truth for the FRENCH "nothing relevant found" message —
+    # used both in the system prompt (as a fallback if assess_relevance somehow
     # doesn't run) and deterministically by stream_response when
     # assess_relevance classifies the retrieved context as INSUFFICIENT.
     # Deterministic beats letting the LLM paraphrase it: a fixed string can't
     # drift or contradict itself the way free-form generation did.
-    INSUFFICIENT_CONTEXT_MESSAGE = (
-        "Je n'ai pas trouvé d'information pertinente dans le corpus pour répondre à cette question. "
-        "Veuillez reformuler ou consulter votre formateur."
-    )
+    #
+    # Deliberately still a plain ``str``, not a per-language mapping: __init__
+    # interpolates it into self.system_prompt with an f-string, and the
+    # system prompt is French regardless of the learner's language (only the
+    # "answer in French" rule is swapped out — see _build_messages). Other
+    # languages live in the module-level USER_MESSAGES table and are reached
+    # through insufficient_context_message() below, which keeps honouring an
+    # instance-level override of this attribute.
+    INSUFFICIENT_CONTEXT_MESSAGE = USER_MESSAGES["insufficient_context"]["fr"]
+
+    def insufficient_context_message(self, language: Optional[str] = None) -> str:
+        """The INSUFFICIENT refusal, in the learner's language.
+
+        French — and None/unknown, which is the pipeline-wide default for
+        query_language — returns ``self.INSUFFICIENT_CONTEXT_MESSAGE`` rather
+        than the table entry, so this attribute stays the single French source
+        of truth and an instance-level override still wins.
+        """
+        if not language or language == "fr":
+            return self.INSUFFICIENT_CONTEXT_MESSAGE
+        return localized_message("insufficient_context", language)
+
+    def detect_query_language(self, text: str) -> str:
+        """ISO 639-1 language of `text` — local detection only, never an LLM call.
+
+        detect_and_translate_query already computes this, but only as pipeline
+        step 0, i.e. *after* the pre-LLM topic classifier has already had a
+        chance to refuse the question. This exposes the same py3langid gate on
+        its own so a refusal raised before (or without) that step can still be
+        written in the learner's language.
+
+        Uses exactly the same thresholds as detect_and_translate_query, so the
+        two never disagree, and shares its bias: langid unavailable, low
+        confidence, or too-short text all mean "fr". Never raises.
+        """
+        try:
+            lang, _ = translation_service.decide_translation(
+                text,
+                self._langid,
+                self.config.langid_confidence_threshold,
+                self.config.min_langid_chars,
+            )
+            return lang if isinstance(lang, str) and lang else "fr"
+        except Exception as e:
+            logger.warning(f"detect_query_language failed ({e}) — assuming French")
+            return "fr"
 
     # Per-document preview length for assess_relevance's classifier prompt.
     # Must cover a full chunk, not an arbitrary short slice — SemanticChunker
@@ -293,6 +566,17 @@ class RAGService:
     # previous limit, causing a well-matched (rerank score 0.92+) chunk to be
     # misjudged as insufficient.
     RELEVANCE_PREVIEW_CHARS = 1600
+
+    # How many documents the classifier is shown. The same incident had a
+    # second half that went unnoticed: the prompt used only the first 5
+    # documents while retrieval supplies up to MAX_CONTEXT_DOCS. After
+    # reranking, annotation clips can hold the top 5 on cross-craft vocabulary
+    # ("biseau", "meule" appear in both grinding and glass finishing), leaving
+    # the course chunk that actually answers the question at rank 6-8 —
+    # invisible to the classifier, which then declared the context
+    # insufficient while `generate` had that same chunk in hand.
+    # Kept at MAX_CONTEXT_DOCS so the gate judges exactly what generate sees.
+    RELEVANCE_MAX_DOCS = 8
 
     def _initialize_cross_encoder(self):
         """Load local cross-encoder or skip if remote reranker is configured."""
@@ -326,9 +610,14 @@ class RAGService:
         return translation_service.load_langid()
 
     def add_documents(self, documents: List[Document]) -> None:
-        """Add documents to the vector store."""
+        """Add documents to the vector store, replacing any earlier copy.
+
+        Ids are deterministic (see stable_document_id) and Chroma upserts on
+        id, so re-running a sync updates existing documents instead of
+        appending duplicates.
+        """
         try:
-            self.vector_store.add_documents(documents)
+            self.vector_store.add_documents(documents, ids=stable_document_ids(documents))
             logger.info(f"Added {len(documents)} documents to vector store")
         except Exception as e:
             logger.error(f"Failed to add documents: {str(e)}")
@@ -359,6 +648,59 @@ class RAGService:
         except Exception as e:
             logger.error(f"Failed to remove documents: {str(e)}")
             raise
+
+    # ── MMR candidate-pool sizing ──────────────────────────────────────────
+    # max_marginal_relevance_search first pulls `fetch_k` nearest neighbours,
+    # then greedily picks `k` of them trading relevance off against redundancy.
+    # fetch_k is therefore the diversity budget: at fetch_k == k, MMR has
+    # nothing to choose between and degenerates into plain similarity search.
+    #
+    # This call passed no fetch_k at all, so langchain's flat default of 20
+    # applied — by accident, not by design. Two consequences:
+    #   * against the 16-document annotation collection every single query
+    #     logged "Number of requested results 20 is greater than number of
+    #     elements in index 16, updating n_results = 16"
+    #     (chromadb/segment/impl/vector/local_persistent_hnsw.py:424);
+    #   * at k=15 (the configured similarity_search_k) a 20-document pool left
+    #     MMR almost no room to diversify, quietly.
+    #
+    # 5x mirrors langchain's own default ratio (k=4 / fetch_k=20) and the usual
+    # dense-retrieval rule of thumb of 4-5x. The absolute cap matters once the
+    # corpus grows: fetch_k is how many full 3584-dim embeddings Chroma
+    # materialises and hands back per query, so 5 x 15 = 75 of them just to
+    # discard 60 is real cost for no measurable diversity gain. Both are then
+    # clamped to the collection's live size, which is what actually silences
+    # the warning — Chroma compares the requested n_results against the whole
+    # segment, not against the cohort-filtered subset.
+    MMR_FETCH_K_MULTIPLIER = 5
+    MMR_FETCH_K_CAP = 50
+
+    def _collection_count(self) -> Optional[int]:
+        """Number of documents in the annotation collection, or None.
+
+        Cheap (a SQLite COUNT), but never load-bearing: any failure, or a
+        mocked vector store that returns a non-int, yields None and callers
+        simply skip the clamp.
+        """
+        try:
+            count = self.vector_store._collection.count()
+        except Exception as e:
+            logger.debug(f"Collection count unavailable: {e}")
+            return None
+        return count if isinstance(count, int) else None
+
+    def _mmr_fetch_k(self, k: int) -> int:
+        """MMR candidate-pool size for a request of `k` results.
+
+        See MMR_FETCH_K_MULTIPLIER. Always >= 1 and never above the collection
+        size, so a small collection cannot trigger Chroma's over-query warning
+        and a large one cannot pull an unbounded candidate set.
+        """
+        fetch_k = min(max(k * self.MMR_FETCH_K_MULTIPLIER, k), self.MMR_FETCH_K_CAP)
+        count = self._collection_count()
+        if count is not None and count > 0:
+            fetch_k = min(fetch_k, count)
+        return max(fetch_k, 1)
 
     def similarity_search(
         self,
@@ -393,7 +735,9 @@ class RAGService:
             if cohort_filter is not None:
                 kwargs["filter"] = cohort_filter
 
-            results = self.vector_store.max_marginal_relevance_search(query, k=k, **kwargs)
+            results = self.vector_store.max_marginal_relevance_search(
+                query, k=k, fetch_k=self._mmr_fetch_k(k), **kwargs
+            )
             for doc in results:
                 logger.info(f"Document {doc.metadata.get('source', '')}")
                 doc_content = str(doc.metadata.get("source"))
@@ -405,7 +749,7 @@ class RAGService:
             return unique_results
 
         except Exception as e:
-            logger.error(f"Error during similarity search: {str(e)}")
+            logger.error(f"Error during similarity search: {str(e)}", exc_info=True)
             return []
 
     def generate_hypothetical_document(
@@ -828,7 +1172,7 @@ Génère une explication détaillée à la première personne de la technique co
 
         query = str(state.get("messages")[-1].content)
         snippets = []
-        for i, doc in enumerate(context_docs[:5], 1):
+        for i, doc in enumerate(context_docs[: self.RELEVANCE_MAX_DOCS], 1):
             limit = self.RELEVANCE_PREVIEW_CHARS
             preview = doc.page_content[:limit] + "..." if len(doc.page_content) > limit else doc.page_content
             snippets.append(f"[Document {i}]\n{preview}")
@@ -983,8 +1327,134 @@ Génère une explication détaillée à la première personne de la technique co
             logger.error(f"Failed to sync new annotations: {str(e)}")
             return 0
 
+    # ── Orphaned-HNSW-label alarm ──────────────────────────────────────────
+    # hnswlib allocates a monotonically increasing label for every element ever
+    # added to an index and never reuses one; deleting a document frees its id
+    # in Chroma's metadata segment but not its label in the vector segment. A
+    # segment whose label high-water mark far exceeds its live count can fail
+    # to reload with "Cannot return the results in a contigious 2D array"
+    # (chroma-core/chroma#2620; PR #2621 closed unmerged; no chroma-hnswlib
+    # release since 0.7.6) — and when it does, every vector query in that
+    # process returns nothing, silently, for the life of the process.
+    #
+    # The annotation collection reached 381 allocated labels against 16
+    # addressable documents once, because an older ingest path minted a fresh
+    # random UUID per document per restart; a later dedupe deleted ~365 of
+    # them and left the labels behind. stable_document_id (top of this module)
+    # defused it — the sync is now an upsert in place that allocates no new
+    # labels — so this is latent, not active. These thresholds exist so that
+    # if it ever comes back it announces itself instead of costing another
+    # silent outage.
+    #
+    # Ratio, not a bare difference: a handful of orphans is normal churn on
+    # any collection. The absolute floor keeps a tiny collection (2 alive, 5
+    # allocated) from crying wolf.
+    HNSW_ORPHAN_MIN_LABELS = 32
+    HNSW_ORPHAN_RATIO = 2.0
+
+    def _hnsw_label_stats(self) -> Optional[Tuple[int, int]]:
+        """(allocated_labels, live_documents), or None when unavailable.
+
+        Chroma exposes no public API for a segment's label high-water mark, so
+        this reads ``_total_elements_added`` off the persistent-HNSW segment —
+        private, version-pinned chromadb internals (0.6.3).
+
+        Two deliberate properties:
+
+        * It peeks at the segment manager's *already instantiated* segment and
+          never calls ``get_segment()``, which would build one — building a
+          persistent HNSW segment reads the metadata pickle and reloads the
+          index from disk. If the vector segment has not been used yet there
+          is nothing to check, and this returns None rather than doing I/O to
+          find that out. That is what keeps it free to call on a startup path.
+        * Every step is inside one try/except that degrades to None. A
+          chromadb upgrade that moves any of these attributes must cost us the
+          diagnostic, never an exception on a query or startup path.
+
+        One honest caveat: ``_total_elements_added`` only advances when a write
+        batch is flushed into the HNSW index, while ``count()`` includes the
+        pending batch. Right after an ingest the pair can therefore read low
+        (a freshly seeded 16-document collection reports 0 allocated / 16
+        live). That is fine for what this is — a leak detector, where the
+        signal is allocated running far *ahead* of live — but it is not an
+        accounting audit, and allocated < live is normal, not a second fault.
+        """
+        try:
+            from chromadb.types import SegmentScope
+
+            collection = self.vector_store._collection
+            manager = collection._client._manager
+            record = manager.segment_cache[SegmentScope.VECTOR].get(collection.id)
+            if record is None:
+                return None
+            segment = manager._instances.get(record["id"])
+            if segment is None:
+                return None
+            allocated = getattr(segment, "_total_elements_added", None)
+            live = collection.count()
+            if not isinstance(allocated, int) or not isinstance(live, int):
+                return None
+            return allocated, live
+        except Exception as e:
+            logger.debug(f"HNSW label stats unavailable: {e}")
+            return None
+
+    def warn_if_hnsw_labels_orphaned(self, context: str = "") -> Optional[Tuple[int, int]]:
+        """Log loudly if allocated HNSW labels far exceed live documents.
+
+        Returns the (allocated, live) pair it looked at, or None if the check
+        could not run — callers treat None as "no information", not as "fine".
+        Never raises; see _hnsw_label_stats.
+        """
+        stats = self._hnsw_label_stats()
+        if stats is None:
+            return None
+
+        allocated, live = stats
+        orphaned = allocated - live
+        where = f" after {context}" if context else ""
+
+        if orphaned < self.HNSW_ORPHAN_MIN_LABELS or allocated < live * self.HNSW_ORPHAN_RATIO:
+            if orphaned > 0:
+                logger.debug(
+                    "HNSW labels%s: %d allocated / %d live (%d orphaned, within normal churn)",
+                    where, allocated, live, orphaned,
+                )
+            return stats
+
+        logger.error(
+            "HNSW label leak in collection '%s'%s: %d labels allocated for only %d live "
+            "documents (%d orphaned). A segment in this state can fail to reload with "
+            "'Cannot return the results in a contigious 2D array', after which every "
+            "vector query in the process silently returns nothing. Deleting documents "
+            "cannot reclaim these labels (see _clear_annotation_documents); the only "
+            "fix is to rebuild the collection offline with the backend stopped.",
+            self.config.collection_name, where, allocated, live, orphaned,
+        )
+        return stats
+
     def _clear_annotation_documents(self) -> None:
-        """Remove all annotation-type documents from vector store."""
+        """Delete every addressable annotation document from the vector store.
+
+        Limitation, stated plainly: this cannot purge orphaned HNSW labels, and
+        so cannot repair a collection already suffering from the fault above.
+        It asks Chroma for the ids matching ``type=video_annotation`` and
+        deletes those — by construction it only ever touches ids Chroma can
+        still address. Labels stranded in the HNSW index by earlier deletes
+        have no id left to name them, are invisible to ``get()``, and survive
+        this call untouched. Calling it in the hope of "resetting" a collection
+        that fails with 'Cannot return the results in a contigious 2D array'
+        will not help, and adds a fresh round of deletes on top.
+
+        Reclaiming labels requires rebuilding the collection from scratch —
+        offline, with the backend stopped, since the local Chroma
+        PersistentClient is not process-safe. There is no in-process remedy and
+        no upstream fix (chroma-core/chroma#2620).
+
+        What this call can do is *notice*: it reports the label high-water mark
+        against the live count afterwards, so a leak is loud in the log rather
+        than silent until the next restart.
+        """
         try:
             results = self.vector_store.get(where={"type": "video_annotation"})
             if results and "ids" in results and results["ids"]:
@@ -992,6 +1462,7 @@ Génère une explication détaillée à la première personne de la technique co
                 logger.info(
                     f"Cleared {len(results['ids'])} annotation documents from vector store"
                 )
+            self.warn_if_hnsw_labels_orphaned("clearing annotation documents")
         except Exception as e:
             logger.error(f"Failed to clear annotation documents: {str(e)}")
 
@@ -1166,15 +1637,12 @@ Génère une explication détaillée à la première personne de la technique co
     def _merge_dedup(
         self, a: List[Document], b: List[Document]
     ) -> List[Document]:
-        """Merge two document lists, deduplicating by metadata.source."""
-        seen: set = set()
-        merged: List[Document] = []
-        for doc in a + b:
-            src = doc.metadata.get("source", "")
-            if src not in seen:
-                seen.add(src)
-                merged.append(doc)
-        return merged
+        """Merge two document lists, deduplicating by metadata.source.
+
+        Delegates to merge_dedup_interleaved so that truncating the result
+        cannot starve one retrieval source — see that function for why.
+        """
+        return merge_dedup_interleaved(a, b)
 
     # Maximum number of docs fed into the LLM context across all sources.
     # Keeps the total prompt well within the Apertus-70B 16 384-token window
@@ -1317,9 +1785,30 @@ Génère une explication détaillée à la première personne de la technique co
 
         # 1. Video annotations collection.
         user_cohort_ids = state.get("user_cohort_ids")
-        cohort_filter = build_cohort_filter(user_cohort_ids) if user_cohort_ids is not None else None
+        # An explicitly clicked domain button wins; otherwise fall back to the
+        # craft implied by the course the question was asked from (see
+        # stream_response). Keeps annotation retrieval on-craft even when the
+        # user never touches the domain selector.
+        domain_craft = (
+            DOMAIN_MAP.get(state.get("selected_domain"), {}).get("craft")
+            or state.get("domain_craft")
+        )
+        cohort_filter = (
+            build_cohort_filter(user_cohort_ids, craft=domain_craft)
+            if user_cohort_ids is not None else None
+        )
         if has_annotation_docs:
             annotation_results = self.similarity_search(query, k=5, cohort_filter=cohort_filter)
+            if not annotation_results:
+                # The collection is not empty, so zero hits means retrieval failed rather
+                # than genuinely matching nothing — most likely the hnswlib
+                # "contigious 2D array" fault (see similarity_search's traceback above),
+                # which silently costs every video source for the rest of this process.
+                logger.error(
+                    "Annotation retrieval returned 0 of %d documents — video sources "
+                    "will be missing site-wide until the backend is restarted",
+                    len(vector_data.get("ids") or []),
+                )
             results.extend(annotation_results)
         else:
             logger.info("Annotation collection empty — skipping annotation retrieval")
@@ -1329,7 +1818,7 @@ Génère une explication détaillée à la première personne de la technique co
             enrolled_course_ids = state.get("enrolled_course_ids")
             course_results = self.course_rag_service.similarity_search_all_courses(
                 query,
-                k_per_course=1,
+                k_per_course=4,
                 priority_course_id=course_id,
                 allowed_course_ids=enrolled_course_ids,
             )
@@ -1430,7 +1919,18 @@ Génère une explication détaillée à la première personne de la technique co
 
         annotation_results: List[Document] = []
         user_cohort_ids = state.get("user_cohort_ids")
-        cohort_filter = build_cohort_filter(user_cohort_ids) if user_cohort_ids is not None else None
+        # An explicitly clicked domain button wins; otherwise fall back to the
+        # craft implied by the course the question was asked from (see
+        # stream_response). Keeps annotation retrieval on-craft even when the
+        # user never touches the domain selector.
+        domain_craft = (
+            DOMAIN_MAP.get(state.get("selected_domain"), {}).get("craft")
+            or state.get("domain_craft")
+        )
+        cohort_filter = (
+            build_cohort_filter(user_cohort_ids, craft=domain_craft)
+            if user_cohort_ids is not None else None
+        )
 
         # 1. Video annotations.
         if has_annotation_docs:
@@ -1442,7 +1942,7 @@ Génère une explication détaillée à la première personne de la technique co
             enrolled_course_ids = state.get("enrolled_course_ids")
             course_results = self.course_rag_service.similarity_search_all_courses(
                 refined_query,
-                k_per_course=1,
+                k_per_course=4,
                 priority_course_id=course_id,
                 allowed_course_ids=enrolled_course_ids,
             )

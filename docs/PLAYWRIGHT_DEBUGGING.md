@@ -29,32 +29,56 @@ including the Playwright MCP browser — bypasses the proxy and hits this
 box's own (expired) cert directly. This is a local-machine artifact of the
 test environment, not a production problem.
 
-**Fix:** the Playwright MCP server only supports ignoring cert errors as a
-process-launch flag, not per-request. Add `--ignore-https-errors` to its
-args in **both** copies of the plugin's `.mcp.json` (which one is "active"
-isn't obvious, so edit both):
-
-```
-~/.claude/plugins/cache/claude-plugins-official/playwright/<version>/.mcp.json
-~/.claude/plugins/cache/claude-plugins-official/playwright/unknown/.mcp.json
-```
+**Fix — already applied, nothing to do.** The MCP server can only ignore
+cert errors as a process-launch flag, not per-request, so the flag lives in
+the plugin's `.mcp.json`. Since 2026-09-03 it is **permanent**, together with
+`--no-sandbox` (§2a):
 
 ```json
-{
-  "playwright": {
-    "command": "npx",
-    "args": ["@playwright/mcp@latest", "--ignore-https-errors"]
-  }
-}
+{"playwright": {"command": "npx",
+  "args": ["@playwright/mcp@latest", "--ignore-https-errors", "--no-sandbox"]}}
 ```
 
-**Then reconnect** — a running session won't pick up the config change on
-its own. Run `/mcp` and reconnect the `playwright` server.
+These used to be added and reverted every session, costing two `/mcp`
+reconnects each time and making routine browser testing painful. If you edit
+these files, a running session will not pick it up — reconnect with `/mcp`.
 
-**Scope this down and revert when done.** This flag disables cert
-validation for *every* site the browser visits, not just this one host, for
-as long as it's set. Remove the flag from both files and reconnect again
-once the debugging session is over.
+### There is no single config file — set them all
+
+This is the trap that cost the most time. The flags must go in **every** copy
+for the current OS user, because which one the server actually reads is not
+predictable, and **new copies appear on their own** (a versioned directory
+materialised mid-session and silently won over the one already edited — the
+symptom was a freshly reconnected server running with no flags at all).
+
+Find and check them all:
+
+```bash
+find ~/.claude/plugins -path '*playwright*' -name '.mcp.json' \
+  -exec sh -c 'echo "--- $1"; cat "$1"' _ {} \;
+```
+
+As of 2026-09-03 that is three paths under `/root`: two under
+`plugins/cache/claude-plugins-official/playwright/<version-or-"unknown">/`
+and one under `plugins/marketplaces/.../external_plugins/playwright/`.
+Do not trust that list — re-run the `find`.
+
+**The plugin cache is also per-OS-user.** Running as `root` and running as
+`claude-runner` read entirely different trees, so "already configured" in one
+home directory says nothing about the other.
+
+Know what you are accepting: `--ignore-https-errors` disables certificate
+validation for *every* site that browser visits, and `--no-sandbox` (see §2a)
+drops Chromium's process isolation. That is defensible here because this
+browser only ever visits this box, and the expired cert is a local artifact —
+but if that ever stops being true, remove both flags and reconnect.
+
+### 2a. Chromium will not start as root without `--no-sandbox`
+
+Running as `root`, `browser_navigate` dies before the first page with
+`Running as root without --no-sandbox is not supported`
+(`zygote_host_impl_linux.cc`). Sessions running as `claude-runner` never see
+this. Both flags are set permanently for that reason.
 
 ## 2. "Browser is already in use" after reconnecting
 
@@ -179,23 +203,92 @@ for doc, meta in zip(data['documents'], data['metadatas']):
 Note: `chromadb` v0.6+ `list_collections()` returns plain name strings, not
 objects with `.name` — don't do `c.name` on them.
 
-## Quick-start checklist for the next session
+## Standard procedure (start here)
 
-1. Add `--ignore-https-errors` to both `.mcp.json` copies (§1), reconnect
-   (`/mcp`).
-2. If `browser_navigate` says the browser's already in use, kill the stale
+Browser testing is a routine instrument here, not a special occasion. Follow
+this; you should not need to ask anyone for anything.
+
+**Nobody hands you credentials.** They are on the box:
+
+```bash
+/opt/craftpilot_backend/scripts/moodle-test-cred.sh --list          # which account for what
+/opt/craftpilot_backend/scripts/moodle-test-cred.sh enrolled --user # username
+/opt/craftpilot_backend/scripts/moodle-test-cred.sh enrolled --pass # password
+```
+
+The helper reads two files, split by privilege: the test accounts live in
+`/etc/craftpilot/test-credentials`, readable by the `claude-runner` user so
+routine testing needs **no root session**; the `teacher` role is a real staff
+login and stays in `/root/moodle-test-credentials.txt`, root only.
+
+Never copy a password into a file under `/var/www/html/public` — that is the
+web root. Never paste one into chat or a commit.
+
+One limitation to be aware of: filling the login form means the password is
+an argument to a `browser_type` call, so it lands in the session transcript.
+That is unavoidable while authentication goes through the UI, and it is why
+these are disposable accounts. Never drive the browser this way with a
+credential that matters.
+
+**Pick the right account.** Three roles; `--list` explains each in full:
+
+| Role | Account | Use it for |
+|------|---------|-----------|
+| `enrolled` | `cp_test_enrolled` (295) | Learner behaviour, and as the **positive** control |
+| `unenrolled` | `cp_test_unenrolled` (296) | The **negative** control for access isolation |
+| `teacher` | `claude_runner` (293) | Only when a test must *author* content |
+
+Use `enrolled` and `unenrolled` as a **pair**. A refusal from the unenrolled
+account proves nothing alone — retrieval fails for many unrelated reasons
+(too few chunks per course, a truncated relevance gate). Only a *passing*
+positive control makes the negative result meaningful.
+
+**Steps:**
+
+1. **Navigate.** `--ignore-https-errors` and `--no-sandbox` are now permanent
+   in the plugin's `.mcp.json`, so no config edit and no `/mcp` reconnect —
+   see §1 and §2 for why each is needed and how to revert them.
+2. If `browser_navigate` reports the browser is already in use, kill the stale
    process tree (§2).
-3. Ask the user to enable manual/interactive permission mode before doing
-   anything beyond read-only navigation/snapshots (§3) — or get the
-   `browser_click`/`browser_type`/`browser_fill_form` allow-rules added
-   first.
-4. Log in at `/login/index.php` with the `claude_runner` credentials (ask
-   the project admin — not written here on purpose).
-5. If testing course content ingestion: confirm the account is actually
-   **enrolled** (not just role-assigned) in the target course before
-   expecting CraftPilot chat to find anything (§5).
-6. When done: remove `--ignore-https-errors` from both `.mcp.json` files
-   and reconnect again (§1).
+3. **Log in** at `/login/index.php`: fill `#username` and `#password`, submit.
+   Confirm you are who you think you are before trusting anything else —
+   `browser_evaluate` → `M.cfg.userId`. Session state persists in the browser
+   profile between runs, so you may already be logged in as someone else.
+4. **Do not test the chat widget from the site front page.** Its single
+   `#cp-wrapper` renders inside `#setup1Modal`, a closed Bootstrap modal, so
+   the toggle is unclickable there — `browser_snapshot` and
+   `getComputedStyle` both report it as perfectly visible. Use `/my/`
+   (Dashboard) instead. See §4 for how to recognise this class of failure.
+5. **Log out between accounts** —
+   `/login/logout.php?sesskey=<M.cfg.sesskey>`. A stale session is the easiest
+   way to produce a confidently wrong isolation result.
+6. If testing course-content retrieval: confirm the account is actually
+   **enrolled** (not merely role-assigned) in the target course (§5).
+
+**Nothing to revert when you finish.** The flags are deliberately permanent
+now; automation was costing two `/mcp` reconnects per session otherwise.
+
+### Testing the backend without a browser
+
+Not everything needs Playwright, and `curl` is far faster for retrieval work.
+`/api/chat` accepts `user_id` directly, so you can test any account's view
+without logging in at all:
+
+```bash
+T=$(grep -oP '^INTERNAL_API_TOKEN=\K.*' /opt/craftpilot_backend/.env | tr -d '\r\n ')
+curl -s -X POST http://127.0.0.1:8000/api/chat \
+  -H "X-Internal-Token: $T" -H 'Content-Type: application/json' \
+  -d '{"message":"…","user_id":296,"conversation_thread_id":"probe"}'
+```
+
+Note the `tr -d '\r\n '` — `.env` has CRLF line endings, and a trailing
+carriage return in the header makes uvicorn reject the request with a
+baffling `400 Invalid HTTP request`.
+
+**Use `curl` for the pipeline, Playwright for the product.** `curl` bypasses
+`chat_proxy.php`, sesskey validation, the 307 redirect and all the
+JavaScript — so it proves retrieval works, not that a user can reach it. The
+`#setup1Modal` bug above passes every possible `curl` test.
 
 To verify a save round-tripped through translation/ingestion correctly,
 `tail -f /tmp/craftpilot_backend.log` and look for
