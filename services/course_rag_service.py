@@ -58,7 +58,9 @@ def _breadcrumb(heading_stack: List[Tuple[int, str]]) -> str:
     return " > ".join(text for _, text in heading_stack)
 
 
-def _build_heading_translation_prompt(heading: str, source_lang: str) -> str:
+def _build_heading_translation_prompt(
+    heading: str, source_lang: str, context: str = ""
+) -> str:
     """Translation prompt for a bare section title (breadcrumb segment).
 
     Kept separate from ``translation_service.build_chunk_translation_prompt``
@@ -66,7 +68,30 @@ def _build_heading_translation_prompt(heading: str, source_lang: str) -> str:
     the model, handed a whole chunk, would rewrite the leading title from the
     body it just read. A section title has to come back as a title — same
     words, translated, nothing else.
+
+    Context matters more than it looks. With no context at all, the Greek
+    heading "Ανόπτηση" (annealing) came back as "Décapage" (pickling) — and
+    consistently so across every chunk of the page, because the result is
+    cached. The body translation of that same page is excellent precisely
+    because it has surrounding text to disambiguate from. So an excerpt is
+    passed in for vocabulary only, explicitly demoted to a glossary: the
+    failure this prompt originally guarded against was the model rewriting the
+    title *from* the body, so the excerpt must never read as content.
     """
+    context = (context or "").strip()
+    if context:
+        return (
+            "Traduis en français ce titre de section d'un cours technique "
+            "(artisanat, métiers d'art).\n"
+            "Un extrait de la section est fourni UNIQUEMENT pour lever les "
+            "ambiguïtés de vocabulaire technique. Ne le traduis pas, n'en "
+            "reprends aucune phrase, ne t'en sers que pour choisir le bon "
+            "terme métier.\n"
+            "Réponds avec UNIQUEMENT le titre traduit : pas de guillemets, pas "
+            "d'explication, pas de reformulation, pas de phrase complète.\n\n"
+            f"Extrait de la section (vocabulaire seulement) :\n{context[:600]}\n\n"
+            f"Titre original ({source_lang}) :\n{heading}"
+        )
     return (
         "Traduis en français ce titre de section d'un cours technique "
         "(artisanat, métiers d'art).\n"
@@ -491,6 +516,7 @@ class CourseRAGService:
         cache: Dict[str, str],
         max_retries: int = 2,
         throttle_seconds: float = 0.0,
+        context: str = "",
     ) -> str:
         """Translate a breadcrumb, one LLM call per *distinct* heading segment.
 
@@ -519,7 +545,7 @@ class CourseRAGService:
                     cache[segment] = segment
                 else:
                     translated = translation_service.translate_to_french(
-                        _build_heading_translation_prompt(segment, source_lang),
+                        _build_heading_translation_prompt(segment, source_lang, context),
                         self._translation_llm,
                         max_retries=max_retries,
                     )
@@ -600,12 +626,21 @@ class CourseRAGService:
         max_retries: int = 2,
         throttle_seconds: float = 0.0,
     ) -> str:
-        """Prepend the translated breadcrumb to a translated body."""
+        """Prepend the translated breadcrumb to a translated body.
+
+        The already-translated body is handed to the heading translator as
+        disambiguation context. It is the best source available: same subject
+        matter, already in the target language, and its terminology is
+        demonstrably good — so the heading can be aligned to the words the body
+        actually used. Only the first chunk under a given heading pays for it;
+        the rest hit the cache, so consistency is unaffected.
+        """
         if not breadcrumb:
             return translated_body
         fr_breadcrumb = self._translate_heading_path(
             breadcrumb, source_lang, cache,
             max_retries=max_retries, throttle_seconds=throttle_seconds,
+            context=translated_body,
         )
         if not fr_breadcrumb:
             return translated_body
