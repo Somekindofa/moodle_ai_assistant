@@ -67,3 +67,63 @@ Each record has its own "Known limits" section; the ones most likely to bite:
 - **03** — whether the *production* Chroma collection currently holds orphaned
   HNSW labels is still unknown; the new startup check answers it in the log on
   the next restart.
+
+---
+
+## Post-restart verification (2026-09-04 17:22–17:27, production)
+
+Backend restarted 17:22:03 with `Environment=PYTHONNOUSERSITE=1` now pinned via
+`/etc/systemd/system/craftpilot-backend.service.d/pythonnousersite.conf`.
+Clean startup, 16 annotations synced, no errors.
+
+**Record 03, open question resolved — the production index has NO orphaned labels.**
+Measured offline from a copy of the vector segment (never the live files). Parsing
+`header.bin` with the correct layout (one leading `uint32`, then `size_t` fields):
+
+```
+max_elements          = 1000
+cur_element_count     = 0      <-- allocated HNSW labels
+size_data_per_element = 14476  ( = 132 + 3584*4 + 8, matches dim 3584 )
+maxlevel              = -1
+enterpoint_node       = -1
+```
+
+`maxlevel = -1` and a 0-byte `link_lists.bin` mean the persisted HNSW graph is
+**empty**: all 16 documents are still in Chroma's brute-force buffer, because the
+collection has no metadata overrides so the default `hnsw:batch_size=100` applies
+and nothing has been flushed into the graph yet. So `allocated 0 / live 16 /
+orphaned 0` — yesterday's drop-and-rebuild is holding, and `stable_document_id`
+upserts are allocating no new labels.
+
+**Nuance worth keeping:** the orphan failure mode is currently *unreachable*
+rather than *fixed upstream* — the graph is empty, so it cannot be corrupted. The
+risk returns once the collection grows past the batch threshold and elements are
+flushed into the graph. That is exactly what record 03's startup check is for.
+Note that check logs at DEBUG when healthy, so at INFO level "no orphans" and
+"could not run" look identical — read it as informative only when it WARNs.
+
+**A caution for anyone repeating this measurement:** `length.bin` is a
+capacity-sized (1000 x int32) buffer whose unused slots hold uninitialised bytes.
+Counting its non-zero entries yields a plausible-looking but completely wrong
+"982 orphaned". `header.bin` is the only trustworthy source, and a directory path
+cannot be passed to `hnswlib.load_index` — Chroma persists across four files,
+not hnswlib's single-file format.
+
+### Functional checks through the Moodle UI (as `claude_runner`, course 109)
+
+| Check | Result |
+|---|---|
+| Craft inference still fires | `Inferred craft 'glassblowing' from course 109 (category 25)` |
+| Correct video card (no regression) | `Loic_biseauOblique.mov.mp4`, annotations 16 -> 2, zero glovemaking |
+| Record 03 `fetch_k` | The `requested 20 > index 16` warning is **gone** |
+| Record 03 refusal language | Greek off-topic question answered **in Greek**: "Δεν βρήκα σχετικές πληροφορίες στο σώμα κειμένων…" |
+
+**One warning remains by design:** `requested 4 > index 2` comes from
+`course_rag_service._search_with_embedding`, which passes `n_results=k` to a raw
+`collection.query()`. Clamping it would need a count query per course per query —
+a real per-request cost to silence a benign warning that Chroma already handles
+by clamping. Left alone deliberately.
+
+**Still unverified** (unchanged from the records above): records 01 and 02's
+limits, and the whole of record 02's effect, which cannot appear until a
+re-ingest is run.
