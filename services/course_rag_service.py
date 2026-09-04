@@ -30,6 +30,52 @@ def _approx_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
+def _push_heading(heading_stack: List[Tuple[int, str]], level: int, text: str) -> None:
+    """Push a heading onto the breadcrumb stack, dropping siblings and deeper.
+
+    The stack stores ``(level, text)`` pairs and is trimmed by *level*, never
+    by list position. Position and level are not interchangeable, and treating
+    them as such invents ancestors that do not exist in the document:
+
+      * A page whose first heading is an ``<h2>`` (no ``<h1>``) has no root.
+        Position-based trimming (``stack[:level - 1]``) keeps index 0, so the
+        first ``<h2>`` becomes a permanent root and every later ``<h2>`` is
+        falsely nested under it — e.g. "Το φυσοκάλαμο > Το πόντιλ", two
+        sibling tools rendered as a parent/child pair.
+      * Levels may skip (h1 → h3). The level-2 ancestor simply does not exist;
+        the breadcrumb must be "h1 > h3", not h1 padded out to depth 3.
+      * Two headings at the same level are siblings, never parent and child.
+
+    Keeping only strictly-shallower entries handles all three uniformly.
+    """
+    while heading_stack and heading_stack[-1][0] >= level:
+        heading_stack.pop()
+    heading_stack.append((level, text))
+
+
+def _breadcrumb(heading_stack: List[Tuple[int, str]]) -> str:
+    """Render a ``(level, text)`` heading stack as a "A > B > C" breadcrumb."""
+    return " > ".join(text for _, text in heading_stack)
+
+
+def _build_heading_translation_prompt(heading: str, source_lang: str) -> str:
+    """Translation prompt for a bare section title (breadcrumb segment).
+
+    Kept separate from ``translation_service.build_chunk_translation_prompt``
+    on purpose: that prompt describes its input as "contenu pédagogique" and
+    the model, handed a whole chunk, would rewrite the leading title from the
+    body it just read. A section title has to come back as a title — same
+    words, translated, nothing else.
+    """
+    return (
+        "Traduis en français ce titre de section d'un cours technique "
+        "(artisanat, métiers d'art).\n"
+        "Réponds avec UNIQUEMENT le titre traduit : pas de guillemets, pas "
+        "d'explication, pas de reformulation, pas de phrase complète.\n\n"
+        f"Titre original ({source_lang}) :\n{heading}"
+    )
+
+
 class SemanticChunker:
     """Splits structured documents (HTML / PDF / DOCX) into semantic chunks.
 
@@ -60,7 +106,8 @@ class SemanticChunker:
     ) -> List[Document]:
         from bs4 import NavigableString, Tag
 
-        heading_stack: List[str] = []   # breadcrumb of current headings
+        # (level, text) pairs — see _push_heading for why level, not position
+        heading_stack: List[Tuple[int, str]] = []
         buffer: List[str] = []           # accumulated paragraph text
         chunks: List[Document] = []
 
@@ -75,7 +122,7 @@ class SemanticChunker:
             buffer.clear()
 
         def _emit(text: str) -> None:
-            heading_path = " > ".join(heading_stack) if heading_stack else ""
+            heading_path = _breadcrumb(heading_stack)
             # Prepend breadcrumb so the embedding encodes positional context
             full_text = f"{heading_path}\n\n{text}".strip() if heading_path else text
             idx = len(chunks)
@@ -97,9 +144,7 @@ class SemanticChunker:
                     flush(force=True)
                     level = int(tag_name[1])
                     heading_text = element.get_text(" ", strip=True)
-                    # Keep heading_stack up to (level - 1) then add new heading
-                    heading_stack[:] = heading_stack[: level - 1]
-                    heading_stack.append(heading_text)
+                    _push_heading(heading_stack, level, heading_text)
 
                 elif tag_name in ("p", "li", "td", "th", "dd", "dt", "blockquote"):
                     text = element.get_text(" ", strip=True)
@@ -133,7 +178,7 @@ class SemanticChunker:
             logger.error(f"Failed to open PDF: {e}")
             return []
 
-        heading_stack: List[str] = []
+        heading_stack: List[Tuple[int, str]] = []
         buffer: List[str] = []
         chunks: List[Document] = []
         page_images: Dict[int, int] = {}   # page_num → image count
@@ -145,7 +190,7 @@ class SemanticChunker:
                 return
             if not force and _approx_tokens(text) < MIN_TOKENS:
                 return
-            heading_path = " > ".join(heading_stack) if heading_stack else ""
+            heading_path = _breadcrumb(heading_stack)
             full_text = f"{heading_path}\n\n{text}".strip() if heading_path else text
             idx = len(chunks)
             meta = {
@@ -206,8 +251,7 @@ class SemanticChunker:
                         flush(force=True)
                         # Approximate heading level from font size
                         level = max(1, min(3, round((heading_threshold - avg_size + heading_threshold) / heading_threshold)))
-                        heading_stack[:] = heading_stack[:level - 1]
-                        heading_stack.append(line_text)
+                        _push_heading(heading_stack, level, line_text)
                     else:
                         buffer.append(line_text)
                         combined = " ".join(buffer)
@@ -237,7 +281,7 @@ class SemanticChunker:
             logger.error(f"Failed to open DOCX: {e}")
             return []
 
-        heading_stack: List[str] = []
+        heading_stack: List[Tuple[int, str]] = []
         buffer: List[str] = []
         chunks: List[Document] = []
 
@@ -248,7 +292,7 @@ class SemanticChunker:
                 return
             if not force and _approx_tokens(text) < MIN_TOKENS:
                 return
-            heading_path = " > ".join(heading_stack) if heading_stack else ""
+            heading_path = _breadcrumb(heading_stack)
             full_text = f"{heading_path}\n\n{text}".strip() if heading_path else text
             idx = len(chunks)
             meta = {
@@ -272,8 +316,7 @@ class SemanticChunker:
                 # Extract level from style name e.g. "Heading 1" → 1
                 m = re.search(r"(\d+)", style_name)
                 level = int(m.group(1)) if m else 1
-                heading_stack[:] = heading_stack[:level - 1]
-                heading_stack.append(text)
+                _push_heading(heading_stack, level, text)
             else:
                 buffer.append(text)
                 combined = " ".join(buffer)
@@ -422,18 +465,90 @@ class CourseRAGService:
         )
         return len(chunks)
 
+    # ── Breadcrumb-aware translation ──────────────────────────────
+
+    @staticmethod
+    def _split_breadcrumb(text: str, heading_path: str) -> Tuple[str, str]:
+        """Split stored chunk text into ``(breadcrumb, body)``.
+
+        SemanticChunker writes ``f"{heading_path}\n\n{body}"``, so when the
+        chunk carries a heading_path the prefix is recoverable exactly.
+        Returns ``("", text)`` for anything else (no heading_path, or text
+        that does not start with it), so such chunks keep being handled as
+        one undivided blob exactly as before.
+        """
+        if not heading_path:
+            return "", text
+        prefix = f"{heading_path}\n\n"
+        if text.startswith(prefix):
+            return heading_path, text[len(prefix):]
+        return "", text
+
+    def _translate_heading_path(
+        self,
+        heading_path: str,
+        source_lang: str,
+        cache: Dict[str, str],
+        max_retries: int = 2,
+        throttle_seconds: float = 0.0,
+    ) -> str:
+        """Translate a breadcrumb, one LLM call per *distinct* heading segment.
+
+        `cache` is owned by the caller and lives for one module (or one
+        backfill run), which is what makes the result stable: a breadcrumb
+        translated once is reused verbatim by every chunk beneath it, so all
+        chunks of a page agree on their hierarchy instead of each inventing
+        its own French rendering of the same title.
+
+        Caching per *segment* rather than per full path is deliberate: the
+        same heading must render identically whether it appears as a leaf
+        ("A") or as an ancestor ("A > B"), otherwise two chunks of one page
+        can still disagree about the same heading.
+
+        A failed or empty translation caches the original text, so a
+        transient API error degrades to a stable untranslated segment rather
+        than a segment that flips language halfway down the page.
+        """
+        segments: List[str] = []
+        for raw_segment in heading_path.split(" > "):
+            segment = raw_segment.strip()
+            if not segment:
+                continue
+            if segment not in cache:
+                if translation_service.is_degenerate_text(segment):
+                    cache[segment] = segment
+                else:
+                    translated = translation_service.translate_to_french(
+                        _build_heading_translation_prompt(segment, source_lang),
+                        self._translation_llm,
+                        max_retries=max_retries,
+                    )
+                    if throttle_seconds:
+                        time.sleep(throttle_seconds)
+                    cache[segment] = (translated or segment).strip().strip('"').strip()
+            segments.append(cache[segment])
+        return " > ".join(s for s in segments if s)
+
     def _translate_chunks_if_needed(
         self, chunks: List[Document], rag_config: Optional[Any]
     ) -> List[Document]:
         """Translate every chunk of a non-French module to French.
 
         Language is detected once, from the module's first chunk — not per
-        chunk — since a module is authored in one language. `page_content`
-        (which already includes the heading breadcrumb baked in by
-        SemanticChunker) is translated; `metadata["heading_path"]` is left
-        untouched, since it's surfaced to the frontend as a citation/
-        navigation breadcrumb back to the actual Moodle course structure,
-        not used for retrieval.
+        chunk — since a module is authored in one language.
+
+        The heading breadcrumb baked into `page_content` by SemanticChunker is
+        split off and translated separately, once per distinct heading, then
+        re-attached. Translating it as part of each chunk (the previous
+        behaviour) let the model rewrite the title from whatever body text
+        followed it, so one Greek h1 came back as five different — and all
+        wrong — French titles across the five chunks of a single page. The
+        breadcrumb exists to be a stable hierarchy signal in the embedded
+        text; a per-chunk-variable breadcrumb is pure noise.
+
+        `metadata["heading_path"]` is still left untouched in the source
+        language: it is surfaced to the frontend as a citation/navigation
+        breadcrumb back to the actual Moodle course structure.
         """
         if not chunks or rag_config is None or not rag_config.enable_ingestion_translation:
             return chunks
@@ -448,21 +563,53 @@ class CourseRAGService:
             return chunks
 
         out: List[Document] = []
+        heading_cache: Dict[str, str] = {}   # one per module — see _translate_heading_path
         for chunk in chunks:
             if translation_service.is_degenerate_text(chunk.page_content):
                 # OCR/text-extraction garbage (scanned form blank-lines etc.)
                 # — sending this to the LLM is what hung a live backfill run.
                 out.append(chunk)
                 continue
-            prompt = translation_service.build_chunk_translation_prompt(chunk.page_content, source_lang)
+            breadcrumb, body = self._split_breadcrumb(
+                chunk.page_content, chunk.metadata.get("heading_path", "") or ""
+            )
+            prompt = translation_service.build_chunk_translation_prompt(body, source_lang)
             translated = translation_service.translate_to_french(prompt, self._translation_llm, max_retries=2)
             new_meta = {**chunk.metadata, "source_language": source_lang}
             if translated:
                 new_meta["original_text"] = chunk.page_content
-                out.append(Document(page_content=translated, metadata=new_meta))
+                out.append(Document(
+                    page_content=self._reattach_breadcrumb(
+                        breadcrumb, translated, source_lang, heading_cache, max_retries=2,
+                    ),
+                    metadata=new_meta,
+                ))
             else:
+                # Body translation failed — keep the whole chunk in its
+                # original language rather than emitting a French breadcrumb
+                # glued onto untranslated body text.
                 out.append(Document(page_content=chunk.page_content, metadata=new_meta))
         return out
+
+    def _reattach_breadcrumb(
+        self,
+        breadcrumb: str,
+        translated_body: str,
+        source_lang: str,
+        cache: Dict[str, str],
+        max_retries: int = 2,
+        throttle_seconds: float = 0.0,
+    ) -> str:
+        """Prepend the translated breadcrumb to a translated body."""
+        if not breadcrumb:
+            return translated_body
+        fr_breadcrumb = self._translate_heading_path(
+            breadcrumb, source_lang, cache,
+            max_retries=max_retries, throttle_seconds=throttle_seconds,
+        )
+        if not fr_breadcrumb:
+            return translated_body
+        return f"{fr_breadcrumb}\n\n{translated_body}"
 
     def backfill_translations(
         self, course_id: str, rag_config: Any, throttle_seconds: float = 0.0,
@@ -509,6 +656,9 @@ class CourseRAGService:
 
         update_ids: List[str] = []
         update_docs: List[Document] = []
+        # One breadcrumb cache for the whole run, so every chunk in the
+        # collection agrees on the French form of a given heading.
+        heading_cache: Dict[str, str] = {}
 
         for idx, (doc_id, text, meta) in enumerate(zip(ids, documents, metadatas), start=1):
             if meta.get("source_language"):
@@ -525,7 +675,10 @@ class CourseRAGService:
                 if not should_translate:
                     stats["unchanged_french"] += 1
                 else:
-                    prompt = translation_service.build_chunk_translation_prompt(text, source_lang)
+                    breadcrumb, body = self._split_breadcrumb(
+                        text or "", meta.get("heading_path", "") or ""
+                    )
+                    prompt = translation_service.build_chunk_translation_prompt(body, source_lang)
                     translated = translation_service.translate_to_french(
                         prompt, self._translation_llm, max_retries=5
                     )
@@ -536,7 +689,13 @@ class CourseRAGService:
                     else:
                         new_meta = {**meta, "source_language": source_lang, "original_text": text}
                         update_ids.append(doc_id)
-                        update_docs.append(Document(page_content=translated, metadata=new_meta))
+                        update_docs.append(Document(
+                            page_content=self._reattach_breadcrumb(
+                                breadcrumb, translated, source_lang, heading_cache,
+                                max_retries=5, throttle_seconds=throttle_seconds,
+                            ),
+                            metadata=new_meta,
+                        ))
                         stats["translated"] += 1
 
             if on_progress:
@@ -580,7 +739,16 @@ class CourseRAGService:
                 logger.info(f"Course collection '{course_id}' is empty")
                 return []
 
-            results = collection.max_marginal_relevance_search(query, k=k)
+            # MMR pulls `fetch_k` neighbours, then picks k diverse ones from
+            # them. Left implicit, langchain defaults fetch_k=20 regardless of
+            # k or of how many chunks the course actually has, which makes
+            # Chroma log an over-query warning on every small course. The
+            # count is free here: `data` was just fetched above.
+            # Mirrors RAGService._mmr_fetch_k - keep the two in step.
+            fetch_k = min(max(k * 5, k), 50, len(data['ids'])) or 1
+            results = collection.max_marginal_relevance_search(
+                query, k=k, fetch_k=fetch_k
+            )
             seen: set = set()
             unique: List[Document] = []
             for doc in results:
