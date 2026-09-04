@@ -64,6 +64,7 @@ list($options, $unrecognised) = cli_get_params([
     'fresh'   => false,
     'dry-run' => false,
     'limit'   => 0,
+    'wait'    => 180,
     'help'    => false,
 ], ['c' => 'course', 'a' => 'all', 'r' => 'resume', 'n' => 'dry-run', 'h' => 'help']);
 
@@ -85,6 +86,9 @@ Options:
   -n, --dry-run     List what would be processed and exit. No changes, no
                     LLM calls, no cost.
       --limit=N     Stop after N modules. Handy with --dry-run.
+      --wait=SECS   How long to wait for the backend to become ready
+                    before giving up. Default 180. It takes ~1 minute to
+                    start, and systemctl returns long before that.
   -h, --help        This message.
 
 BACK UP /opt/craftpilot_backend/chroma_langchain_db BEFORE A REAL RUN.
@@ -167,6 +171,54 @@ if ($dryrun) {
     cli_writeln("\nDry run only. {$total} module(s) would be processed. Nothing changed.");
     exit(0);
 }
+
+// ── Preflight: wait for the backend to actually accept connections ─────
+// The service is Type=simple, so `systemctl start` returns as soon as the
+// process forks - roughly a minute before uvicorn binds the port. It loads
+// embeddings, Chroma and the LLM client, then re-syncs annotations against a
+// remote API, all before it listens. Without this check the script would march
+// through every module turning connection refusals into errors, which is
+// exactly what happened on the first pilot run. /api/health needs no token.
+$healthurl = 'http://127.0.0.1:8000/api/health';
+$deadline  = time() + max(0, (int) $options['wait']);
+$ready     = false;
+$announced = false;
+
+do {
+    $ch = curl_init($healthurl);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 5,
+        CURLOPT_FAILONERROR    => false,
+    ]);
+    curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($code === 200) {
+        $ready = true;
+        break;
+    }
+
+    if (!$announced) {
+        cli_writeln('Waiting for the CraftPilot backend to become ready (it takes ~1 minute to start)...');
+        $announced = true;
+    }
+    sleep(3);
+} while (time() < $deadline);
+
+if (!$ready) {
+    cli_error(
+        "CraftPilot backend is not answering on {$healthurl}.\n" .
+        "Nothing was changed. Check it with:\n" .
+        "  systemctl status craftpilot-backend\n" .
+        "  tail -30 /tmp/craftpilot_backend.log\n" .
+        "Then re-run this script. Increase --wait if the machine is slow."
+    );
+}
+
+cli_writeln('Backend is ready.');
+cli_writeln('');
 
 // ── Process ───────────────────────────────────────────────────────────────────
 $extractor = new \local_craftpilot\course_content_extractor();
